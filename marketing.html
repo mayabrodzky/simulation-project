@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Polaris — Company Site</title>
+  <style>
+    /* ===== Brand palette ===== */
+    :root{
+      --ink:#0f1b2d;          /* primary text */
+      --muted:#5b6b84;        /* secondary text */
+      --bg:#f4f7fb;           /* page background */
+      --panel:#ffffff;        /* cards */
+      --line:#d9e1ef;         /* borders */
+
+      --primary:#3b82f6;      /* main accent (blue) */
+      --primary-600:#2563eb;
+      --teal:#14b8a6;         /* secondary accent */
+      --lav:#8b5cf6;          /* lilac highlight */
+      --glow:0 30px 120px rgba(59,130,246,.28);
+    }
+
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color:var(--ink); background:var(--bg); line-height:1.65;
+    }
+    a{color:inherit;text-decoration:none}
+
+    /* ===== Nav ===== */
+    .nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    .wrap{max-width:1100px;margin:0 auto;padding:14px 20px}
+    .nav .row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px}
+    .logo{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-weight:900;
+      background:radial-gradient(120% 120% at 20% 10%,#7dd3fc 0%,#60a5fa 45%,#8b5cf6 100%);box-shadow:0 6px 18px rgba(99,102,241,.28)}
+    .navlinks{display:flex;gap:18px;align-items:center}
+    .navlinks a{color:var(--muted);font-weight:600}
+    .navlinks a:hover{color:var(--ink)}
+    .cta-nav{padding:10px 16px;border-radius:10px;color:#fff;font-weight:700;background:linear-gradient(135deg,var(--primary),var(--lav));box-shadow:0 8px 24px rgba(59,130,246,.25)}
+
+    /* ===== Hero ===== */
+    .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+      background:radial-gradient(800px 300px at 15% -10%,rgba(59,130,246,.24),transparent 60%),
+                 radial-gradient(700px 260px at 90% 0%,rgba(20,184,166,.16),transparent 60%)}
+    .hero .grid{max-width:1100px;margin:0 auto;padding:70px 20px 50px;display:grid;grid-template-columns:1.2fr 1fr;gap:30px}
+    .h-title{font-size:48px;line-height:1.15;letter-spacing:-.02em;margin-bottom:14px}
+    .h-sub{color:var(--muted);font-size:18px;margin-bottom:26px}
+    .cta{display:inline-flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;font-weight:700;color:#fff;
+      background:linear-gradient(135deg,var(--primary),var(--teal));box-shadow:var(--glow);transition:transform .06s}
+    .cta:hover{transform:translateY(-1px)}
+    .cta.secondary{color:var(--ink);background:#eef3ff;border:1px solid var(--line);box-shadow:none}
+    .hero-visual{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(15,27,45,.06);min-height:280px;display:grid;place-items:center;padding:14px}
+    .chiprow{display:flex;gap:10px;margin-top:12px}
+    .chip{padding:6px 10px;border-radius:999px;background:#eef2ff;color:#1e40af;font-weight:700;font-size:12px;border:1px solid #c7d2fe}
+
+    /* ===== Sections ===== */
+    .section{max-width:1100px;margin:56px auto;padding:0 20px}
+    .sec-title{font-size:28px;margin-bottom:14px}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 10px 26px rgba(15,27,45,.05)}
+    .card .icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;margin-bottom:10px;background:linear-gradient(135deg,#e0f2fe,#e9d5ff);color:#334155;font-weight:900;border:1px solid #d9e1ef}
+    .card h4{margin-bottom:6px}
+    .card p{color:var(--muted)}
+    .muted{color:var(--muted)}
+
+    /* ===== Testimonial ===== */
+    .testi{background:linear-gradient(135deg,#eef6ff,#effaf9);border:1px solid var(--line);border-radius:16px;padding:24px;display:grid;grid-template-columns:64px 1fr;gap:16px;align-items:center}
+    .avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#60a5fa,#8b5cf6);border:3px solid #fff;box-shadow:0 8px 28px rgba(99,102,241,.25)}
+    blockquote{font-size:18px}
+    .by{color:var(--muted);font-size:14px;margin-top:6px}
+
+    /* ===== FAQ ===== */
+    .faq{display:grid;gap:12px}
+    .q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+    .q summary{cursor:pointer;font-weight:700}
+    .q p{margin-top:8px;color:var(--muted)}
+
+    /* ===== Join form ===== */
+    .join{display:grid;gap:14px;max-width:540px;margin:0 auto;text-align:center}
+    .input{width:100%;padding:14px;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:16px}
+    .btn{padding:12px 16px;border-radius:12px;border:0;color:#fff;background:linear-gradient(135deg,var(--primary),var(--lav));font-weight:700;cursor:pointer;box-shadow:0 10px 26px rgba(59,130,246,.25)}
+    .note{font-size:12px;color:var(--muted)}
+
+    /* ===== Footer ===== */
+    footer{margin-top:60px;border-top:1px solid var(--line);padding:18px 20px;text-align:center;color:var(--muted);font-size:14px}
+
+    /* ===== Reveal on scroll ===== */
+    .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease, transform .5s ease}
+    .reveal.show{opacity:1;transform:none}
+
+    @media (max-width:920px){
+      .hero .grid{grid-template-columns:1fr}
+      .grid3{grid-template-columns:1fr}
+      .grid4{grid-template-columns:1fr 1fr}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="wrap">
+      <div class="row">
+        <div class="brand"><div class="logo">★</div>Polaris</div>
+        <div class="navlinks">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#integrations">Integrations</a>
+          <a href="#about">About</a>
+          <a class="cta-nav" href="index.html">Try the Demo</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="grid">
+      <div>
+        <h1 class="h-title">Empowering teams with smarter simulations</h1>
+        <p class="h-sub">Polaris helps organizations model scenarios, test decisions, and communicate impact with beautiful, clear visuals.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <a class="cta" href="index.html">▶ Try the Demo</a>
+          <a class="cta secondary" href="#how">Learn more</a>
+        </div>
+        <div class="chiprow">
+          <div class="chip">No install</div><div class="chip">Web-based</div><div class="chip">Fast to iterate</div>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="Product preview">
+        <!-- אפשר להחליף לתמונה משלך -->
+        <svg viewBox="0 0 640 360" width="100%" height="100%">
+          <defs>
+            <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#e6f0ff"/><stop offset="1" stop-color="#f5f7ff"/></linearGradient>
+            <linearGradient id="g2" x1="0" x2="1"><stop offset="0" stop-color="#cfe6ff"/><stop offset="1" stop-color="#dcd6ff"/></linearGradient>
+          </defs>
+          <rect width="640" height="360" fill="url(#g1)"/>
+          <rect x="24" y="24" width="592" height="72" rx="12" fill="url(#g2)" stroke="#d9e1ef"/>
+          <rect x="24" y="110" width="280" height="210" rx="12" fill="#ffffff" stroke="#d9e1ef"/>
+          <rect x="312" y="110" width="304" height="210" rx="12" fill="#ffffff" stroke="#d9e1ef"/>
+          <circle cx="72" cy="62" r="8" fill="#60a5fa"/><circle cx="96" cy="62" r="8" fill="#14b8a6"/><circle cx="120" cy="62" r="8" fill="#8b5cf6"/>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="section reveal">
+    <h3 class="sec-title">How it works</h3>
+    <div class="grid4">
+      <div class="card"><div class="icon">🔑</div><h4>1. Set up</h4><p>Create a project and tailor the simulation to your team’s goals.</p></div>
+      <div class="card"><div class="icon">🧮</div><h4>2. Simulate</h4><p>Run alternative scenarios to understand trade-offs and constraints.</p></div>
+      <div class="card"><div class="icon">📊</div><h4>3. Analyze</h4><p>Visual dashboards highlight impact so everyone’s on the same page.</p></div>
+      <div class="card"><div class="icon">✅</div><h4>4. Decide</h4><p>Move forward with clarity and confidence, backed by data.</p></div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="section reveal">
+    <h3 class="sec-title">Why teams choose Polaris</h3>
+    <div class="grid3">
+      <div class="card"><div class="icon">⚡</div><h4>Fast scenario modeling</h4><p>Compare options quickly and iterate with minimal friction.</p></div>
+      <div class="card"><div class="icon">🧭</div><h4>Clear communication</h4><p>Visuals that explain complex choices to peers and stakeholders.</p></div>
+      <div class="card"><div class="icon">🧩</div><h4>Easy adoption</h4><p>No install, web-based, and friendly for pilots, classes, and demos.</p></div>
+    </div>
+  </section>
+
+  <!-- INTEGRATIONS -->
+  <section id="integrations" class="section reveal">
+    <h3 class="sec-title">Integrations we use in the demo</h3>
+    <p class="muted" style="margin-bottom:12px">These tools are already wired in the project so you can showcase real instrumentation:</p>
+    <div class="grid4">
+      <div class="card" style="text-align:center"><div class="icon">🗄️</div><h4>Supabase</h4><p class="muted">Cloud DB for signups</p></div>
+      <div class="card" style="text-align:center"><div class="icon">🪲</div><h4>Sentry</h4><p class="muted">Error & replay</p></div>
+      <div class="card" style="text-align:center"><div class="icon">🎥</div><h4>Smartlook</h4><p class="muted">Session recordings</p></div>
+      <div class="card" style="text-align:center"><div class="icon">🚀</div><h4>Vercel</h4><p class="muted">Auto-deploy (soon)</p></div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about" class="section reveal">
+    <h3 class="sec-title">Our story</h3>
+    <div class="card">
+      <p class="muted">
+        Polaris was built as a compact, teachable product that helps teams reason about decisions with
+        quick simulations and crisp visuals. The goal is to reduce back-and-forth, and let anyone —
+        students, managers, or partners — explore scenarios in minutes, not weeks.
+      </p>
+    </div>
+  </section>
+
+  <!-- TESTIMONIAL -->
+  <section class="section reveal">
+    <div class="testi">
+      <div class="avatar" aria-hidden="true"></div>
+      <div>
+        <blockquote>“Polaris helped our team validate decisions 3× faster. The UI is clean, and the demo-to-production path was effortless.”</blockquote>
+        <div class="by">Operations Lead, Early-stage Partner</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section reveal">
+    <h3 class="sec-title">FAQ</h3>
+    <div class="faq">
+      <details class="q"><summary>Do I need to install anything?</summary><p>No. Polaris runs on the web and works on modern browsers.</p></details>
+      <details class="q"><summary>Can we adapt it for different domains?</summary><p>Yes. The simulations are generic and can be tailored to many industries.</p></details>
+      <details class="q"><summary>How is my data stored?</summary><p>For the demo we use Supabase (Postgres) with strict RLS. Production setups can use your own cloud.</p></details>
+    </div>
+  </section>
+
+  <!-- JOIN THE BETA -->
+  <section class="section reveal" style="text-align:center">
+    <h3 class="sec-title">Join the beta</h3>
+    <p class="muted" style="margin-bottom:12px">Drop your email to get early updates. No spam, promise.</p>
+    <form class="join" id="join-form">
+      <input id="email" class="input" type="email" placeholder="you@company.com" required />
+      <button class="btn" type="submit">Request access</button>
+      <div id="msg" class="note"></div>
+    </form>
+  </section>
+
+  <footer>© 2025 Polaris Project — Demo site for course project.</footer>
+
+  <!-- Reveal on scroll + optional Supabase hookup -->
+  <script>
+    // Reveal animations
+    const obs = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('show'); obs.unobserve(e.target);} });
+    },{threshold:.15});
+    document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+    // === Optional: send "Join beta" emails to Supabase 'signups' table ===
+    // TODO: put your real values here (from Supabase -> Project Settings -> API)
+    const SUPABASE_URL = "";   // e.g. "https://abcd.supabase.co"
+    const SUPABASE_ANON_KEY = "";
+
+    document.getElementById('join-form').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const msg = document.getElementById('msg');
+      const email = document.getElementById('email').value.trim();
+
+      if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
+        msg.textContent = "Saved locally. (Connect Supabase URL & Key to store in the cloud.)";
+        return;
+      }
+
+      try{
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/signups`,{
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer':'return=representation'
+          },
+          body: JSON.stringify({ email })
+        });
+        if(!res.ok) throw new Error(await res.text());
+        msg.textContent = "Thanks! You're on the list.";
+      }catch(err){
+        console.error(err);
+        msg.textContent = "Something went wrong. Try again later.";
+      }
+    });
+  </script>
+</body>
+</html>
