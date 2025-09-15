@@ -23,7 +23,9 @@
         a.src="https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js";
         e=f.getElementsByTagName("script")[0];e.parentNode.insertBefore(a,e)
     }})(document,window.mixpanel||[]);
-    mixpanel.init("bfd79bf4361fb470a57eaae6ddaa3ed8");
+    mixpanel.init("bfd79bf4361fb470a57eaae6ddaa3ed8", {
+      api_host: "https://api-eu.mixpanel.com"
+    });
   </script>
 
   <style>
@@ -291,7 +293,7 @@
       }
     });
   </script>
-  
+
   <script>
     mixpanel.track("Page Loaded");
   </script>
