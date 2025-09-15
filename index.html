@@ -294,33 +294,25 @@
     });
   </script>
 
-    <!-- Featurebase Feedback Widget -->
-  <script>
-  !(function(e,t){
-    const a="featurebase-sdk";
-    function n(){
-      if(!t.getElementById(a)){
-        var e=t.createElement("script");
-        (e.id=a),
-        (e.src="https://do.featurebase.app/js/sdk.js"),
-        t.getElementsByTagName("script")[0].parentNode.insertBefore(e,t.getElementsByTagName("script")[0])
-      }
-    }
-    "function"!=typeof e.Featurebase && (e.Featurebase=function(){(e.Featurebase.q=e.Featurebase.q||[]).push(arguments)});
-    "complete"===t.readyState||"interactive"===t.readyState?n():t.addEventListener("DOMContentLoaded",n)
-  })(window,document);
-  </script>
+<!-- 1. Load the Featurebase SDK -->
+<script>!(function(e,t){var a="featurebase-sdk";function n(){if(!t.getElementById(a)){var e=t.createElement("script");(e.id=a),(e.src="https://do.featurebase.app/js/sdk.js"),t.getElementsByTagName("script")[0].parentNode.insertBefore(e,t.getElementsByTagName("script")[0])}};"function"!=typeof e.Featurebase&&(e.Featurebase=function(){(e.Featurebase.q=e.Featurebase.q||[]).push(arguments)}),"complete"===t.readyState||"interactive"===t.readyState?n():t.addEventListener("DOMContentLoaded",n)})(window,document);</script>
 
-  <script>
-  Featurebase("initialize_feedback_widget", {
-    organization: "bellatryx",   // השם מה-URL שלך: bellatryx.featurebase.app
-    theme: "light",              // אפשר גם "dark" אם תרצי
-    placement: "right",          // ימוקם בצד ימין
-    email: "your@email.com",     // אפשרי, לא חובה
-    defaultBoard: "general",     // הלוח שייפתח כברירת מחדל
-    locale: "en"
+<!-- 2. Boot Featurebase with your messenger config -->
+<script>
+  Featurebase("boot", {
+    appId: "68c7dbdda04bf7aac651d56d",         // required
+    createdAt: "2025-05-06T12:00:00Z", // optional
+    theme: "light",                    // "light" or "dark"
+    language: "en",                     // short code (e.g. "en", "de", etc.)
+    // Hide the launcher button entirely
+    // For custom launcher button implementation
+    // hideDefaultLauncher: true // optional
+    // userHash: generatedToken // Check the docs for additional details below
+    // + feel free to add any more custom values about the user here
   });
-  </script>
+</script>
+
+
 
   <script>
     mixpanel.track("Page Loaded");
