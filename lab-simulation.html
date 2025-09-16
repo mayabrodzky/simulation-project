@@ -1,0 +1,1196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Polaris – Professional Lab Simulation</title>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 1rem 2rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    .header-content {
+      max-width: 1600px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #4f46e5;
+    }
+
+    .stats {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    /* Staff Status Bar */
+    .staff-status-bar {
+      background: white;
+      padding: 0.75rem 2rem;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.75rem;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-size: 0.875rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Main Layout */
+    .main-container {
+      max-width: 1600px;
+      margin: 1rem auto;
+      padding: 0 2rem;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 2rem;
+    }
+
+    /* Canvas */
+    .game-wrapper {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    .game-header {
+      background: linear-gradient(135deg, #1e293b, #334155);
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn-control {
+      width: 36px;
+      height: 36px;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+
+    .btn-control:hover {
+      background: rgba(255,255,255,0.2);
+      transform: scale(1.05);
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 600px;
+      background: #1a1f2e;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+
+    .panel h3 {
+      margin-bottom: 1rem;
+      color: #1e293b;
+      font-size: 1.2rem;
+    }
+
+    .staff-list {
+      display: grid;
+      gap: 0.75rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .staff-card {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 1rem;
+      border: 2px solid #e2e8f0;
+      transition: all 0.2s;
+    }
+
+    .staff-card:hover {
+      border-color: #6366f1;
+      transform: translateX(2px);
+    }
+
+    .staff-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .staff-name {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .staff-badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-working { background: #dcfce7; color: #166534; }
+    .badge-idle { background: #fef3c7; color: #92400e; }
+    .badge-break { background: #fed7aa; color: #9a3412; }
+    .badge-off { background: #fecaca; color: #991b1b; }
+
+    .staff-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+
+    .staff-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: #6366f1;
+      color: white;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: #6366f1;
+      color: white;
+      border-color: #6366f1;
+    }
+
+    .btn-primary:hover {
+      background: #4f46e5;
+    }
+
+    /* Task Selection Modal */
+    .task-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      z-index: 1000;
+      display: none;
+    }
+
+    .task-modal.active {
+      display: block;
+    }
+
+    .task-modal h3 {
+      margin-bottom: 1.5rem;
+      color: #1e293b;
+    }
+
+    .task-options {
+      display: grid;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .task-option {
+      padding: 1rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .task-option:hover {
+      border-color: #6366f1;
+      background: #f0f9ff;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+      display: none;
+    }
+
+    .modal-overlay.active {
+      display: block;
+    }
+
+    /* Equipment Panel */
+    .equipment-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .equipment-card {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 1rem;
+      border: 2px solid #e2e8f0;
+    }
+
+    .condition-bar {
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 0.5rem 0;
+    }
+
+    .condition-fill {
+      height: 100%;
+      transition: width 0.3s;
+    }
+
+    /* Notification */
+    .notification {
+      position: fixed;
+      top: 100px;
+      right: 20px;
+      padding: 1rem 1.5rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      animation: slideIn 0.3s;
+      z-index: 2000;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(100px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">
+        <span>🧬</span>
+        <span>Polaris Lab Simulation</span>
+      </div>
+      
+      <div class="stats">
+        <div class="stat">
+          <span style="font-size: 20px;">💰</span>
+          <div>
+            <div style="font-weight: 700;">$<span id="money">25000</span></div>
+            <div style="font-size: 0.75rem; color: #64748b;">Budget</div>
+          </div>
+        </div>
+        
+        <div class="stat">
+          <span style="font-size: 20px;">🧪</span>
+          <div>
+            <div style="font-weight: 700;"><span id="materials">200</span></div>
+            <div style="font-size: 0.75rem; color: #64748b;">Materials</div>
+          </div>
+        </div>
+        
+        <div class="stat">
+          <span style="font-size: 20px;">🔬</span>
+          <div>
+            <div style="font-weight: 700;"><span id="samples">120</span></div>
+            <div style="font-size: 0.75rem; color: #64748b;">Samples</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Staff Status Bar -->
+  <div class="staff-status-bar">
+    <div class="status-item">
+      <span class="status-dot" style="background: #10b981;"></span>
+      <span><strong id="workingCount">0</strong> Working</span>
+    </div>
+    <div class="status-item">
+      <span class="status-dot" style="background: #f59e0b;"></span>
+      <span><strong id="breakCount">0</strong> On Break</span>
+    </div>
+    <div class="status-item">
+      <span class="status-dot" style="background: #ef4444;"></span>
+      <span><strong id="offCount">0</strong> Off Duty</span>
+    </div>
+    <div class="status-item">
+      <span>📍</span>
+      <span><strong id="labCount">0</strong> In Lab</span>
+    </div>
+    <div class="status-item">
+      <span>🎓</span>
+      <span><strong id="trainingCount">0</strong> Training</span>
+    </div>
+    <div class="status-item">
+      <span>🚗</span>
+      <span><strong id="fieldCount">0</strong> Field Work</span>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-container">
+    <!-- Game Canvas -->
+    <div class="game-wrapper">
+      <div class="game-header">
+        <span style="font-size: 1.1rem; font-weight: 600;">🏥 Laboratory Floor - Isometric View</span>
+        <div class="controls">
+          <button class="btn-control" onclick="Lab.togglePause()" title="Play/Pause">⏯️</button>
+          <button class="btn-control" onclick="Lab.changeSpeed()" title="Speed">⚡</button>
+          <button class="btn-control" onclick="Lab.resetCamera()" title="Reset View">🎯</button>
+        </div>
+      </div>
+      <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <!-- Staff Panel -->
+      <div class="panel">
+        <h3>👥 Staff Management</h3>
+        <div class="staff-list" id="staffList">
+          <!-- Staff cards will be generated here -->
+        </div>
+      </div>
+
+      <!-- Equipment Panel -->
+      <div class="panel">
+        <h3>🔧 Equipment Status</h3>
+        <div class="equipment-grid" id="equipmentList">
+          <!-- Equipment cards will be generated here -->
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Task Selection Modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="Lab.closeTaskModal()"></div>
+  <div class="task-modal" id="taskModal">
+    <h3>Select Task for <span id="selectedStaffName"></span></h3>
+    <div class="task-options" id="taskOptions">
+      <!-- Task options will be generated here -->
+    </div>
+    <button class="btn" onclick="Lab.closeTaskModal()">Cancel</button>
+  </div>
+
+  <script>
+    // Professional Lab Simulation
+    const Lab = {
+      // Canvas
+      canvas: null,
+      ctx: null,
+      width: 0,
+      height: 0,
+      
+      // Camera
+      camera: {
+        x: 0,
+        y: 0,
+        zoom: 1
+      },
+      
+      // Game State
+      state: {
+        money: 25000,
+        materials: 200,
+        samples: 120,
+        time: 480, // 8:00 AM
+        speed: 1,
+        paused: false
+      },
+      
+      // Grid
+      gridWidth: 16,
+      gridHeight: 10,
+      tileSize: 50,
+      
+      // Entities
+      staff: [],
+      equipment: [],
+      
+      // Selected staff for task assignment
+      selectedStaff: null,
+      
+      // Initialize
+      init() {
+        console.log('Initializing Lab Simulation...');
+        
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
+        
+        this.createStaff();
+        this.createEquipment();
+        this.setupEventHandlers();
+        
+        this.lastTime = performance.now();
+        this.gameLoop();
+        
+        this.updateStaffPanel();
+        this.updateEquipmentPanel();
+        
+        this.showNotification('Welcome to Polaris Lab Simulation!', 'success');
+      },
+      
+      resizeCanvas() {
+        const rect = this.canvas.getBoundingClientRect();
+        this.canvas.width = rect.width;
+        this.canvas.height = rect.height;
+        this.width = rect.width;
+        this.height = rect.height;
+        
+        // Center camera on lab
+        this.camera.x = this.width / 2 - (this.gridWidth * this.tileSize) / 2;
+        this.camera.y = 100;
+      },
+      
+      createStaff() {
+        const staffData = [
+          {name: 'Dr. Sarah Chen', role: 'Senior Researcher', location: 'lab'},
+          {name: 'Dr. Michael Ross', role: 'Lab Director', location: 'lab'},
+          {name: 'Emma Watson', role: 'Research Assistant', location: 'lab'},
+          {name: 'Tom Bradley', role: 'Lab Technician', location: 'training'},
+          {name: 'Dr. Lisa Anderson', role: 'Data Analyst', location: 'lab'},
+          {name: 'Jake Kumar', role: 'Junior Researcher', location: 'field'},
+          {name: 'Nina Patel', role: 'Quality Control', location: 'lab'},
+          {name: 'Alex Thompson', role: 'Lab Assistant', location: 'lab'}
+        ];
+        
+        staffData.forEach((data, i) => {
+          this.staff.push({
+            id: i,
+            ...data,
+            x: 2 + (i % 4) * 3,
+            y: 2 + Math.floor(i / 4) * 3,
+            targetX: null,
+            targetY: null,
+            state: i < 6 ? 'idle' : 'off',
+            energy: 80 + Math.random() * 20,
+            task: null,
+            speed: 0.02,
+            color: `hsl(${i * 45}, 70%, 50%)`
+          });
+        });
+      },
+      
+      createEquipment() {
+        const equipmentData = [
+          {name: 'Microscope A', icon: '🔬', x: 8, y: 2},
+          {name: 'Centrifuge', icon: '🌀', x: 10, y: 2},
+          {name: 'PCR Machine', icon: '🧬', x: 12, y: 2},
+          {name: 'Incubator', icon: '🌡️', x: 8, y: 4},
+          {name: 'Spectrophotometer', icon: '📊', x: 10, y: 4},
+          {name: 'Mass Spectrometer', icon: '⚗️', x: 12, y: 4},
+          {name: 'Flow Cytometer', icon: '💠', x: 8, y: 6},
+          {name: 'Freezer -80°C', icon: '❄️', x: 10, y: 6},
+          {name: 'Biosafety Cabinet', icon: '🛡️', x: 12, y: 6}
+        ];
+        
+        equipmentData.forEach((data, i) => {
+          this.equipment.push({
+            id: i,
+            ...data,
+            condition: 70 + Math.random() * 30,
+            inUse: false,
+            assignedTo: null
+          });
+        });
+      },
+      
+      setupEventHandlers() {
+        // Mouse drag for camera
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        
+        this.canvas.addEventListener('mousedown', (e) => {
+          isDragging = true;
+          dragStartX = e.clientX - this.camera.x;
+          dragStartY = e.clientY - this.camera.y;
+        });
+        
+        this.canvas.addEventListener('mousemove', (e) => {
+          if (isDragging) {
+            this.camera.x = e.clientX - dragStartX;
+            this.camera.y = e.clientY - dragStartY;
+          }
+        });
+        
+        this.canvas.addEventListener('mouseup', () => {
+          isDragging = false;
+        });
+        
+        this.canvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? 0.9 : 1.1;
+          this.camera.zoom = Math.max(0.5, Math.min(2, this.camera.zoom * delta));
+        });
+      },
+      
+      // Isometric conversion
+      toIso(x, y) {
+        const isoX = (x - y) * this.tileSize * this.camera.zoom;
+        const isoY = (x + y) * (this.tileSize / 2) * this.camera.zoom;
+        return {
+          x: isoX + this.camera.x + this.width / 2,
+          y: isoY + this.camera.y
+        };
+      },
+      
+      // Update
+      update(dt) {
+        if (this.state.paused) return;
+        
+        // Update time
+        this.state.time += dt * this.state.speed * 0.5;
+        if (this.state.time >= 1440) this.state.time = 0;
+        
+        // Update staff
+        this.staff.forEach(person => {
+          if (person.state === 'off') return;
+          
+          // Movement
+          if (person.targetX !== null && person.targetY !== null) {
+            const dx = person.targetX - person.x;
+            const dy = person.targetY - person.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist > 0.1) {
+              person.x += (dx / dist) * person.speed * dt * 60;
+              person.y += (dy / dist) * person.speed * dt * 60;
+            } else {
+              person.x = person.targetX;
+              person.y = person.targetY;
+              person.targetX = null;
+              person.targetY = null;
+              
+              // Start working if at equipment
+              if (person.task && person.task.type === 'equipment') {
+                person.state = 'working';
+                const eq = this.equipment.find(e => e.id === person.task.equipmentId);
+                if (eq) eq.inUse = true;
+              }
+            }
+          }
+          
+          // Energy management
+          if (person.state === 'working') {
+            person.energy -= dt * 2;
+            if (person.energy < 20) {
+              person.state = 'break';
+              person.task = null;
+            }
+          } else if (person.state === 'break') {
+            person.energy += dt * 5;
+            if (person.energy >= 100) {
+              person.energy = 100;
+              person.state = 'idle';
+            }
+          }
+          
+          // Random idle movement
+          if (person.state === 'idle' && Math.random() < 0.005) {
+            person.targetX = 1 + Math.random() * (this.gridWidth - 2);
+            person.targetY = 1 + Math.random() * (this.gridHeight - 2);
+          }
+        });
+        
+        // Update equipment condition
+        this.equipment.forEach(eq => {
+          if (eq.inUse) {
+            eq.condition -= dt * 0.5;
+            if (eq.condition < 0) eq.condition = 0;
+          }
+        });
+        
+        this.updateUI();
+        this.updateStatusCounts();
+      },
+      
+      // Render
+      render() {
+        // Clear
+        this.ctx.fillStyle = '#0f172a';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        
+        // Draw grid
+        for (let y = 0; y < this.gridHeight; y++) {
+          for (let x = 0; x < this.gridWidth; x++) {
+            const iso = this.toIso(x, y);
+            
+            // Floor tile
+            this.ctx.fillStyle = (x + y) % 2 === 0 ? '#1e293b' : '#334155';
+            this.ctx.globalAlpha = 0.3;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(iso.x, iso.y);
+            this.ctx.lineTo(iso.x + this.tileSize * this.camera.zoom, iso.y + this.tileSize * this.camera.zoom / 2);
+            this.ctx.lineTo(iso.x, iso.y + this.tileSize * this.camera.zoom);
+            this.ctx.lineTo(iso.x - this.tileSize * this.camera.zoom, iso.y + this.tileSize * this.camera.zoom / 2);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            // Grid lines
+            this.ctx.globalAlpha = 0.1;
+            this.ctx.strokeStyle = '#64748b';
+            this.ctx.lineWidth = 1;
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1;
+          }
+        }
+        
+        // Draw zones
+        this.drawZone(1, 1, 6, 8, 'Work Area', 'rgba(59, 130, 246, 0.1)');
+        this.drawZone(7, 1, 6, 8, 'Equipment Zone', 'rgba(16, 185, 129, 0.1)');
+        this.drawZone(13, 1, 2, 8, 'Storage', 'rgba(245, 158, 11, 0.1)');
+        
+        // Sort entities for proper depth
+        const entities = [
+          ...this.equipment.map(e => ({...e, type: 'equipment'})),
+          ...this.staff.map(s => ({...s, type: 'staff'}))
+        ].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+        
+        // Draw entities
+        entities.forEach(entity => {
+          if (entity.type === 'equipment') {
+            this.drawEquipment(entity);
+          } else if (entity.type === 'staff' && entity.state !== 'off') {
+            this.drawStaff(entity);
+          }
+        });
+        
+        // Draw HUD
+        this.drawHUD();
+      },
+      
+      drawZone(x, y, w, h, label, color) {
+        const topLeft = this.toIso(x, y);
+        const topRight = this.toIso(x + w, y);
+        const bottomRight = this.toIso(x + w, y + h);
+        const bottomLeft = this.toIso(x, y + h);
+        
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.moveTo(topLeft.x, topLeft.y);
+        this.ctx.lineTo(topRight.x, topRight.y);
+        this.ctx.lineTo(bottomRight.x, bottomRight.y);
+        this.ctx.lineTo(bottomLeft.x, bottomLeft.y);
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Label
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = `${12 * this.camera.zoom}px Inter`;
+        this.ctx.fillText(label, topLeft.x, topLeft.y - 5);
+      },
+      
+      drawEquipment(eq) {
+        const iso = this.toIso(eq.x, eq.y);
+        const size = 30 * this.camera.zoom;
+        
+        // Base
+        this.ctx.fillStyle = eq.inUse ? '#10b981' : '#475569';
+        this.ctx.fillRect(iso.x - size, iso.y - size / 2, size * 2, size);
+        
+        // Top
+        this.ctx.fillStyle = eq.inUse ? '#34d399' : '#64748b';
+        this.ctx.fillRect(iso.x - size * 0.9, iso.y - size / 2 + 2, size * 1.8, size * 0.3);
+        
+        // Icon
+        this.ctx.font = `${20 * this.camera.zoom}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(eq.icon, iso.x, iso.y + 5);
+        
+        // Name
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = `${10 * this.camera.zoom}px Inter`;
+        this.ctx.fillText(eq.name, iso.x, iso.y + size);
+        
+        // Condition bar
+        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        this.ctx.fillRect(iso.x - size, iso.y + size + 5, size * 2, 3);
+        
+        const condColor = eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444';
+        this.ctx.fillStyle = condColor;
+        this.ctx.fillRect(iso.x - size, iso.y + size + 5, size * 2 * (eq.condition / 100), 3);
+      },
+      
+      drawStaff(person) {
+        const iso = this.toIso(person.x, person.y);
+        const size = 15 * this.camera.zoom;
+        
+        // Shadow
+        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        this.ctx.beginPath();
+        this.ctx.ellipse(iso.x, iso.y + size * 1.5, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Body
+        this.ctx.fillStyle = person.color;
+        this.ctx.fillRect(iso.x - size * 0.7, iso.y - size, size * 1.4, size * 1.8);
+        
+        // Head
+        this.ctx.fillStyle = '#fbbf24';
+        this.ctx.beginPath();
+        this.ctx.arc(iso.x, iso.y - size * 1.3, size * 0.6, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Status indicator
+        if (person.state === 'working') {
+          this.ctx.fillStyle = '#10b981';
+          this.ctx.beginPath();
+          this.ctx.arc(iso.x + size, iso.y - size * 1.5, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+        } else if (person.state === 'break') {
+          this.ctx.fillStyle = '#f59e0b';
+          this.ctx.beginPath();
+          this.ctx.arc(iso.x + size, iso.y - size * 1.5, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        
+        // Energy bar
+        this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        this.ctx.fillRect(iso.x - size, iso.y - size * 2, size * 2, 3);
+        
+        const energyColor = person.energy > 60 ? '#10b981' : person.energy > 30 ? '#f59e0b' : '#ef4444';
+        this.ctx.fillStyle = energyColor;
+        this.ctx.fillRect(iso.x - size, iso.y - size * 2, size * 2 * (person.energy / 100), 3);
+        
+        // Name
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = `${10 * this.camera.zoom}px Inter`;
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(person.name, iso.x, iso.y + size * 2);
+      },
+      
+      drawHUD() {
+        // Time display
+        const hours = Math.floor(this.state.time / 60);
+        const minutes = Math.floor(this.state.time % 60);
+        
+        this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        this.ctx.fillRect(10, 10, 150, 40);
+        
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = '16px Inter';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText(`🕐 ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`, 20, 35);
+        
+        // Speed indicator
+        this.ctx.fillText(`⚡ ${this.state.speed}x`, 100, 35);
+      },
+      
+      // Game loop
+      gameLoop() {
+        const now = performance.now();
+        const dt = (now - this.lastTime) / 1000;
+        this.lastTime = now;
+        
+        this.update(dt);
+        this.render();
+        
+        requestAnimationFrame(() => this.gameLoop());
+      },
+      
+      // UI Updates
+      updateUI() {
+        document.getElementById('money').textContent = this.state.money.toFixed(0);
+        document.getElementById('materials').textContent = this.state.materials;
+        document.getElementById('samples').textContent = this.state.samples;
+      },
+      
+      updateStatusCounts() {
+        const counts = {
+          working: 0,
+          break: 0,
+          off: 0,
+          lab: 0,
+          training: 0,
+          field: 0
+        };
+        
+        this.staff.forEach(person => {
+          if (person.state === 'working' || person.state === 'idle') counts.working++;
+          else if (person.state === 'break') counts.break++;
+          else if (person.state === 'off') counts.off++;
+          
+          if (person.state !== 'off') {
+            if (person.location === 'lab') counts.lab++;
+            else if (person.location === 'training') counts.training++;
+            else if (person.location === 'field') counts.field++;
+          }
+        });
+        
+        document.getElementById('workingCount').textContent = counts.working;
+        document.getElementById('breakCount').textContent = counts.break;
+        document.getElementById('offCount').textContent = counts.off;
+        document.getElementById('labCount').textContent = counts.lab;
+        document.getElementById('trainingCount').textContent = counts.training;
+        document.getElementById('fieldCount').textContent = counts.field;
+      },
+      
+      updateStaffPanel() {
+        const staffList = document.getElementById('staffList');
+        staffList.innerHTML = this.staff.map((person, i) => `
+          <div class="staff-card">
+            <div class="staff-header">
+              <span class="staff-name">${person.name}</span>
+              <span class="staff-badge badge-${person.state}">${person.state}</span>
+            </div>
+            <div class="staff-info">
+              <span>📍 ${person.location}</span>
+              <span>⚡ ${Math.floor(person.energy)}%</span>
+              <span>Role: ${person.role}</span>
+              <span>Task: ${person.task ? person.task.name : 'None'}</span>
+            </div>
+            <div class="staff-actions">
+              <button class="btn btn-primary" onclick="Lab.openTaskModal(${i})">Assign Task</button>
+              <button class="btn" onclick="Lab.toggleShift(${i})">${person.state === 'off' ? 'Start Shift' : 'End Shift'}</button>
+            </div>
+          </div>
+        `).join('');
+      },
+      
+      updateEquipmentPanel() {
+        const equipmentList = document.getElementById('equipmentList');
+        equipmentList.innerHTML = this.equipment.map((eq, i) => `
+          <div class="equipment-card">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+              <span style="font-size: 24px;">${eq.icon}</span>
+              <div style="flex: 1;">
+                <strong>${eq.name}</strong>
+                <div style="font-size: 0.875rem; color: #64748b;">
+                  ${eq.inUse ? '🔴 In Use' : '🟢 Available'}
+                </div>
+              </div>
+            </div>
+            <div class="condition-bar">
+              <div class="condition-fill" style="width: ${eq.condition}%; background: ${
+                eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444'
+              };"></div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <button class="btn" onclick="Lab.repairEquipment(${i})">Repair ($200)</button>
+              <button class="btn" onclick="Lab.calibrateEquipment(${i})">Calibrate ($100)</button>
+            </div>
+          </div>
+        `).join('');
+      },
+      
+      // Task Modal
+      openTaskModal(staffId) {
+        this.selectedStaff = this.staff[staffId];
+        
+        if (this.selectedStaff.state === 'off') {
+          this.showNotification('Staff member is off duty!', 'error');
+          return;
+        }
+        
+        document.getElementById('selectedStaffName').textContent = this.selectedStaff.name;
+        document.getElementById('modalOverlay').className = 'modal-overlay active';
+        document.getElementById('taskModal').className = 'task-modal active';
+        
+        const taskOptions = document.getElementById('taskOptions');
+        taskOptions.innerHTML = `
+          <div class="task-option" onclick="Lab.assignTask('research')">
+            <strong>🔬 Research Task</strong>
+            <div style="font-size: 0.875rem; color: #64748b;">Conduct experiments and analyze data</div>
+          </div>
+          <div class="task-option" onclick="Lab.assignTask('maintenance')">
+            <strong>🔧 Maintenance</strong>
+            <div style="font-size: 0.875rem; color: #64748b;">Maintain and calibrate equipment</div>
+          </div>
+          <div class="task-option" onclick="Lab.assignTask('training')">
+            <strong>🎓 Training</strong>
+            <div style="font-size: 0.875rem; color: #64748b;">Attend training session (Location: Training Room)</div>
+          </div>
+          <div class="task-option" onclick="Lab.assignTask('fieldwork')">
+            <strong>🚗 Field Work</strong>
+            <div style="font-size: 0.875rem; color: #64748b;">Collect samples from field (Location: Outside)</div>
+          </div>
+          <div class="task-option" onclick="Lab.assignTask('documentation')">
+            <strong>📝 Documentation</strong>
+            <div style="font-size: 0.875rem; color: #64748b;">Write reports and update records</div>
+          </div>
+          ${this.equipment.filter(eq => !eq.inUse).map(eq => `
+            <div class="task-option" onclick="Lab.assignEquipmentTask(${eq.id})">
+              <strong>${eq.icon} Use ${eq.name}</strong>
+              <div style="font-size: 0.875rem; color: #64748b;">Operate specific equipment</div>
+            </div>
+          `).join('')}
+        `;
+      },
+      
+      closeTaskModal() {
+        document.getElementById('modalOverlay').className = 'modal-overlay';
+        document.getElementById('taskModal').className = 'task-modal';
+        this.selectedStaff = null;
+      },
+      
+      assignTask(taskType) {
+        if (!this.selectedStaff) return;
+        
+        const tasks = {
+          research: {
+            name: 'Research',
+            duration: 300,
+            location: 'lab',
+            targetX: 3,
+            targetY: 3
+          },
+          maintenance: {
+            name: 'Maintenance',
+            duration: 200,
+            location: 'lab',
+            targetX: 10,
+            targetY: 5
+          },
+          training: {
+            name: 'Training',
+            duration: 400,
+            location: 'training',
+            targetX: 14,
+            targetY: 2
+          },
+          fieldwork: {
+            name: 'Field Work',
+            duration: 600,
+            location: 'field',
+            targetX: 1,
+            targetY: 8
+          },
+          documentation: {
+            name: 'Documentation',
+            duration: 150,
+            location: 'lab',
+            targetX: 5,
+            targetY: 7
+          }
+        };
+        
+        const task = tasks[taskType];
+        if (task) {
+          this.selectedStaff.task = task;
+          this.selectedStaff.location = task.location;
+          this.selectedStaff.targetX = task.targetX;
+          this.selectedStaff.targetY = task.targetY;
+          this.selectedStaff.state = 'idle';
+          
+          this.showNotification(`${this.selectedStaff.name} assigned to ${task.name}`, 'success');
+          this.closeTaskModal();
+          this.updateStaffPanel();
+        }
+      },
+      
+      assignEquipmentTask(equipmentId) {
+        if (!this.selectedStaff) return;
+        
+        const equipment = this.equipment.find(eq => eq.id === equipmentId);
+        if (equipment && !equipment.inUse) {
+          this.selectedStaff.task = {
+            type: 'equipment',
+            name: `Using ${equipment.name}`,
+            equipmentId: equipment.id
+          };
+          this.selectedStaff.targetX = equipment.x;
+          this.selectedStaff.targetY = equipment.y;
+          this.selectedStaff.state = 'idle';
+          equipment.assignedTo = this.selectedStaff.id;
+          
+          this.showNotification(`${this.selectedStaff.name} assigned to ${equipment.name}`, 'success');
+          this.closeTaskModal();
+          this.updateStaffPanel();
+          this.updateEquipmentPanel();
+        }
+      },
+      
+      toggleShift(staffId) {
+        const person = this.staff[staffId];
+        if (person.state === 'off') {
+          person.state = 'idle';
+          person.energy = 100;
+        } else {
+          person.state = 'off';
+          person.task = null;
+          
+          // Release equipment if assigned
+          const equipment = this.equipment.find(eq => eq.assignedTo === person.id);
+          if (equipment) {
+            equipment.inUse = false;
+            equipment.assignedTo = null;
+          }
+        }
+        
+        this.updateStaffPanel();
+        this.updateEquipmentPanel();
+        this.showNotification(`${person.name} ${person.state === 'off' ? 'ended' : 'started'} shift`, 'info');
+      },
+      
+      repairEquipment(eqId) {
+        const eq = this.equipment[eqId];
+        const cost = 200;
+        
+        if (this.state.money >= cost) {
+          this.state.money -= cost;
+          eq.condition = Math.min(100, eq.condition + 50);
+          this.updateEquipmentPanel();
+          this.showNotification(`${eq.name} repaired!`, 'success');
+        } else {
+          this.showNotification('Insufficient funds!', 'error');
+        }
+      },
+      
+      calibrateEquipment(eqId) {
+        const eq = this.equipment[eqId];
+        const cost = 100;
+        
+        if (this.state.money >= cost) {
+          this.state.money -= cost;
+          eq.condition = Math.min(100, eq.condition + 25);
+          this.updateEquipmentPanel();
+          this.showNotification(`${eq.name} calibrated!`, 'success');
+        } else {
+          this.showNotification('Insufficient funds!', 'error');
+        }
+      },
+      
+      // Controls
+      togglePause() {
+        this.state.paused = !this.state.paused;
+        this.showNotification(this.state.paused ? 'Paused' : 'Resumed', 'info');
+      },
+      
+      changeSpeed() {
+        this.state.speed = this.state.speed === 1 ? 2 : this.state.speed === 2 ? 4 : 1;
+        this.showNotification(`Speed: ${this.state.speed}x`, 'info');
+      },
+      
+      resetCamera() {
+        this.camera.x = this.width / 2 - (this.gridWidth * this.tileSize) / 2;
+        this.camera.y = 100;
+        this.camera.zoom = 1;
+        this.showNotification('View reset', 'info');
+      },
+      
+      showNotification(message, type) {
+        const notif = document.createElement('div');
+        notif.className = 'notification';
+        notif.style.borderLeft = `4px solid ${
+          type === 'success' ? '#10b981' : 
+          type === 'error' ? '#ef4444' : 
+          '#3b82f6'
+        }`;
+        notif.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="font-size: 20px;">
+              ${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}
+            </span>
+            <span>${message}</span>
+          </div>
+        `;
+        document.body.appendChild(notif);
+        
+        setTimeout(() => {
+          notif.style.opacity = '0';
+          setTimeout(() => notif.remove(), 300);
+        }, 3000);
+      }
+    };
+    
+    // Initialize when page loads
+    window.addEventListener('DOMContentLoaded', () => {
+      Lab.init();
+    });
+  </script>
+</body>
+</html>
