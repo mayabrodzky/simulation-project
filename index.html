@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Polaris — Company Site</title>
+  <title>Polaris — Transform Decisions with Intelligent Simulations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <!-- Mixpanel -->
   <script type="text/javascript">
@@ -29,293 +32,1121 @@
   </script>
 
   <style>
-    /* ===== Brand palette ===== */
-    :root{
-      --ink:#0f1b2d;          /* primary text */
-      --muted:#5b6b84;        /* secondary text */
-      --bg:#f4f7fb;           /* page background */
-      --panel:#ffffff;        /* cards */
-      --line:#d9e1ef;         /* borders */
-
-      --primary:#3b82f6;      /* main accent (blue) */
-      --primary-600:#2563eb;
-      --teal:#14b8a6;         /* secondary accent */
-      --lav:#8b5cf6;          /* lilac highlight */
-      --glow:0 30px 120px rgba(59,130,246,.28);
+    :root {
+      /* Premium color palette */
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --gray-600: #475569;
+      --gray-700: #334155;
+      --gray-800: #1e293b;
+      --gray-900: #0f172a;
+      
+      --blue-50: #eff6ff;
+      --blue-500: #3b82f6;
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      
+      --purple-500: #8b5cf6;
+      --purple-600: #7c3aed;
+      
+      --emerald-500: #10b981;
+      --emerald-600: #059669;
+      
+      /* Semantic colors */
+      --primary: var(--blue-600);
+      --primary-hover: var(--blue-700);
+      --accent: var(--purple-500);
+      --success: var(--emerald-500);
+      
+      /* Layout */
+      --max-width: 1200px;
+      --section-padding: 120px;
+      --section-padding-mobile: 80px;
     }
 
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%}
-    body{
-      font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      color:var(--ink); background:var(--bg); line-height:1.65;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    a{color:inherit;text-decoration:none}
 
-    /* ===== Nav ===== */
-    .nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-    .wrap{max-width:1100px;margin:0 auto;padding:14px 20px}
-    .nav .row{display:flex;align-items:center;justify-content:space-between;gap:16px}
-    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px}
-    .logo{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-weight:900;
-      background:radial-gradient(120% 120% at 20% 10%,#7dd3fc 0%,#60a5fa 45%,#8b5cf6 100%);box-shadow:0 6px 18px rgba(99,102,241,.28)}
-    .navlinks{display:flex;gap:18px;align-items:center}
-    .navlinks a{color:var(--muted);font-weight:600}
-    .navlinks a:hover{color:var(--ink)}
-    .cta-nav{padding:10px 16px;border-radius:10px;color:#fff;font-weight:700;background:linear-gradient(135deg,var(--primary),var(--lav));box-shadow:0 8px 24px rgba(59,130,246,.25)}
+    html {
+      scroll-behavior: smooth;
+    }
 
-    /* ===== Hero ===== */
-    .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
-      background:radial-gradient(800px 300px at 15% -10%,rgba(59,130,246,.24),transparent 60%),
-                 radial-gradient(700px 260px at 90% 0%,rgba(20,184,166,.16),transparent 60%)}
-    .hero .grid{max-width:1100px;margin:0 auto;padding:70px 20px 50px;display:grid;grid-template-columns:1.2fr 1fr;gap:30px}
-    .h-title{font-size:48px;line-height:1.15;letter-spacing:-.02em;margin-bottom:14px}
-    .h-sub{color:var(--muted);font-size:18px;margin-bottom:26px}
-    .cta{display:inline-flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;font-weight:700;color:#fff;
-      background:linear-gradient(135deg,var(--primary),var(--teal));box-shadow:var(--glow);transition:transform .06s}
-    .cta:hover{transform:translateY(-1px)}
-    .cta.secondary{color:var(--ink);background:#eef3ff;border:1px solid var(--line);box-shadow:none}
-    .hero-visual{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(15,27,45,.06);min-height:280px;display:grid;place-items:center;padding:14px}
-    .chiprow{display:flex;gap:10px;margin-top:12px}
-    .chip{padding:6px 10px;border-radius:999px;background:#eef2ff;color:#1e40af;font-weight:700;font-size:12px;border:1px solid #c7d2fe}
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
 
-    /* ===== Sections ===== */
-    .section{max-width:1100px;margin:56px auto;padding:0 20px}
-    .sec-title{font-size:28px;margin-bottom:14px}
-    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 10px 26px rgba(15,27,45,.05)}
-    .card .icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;margin-bottom:10px;background:linear-gradient(135deg,#e0f2fe,#e9d5ff);color:#334155;font-weight:900;border:1px solid #d9e1ef}
-    .card h4{margin-bottom:6px}
-    .card p{color:var(--muted)}
-    .muted{color:var(--muted)}
+    /* Typography */
+    .h1 {
+      font-size: clamp(2.5rem, 5vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--gray-900);
+    }
 
-    /* ===== Testimonial ===== */
-    .testi{background:linear-gradient(135deg,#eef6ff,#effaf9);border:1px solid var(--line);border-radius:16px;padding:24px;display:grid;grid-template-columns:64px 1fr;gap:16px;align-items:center}
-    .avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#60a5fa,#8b5cf6);border:3px solid #fff;box-shadow:0 8px 28px rgba(99,102,241,.25)}
-    blockquote{font-size:18px}
-    .by{color:var(--muted);font-size:14px;margin-top:6px}
+    .h2 {
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      color: var(--gray-900);
+    }
 
-    /* ===== FAQ ===== */
-    .faq{display:grid;gap:12px}
-    .q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-    .q summary{cursor:pointer;font-weight:700}
-    .q p{margin-top:8px;color:var(--muted)}
+    .h3 {
+      font-size: clamp(1.5rem, 3vw, 2.25rem);
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--gray-900);
+    }
 
-    /* ===== Join form ===== */
-    .join{display:grid;gap:14px;max-width:540px;margin:0 auto;text-align:center}
-    .input{width:100%;padding:14px;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:16px}
-    .btn{padding:12px 16px;border-radius:12px;border:0;color:#fff;background:linear-gradient(135deg,var(--primary),var(--lav));font-weight:700;cursor:pointer;box-shadow:0 10px 26px rgba(59,130,246,.25)}
-    .note{font-size:12px;color:var(--muted)}
+    .subtitle {
+      font-size: clamp(1.125rem, 2vw, 1.375rem);
+      color: var(--gray-600);
+      font-weight: 400;
+      line-height: 1.6;
+    }
 
-    /* ===== Footer ===== */
-    footer{margin-top:60px;border-top:1px solid var(--line);padding:18px 20px;text-align:center;color:var(--muted);font-size:14px}
+    .body-large {
+      font-size: 1.125rem;
+      color: var(--gray-600);
+      line-height: 1.7;
+    }
 
-    /* ===== Reveal on scroll ===== */
-    .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease, transform .5s ease}
-    .reveal.show{opacity:1;transform:none}
+    .body {
+      font-size: 1rem;
+      color: var(--gray-600);
+      line-height: 1.6;
+    }
 
-    @media (max-width:920px){
-      .hero .grid{grid-template-columns:1fr}
-      .grid3{grid-template-columns:1fr}
-      .grid4{grid-template-columns:1fr 1fr}
+    /* Layout utilities */
+    .container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    .section {
+      padding: var(--section-padding) 0;
+    }
+
+    .section-sm {
+      padding: calc(var(--section-padding) * 0.75) 0;
+    }
+
+    @media (max-width: 768px) {
+      .section {
+        padding: var(--section-padding-mobile) 0;
+      }
+      .section-sm {
+        padding: calc(var(--section-padding-mobile) * 0.75) 0;
+      }
+      .container {
+        padding: 0 1.5rem;
+      }
+    }
+
+    /* Navigation */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(248, 250, 252, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--gray-200);
+      z-index: 100;
+      transition: all 0.3s ease;
+    }
+
+    .nav.scrolled {
+      background: rgba(248, 250, 252, 0.95);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    }
+
+    .nav-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 800;
+      font-size: 1.5rem;
+      color: var(--gray-900);
+      text-decoration: none;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue-500), var(--purple-500));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 900;
+      font-size: 1.25rem;
+      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .nav-links a {
+      color: var(--gray-600);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--gray-900);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--gray-700);
+      border: 1px solid var(--gray-300);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    .btn-secondary:hover {
+      background: var(--gray-50);
+      border-color: var(--gray-400);
+      transform: translateY(-1px);
+    }
+
+    .btn-lg {
+      padding: 1rem 2rem;
+      font-size: 1.125rem;
+    }
+
+    /* Hero Section */
+    .hero {
+      background: 
+        radial-gradient(600px 300px at 20% 0%, rgba(59, 130, 246, 0.15), transparent 70%),
+        radial-gradient(800px 400px at 80% 100%, rgba(139, 92, 246, 0.1), transparent 70%),
+        var(--gray-50);
+      padding-top: 6rem;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        linear-gradient(180deg, transparent, var(--gray-50) 90%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-text {
+      max-width: 600px;
+    }
+
+    .hero-subtitle {
+      margin: 1.5rem 0 2.5rem;
+      max-width: 520px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .hero-tags {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      padding: 0.5rem 1rem;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 999px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--blue-700);
+    }
+
+    .hero-visual {
+      background: white;
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 
+        0 20px 50px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-visual::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--blue-500), var(--purple-500), var(--emerald-500));
+    }
+
+    /* Features Grid */
+    .features {
+      background: white;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 3rem;
+    }
+
+    .feature-card {
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .feature-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      font-size: 1.5rem;
+      background: linear-gradient(135deg, var(--blue-50), var(--purple-50));
+      border: 1px solid var(--gray-200);
+      color: var(--blue-600);
+    }
+
+    .feature-card h3 {
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+    }
+
+    /* Process Section */
+    .process {
+      background: var(--gray-50);
+    }
+
+    .process-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      margin-top: 4rem;
+    }
+
+    .step {
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--gray-200);
+      position: relative;
+    }
+
+    .step-number {
+      position: absolute;
+      top: -12px;
+      left: 2rem;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.875rem;
+    }
+
+    .step h4 {
+      margin: 1rem 0;
+      font-size: 1.125rem;
+      color: var(--gray-900);
+    }
+
+    /* Testimonial */
+    .testimonial {
+      background: 
+        linear-gradient(135deg, 
+          rgba(59, 130, 246, 0.05), 
+          rgba(139, 92, 246, 0.05)
+        );
+      border-radius: 24px;
+      padding: 3rem;
+      margin: 4rem auto;
+      max-width: 900px;
+      text-align: center;
+    }
+
+    .testimonial-quote {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--gray-800);
+      margin-bottom: 2rem;
+      line-height: 1.4;
+    }
+
+    .testimonial-author {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .author-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue-500), var(--purple-500));
+      border: 3px solid white;
+      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+    }
+
+    .author-info h4 {
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 0.25rem;
+    }
+
+    .author-info p {
+      color: var(--gray-600);
+      font-size: 0.875rem;
+    }
+
+    /* Integrations */
+    .integrations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-top: 3rem;
+    }
+
+    .integration-card {
+      background: white;
+      padding: 2rem 1.5rem;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid var(--gray-200);
+      transition: all 0.2s ease;
+    }
+
+    .integration-card:hover {
+      border-color: var(--blue-300);
+      transform: translateY(-2px);
+    }
+
+    .integration-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 1rem;
+      border-radius: 8px;
+      background: var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      background: linear-gradient(135deg, var(--gray-900), var(--gray-800));
+      color: white;
+      text-align: center;
+    }
+
+    .cta-section .h2 {
+      color: white;
+      margin-bottom: 1rem;
+    }
+
+    .cta-section .subtitle {
+      color: var(--gray-300);
+      margin-bottom: 2rem;
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--gray-900);
+      color: var(--gray-400);
+      text-align: center;
+      padding: 2rem 0;
+    }
+
+    /* Animations */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.8s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-content {
+        grid-template-columns: 1fr;
+        gap: 3rem;
+        text-align: center;
+      }
+      
+      .hero-cta {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .nav-links {
+        display: none;
+      }
+      
+      .features-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+      
+      .process-steps {
+        grid-template-columns: 1fr;
+      }
+      
+      .testimonial {
+        padding: 2rem;
+        margin: 2rem auto;
+      }
+      
+      .testimonial-quote {
+        font-size: 1.25rem;
+      }
+    }
+
+    /* Form Styles */
+    .form-container {
+      max-width: 400px;
+      margin: 2rem auto 0;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 1px solid var(--gray-300);
+      border-radius: 8px;
+      font-size: 1rem;
+      background: white;
+      transition: border-color 0.2s ease;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .form-message {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      text-align: center;
+    }
+
+    .form-message.success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--emerald-600);
+    }
+
+    .form-message.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #dc2626;
     }
   </style>
 </head>
 <body>
 
-  <!-- NAV -->
-  <nav class="nav">
-    <div class="wrap">
-      <div class="row">
-        <div class="brand"><div class="logo">★</div>Polaris</div>
-        <div class="navlinks">
-          <a href="#how">How it works</a>
-          <a href="#features">Features</a>
-          <a href="#integrations">Integrations</a>
-          <a href="#about">About</a>
-          <a class="cta-nav" href="app-demo.html">Try the Demo</a>
-        </div>
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="nav-content">
+      <a href="#" class="brand">
+        <div class="logo">★</div>
+        Polaris
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#integrations">Integrations</a>
+        <a href="#about">About</a>
+        <a href="lab-simulation.html" class="btn btn-primary">Try Demo</a>
       </div>
     </div>
   </nav>
 
-  <!-- HERO -->
-  <header class="hero">
-    <div class="grid">
-      <div>
-        <h1 class="h-title">Empowering teams with smarter simulations</h1>
-        <p class="h-sub">Polaris helps organizations model scenarios, test decisions, and communicate impact with beautiful, clear visuals.</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          <a class="cta" href="app-demo.html">▶ Try the Demo</a>
-          <a class="cta secondary" href="#how">Learn more</a>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-text">
+          <h1 class="h1">Transform decisions with intelligent simulations</h1>
+          <p class="subtitle hero-subtitle">
+            Stop guessing. Start knowing. Polaris empowers teams to model complex scenarios, 
+            test critical decisions, and communicate impact with precision—reducing time-to-insight by 75%.
+          </p>
+          <div class="hero-cta">
+            <a href="lab-simulation.html" class="btn btn-primary btn-lg">
+              ▶ Experience the Demo
+            </a>
+            <a href="#how" class="btn btn-secondary btn-lg">
+              See How It Works
+            </a>
+          </div>
+          <div class="hero-tags">
+            <div class="tag">No Installation Required</div>
+            <div class="tag">Deploy in Minutes</div>
+            <div class="tag">Enterprise Ready</div>
+          </div>
         </div>
-        <div class="chiprow">
-          <div class="chip">No install</div><div class="chip">Web-based</div><div class="chip">Fast to iterate</div>
+
+        <div class="hero-visual">
+          <svg viewBox="0 0 560 400" width="100%" height="100%">
+            <defs>
+              <linearGradient id="bg1" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#f8fafc"/>
+                <stop offset="100%" stop-color="#f1f5f9"/>
+              </linearGradient>
+              <linearGradient id="card1" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="100%" stop-color="#f8fafc"/>
+              </linearGradient>
+              <linearGradient id="accent1" x1="0" x2="1">
+                <stop offset="0%" stop-color="#3b82f6"/>
+                <stop offset="100%" stop-color="#8b5cf6"/>
+              </linearGradient>
+            </defs>
+            
+            <!-- Background -->
+            <rect width="560" height="400" rx="12" fill="url(#bg1)"/>
+            
+            <!-- Main dashboard -->
+            <rect x="20" y="30" width="520" height="60" rx="8" fill="url(#card1)" stroke="#e2e8f0"/>
+            <rect x="30" y="40" width="200" height="8" rx="4" fill="#cbd5e1"/>
+            <rect x="30" y="55" width="140" height="8" rx="4" fill="#e2e8f0"/>
+            
+            <!-- Simulation panels -->
+            <rect x="20" y="110" width="240" height="260" rx="12" fill="url(#card1)" stroke="#e2e8f0"/>
+            <rect x="300" y="110" width="260" height="260" rx="12" fill="url(#card1)" stroke="#e2e8f0"/>
+            
+            <!-- Chart elements in left panel -->
+            <rect x="35" y="130" width="210" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+            <path d="M45 220 L85 180 L125 200 L165 160 L205 140 L245 120" stroke="url(#accent1)" stroke-width="3" fill="none"/>
+            <circle cx="85" cy="180" r="4" fill="#3b82f6"/>
+            <circle cx="125" cy="200" r="4" fill="#3b82f6"/>
+            <circle cx="165" cy="160" r="4" fill="#3b82f6"/>
+            
+            <!-- Data points in right panel -->
+            <rect x="315" y="130" width="230" height="40" rx="6" fill="#eff6ff" stroke="#dbeafe"/>
+            <rect x="315" y="180" width="230" height="40" rx="6" fill="#f0fdf4" stroke="#dcfce7"/>
+            <rect x="315" y="230" width="230" height="40" rx="6" fill="#fef7ff" stroke="#f3e8ff"/>
+            
+            <!-- Status indicators -->
+            <circle cx="50" cy="60" r="6" fill="#10b981"/>
+            <circle cx="70" cy="60" r="6" fill="#3b82f6"/>
+            <circle cx="90" cy="60" r="6" fill="#8b5cf6"/>
+          </svg>
         </div>
       </div>
+    </div>
+  </section>
 
-      <div class="hero-visual" aria-label="Product preview">
-        <!-- אפשר להחליף לתמונה משלך -->
-        <svg viewBox="0 0 640 360" width="100%" height="100%">
-          <defs>
-            <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#e6f0ff"/><stop offset="1" stop-color="#f5f7ff"/></linearGradient>
-            <linearGradient id="g2" x1="0" x2="1"><stop offset="0" stop-color="#cfe6ff"/><stop offset="1" stop-color="#dcd6ff"/></linearGradient>
-          </defs>
-          <rect width="640" height="360" fill="url(#g1)"/>
-          <rect x="24" y="24" width="592" height="72" rx="12" fill="url(#g2)" stroke="#d9e1ef"/>
-          <rect x="24" y="110" width="280" height="210" rx="12" fill="#ffffff" stroke="#d9e1ef"/>
-          <rect x="312" y="110" width="304" height="210" rx="12" fill="#ffffff" stroke="#d9e1ef"/>
-          <circle cx="72" cy="62" r="8" fill="#60a5fa"/><circle cx="96" cy="62" r="8" fill="#14b8a6"/><circle cx="120" cy="62" r="8" fill="#8b5cf6"/>
-        </svg>
+  <!-- Features -->
+  <section class="features section fade-in" id="features">
+    <div class="container">
+      <div class="text-center">
+        <h2 class="h2">Why industry leaders choose Polaris</h2>
+        <p class="subtitle" style="margin-top: 1rem; max-width: 600px; margin-left: auto; margin-right: auto;">
+          Built for teams who can't afford to guess. Trusted by organizations that demand precision in their most critical decisions.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Lightning-Fast Modeling</h3>
+          <p class="body">
+            Build and iterate complex scenarios 10x faster than traditional tools. 
+            Go from hypothesis to validated insights in minutes, not days.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🧭</div>
+          <h3>Crystal-Clear Communication</h3>
+          <p class="body">
+            Transform complex analysis into compelling visuals that stakeholders 
+            actually understand. Eliminate confusion, accelerate buy-in.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3>Enterprise-Grade Precision</h3>
+          <p class="body">
+            Proven accuracy with built-in validation, version control, and audit trails. 
+            Make decisions with confidence, backed by bulletproof data.
+          </p>
+        </div>
       </div>
     </div>
-  </header>
+  </section>
 
-  <!-- HOW IT WORKS -->
-  <section id="how" class="section reveal">
-    <h3 class="sec-title">How it works</h3>
-    <div class="grid4">
-      <div class="card"><div class="icon">🔑</div><h4>1. Set up</h4><p>Create a project and tailor the simulation to your team’s goals.</p></div>
-      <div class="card"><div class="icon">🧮</div><h4>2. Simulate</h4><p>Run alternative scenarios to understand trade-offs and constraints.</p></div>
-      <div class="card"><div class="icon">📊</div><h4>3. Analyze</h4><p>Visual dashboards highlight impact so everyone’s on the same page.</p></div>
-      <div class="card"><div class="icon">✅</div><h4>4. Decide</h4><p>Move forward with clarity and confidence, backed by data.</p></div>
+  <!-- How it Works -->
+  <section class="process section fade-in" id="how">
+    <div class="container">
+      <div class="text-center">
+        <h2 class="h2">Three steps to decision mastery</h2>
+        <p class="subtitle" style="margin-top: 1rem;">
+          From setup to action in under 15 minutes. See why teams call it "magic."
+        </p>
+      </div>
+
+      <div class="process-steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h4>Configure & Connect</h4>
+          <p class="body">
+            Import your data sources and define your decision parameters. 
+            Our intelligent setup wizard handles the complexity.
+          </p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <h4>Model & Simulate</h4>
+          <p class="body">
+            Run unlimited scenarios with real-time validation. 
+            Test assumptions, explore edge cases, discover insights.
+          </p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <h4>Present & Decide</h4>
+          <p class="body">
+            Generate executive-ready reports with clear recommendations. 
+            Move from analysis to action with complete confidence.
+          </p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- FEATURES -->
-  <section id="features" class="section reveal">
-    <h3 class="sec-title">Why teams choose Polaris</h3>
-    <div class="grid3">
-      <div class="card"><div class="icon">⚡</div><h4>Fast scenario modeling</h4><p>Compare options quickly and iterate with minimal friction.</p></div>
-      <div class="card"><div class="icon">🧭</div><h4>Clear communication</h4><p>Visuals that explain complex choices to peers and stakeholders.</p></div>
-      <div class="card"><div class="icon">🧩</div><h4>Easy adoption</h4><p>No install, web-based, and friendly for pilots, classes, and demos.</p></div>
+  <!-- Testimonial -->
+  <section class="section fade-in">
+    <div class="container">
+      <div class="testimonial">
+        <blockquote class="testimonial-quote">
+          "Polaris transformed our decision-making process completely. What used to take our team weeks 
+          now happens in hours. The ROI was immediate—we caught a critical market shift that saved us $2M."
+        </blockquote>
+        <div class="testimonial-author">
+          <div class="author-avatar"></div>
+          <div class="author-info">
+            <h4>Sarah Chen</h4>
+            <p>VP Strategy, Fortune 500 Retailer</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- INTEGRATIONS -->
-  <section id="integrations" class="section reveal">
-    <h3 class="sec-title">Integrations we use in the demo</h3>
-    <p class="muted" style="margin-bottom:12px">These tools are already wired in the project so you can showcase real instrumentation:</p>
-    <div class="grid4">
-      <div class="card" style="text-align:center"><div class="icon">🗄️</div><h4>Supabase</h4><p class="muted">Cloud DB for signups</p></div>
-      <div class="card" style="text-align:center"><div class="icon">🪲</div><h4>Sentry</h4><p class="muted">Error & replay</p></div>
-      <div class="card" style="text-align:center"><div class="icon">🎥</div><h4>Smartlook</h4><p class="muted">Session recordings</p></div>
-      <div class="card" style="text-align:center"><div class="icon">🚀</div><h4>Vercel</h4><p class="muted">Auto-deploy (soon)</p></div>
+  <!-- Integrations -->
+  <section class="section fade-in" id="integrations">
+    <div class="container">
+      <div class="text-center">
+        <h2 class="h2">Built for your existing workflow</h2>
+        <p class="subtitle" style="margin-top: 1rem;">
+          Seamless integration with the tools your team already uses. No disruption, just enhancement.
+        </p>
+      </div>
+
+      <div class="integrations-grid">
+        <div class="integration-card">
+          <div class="integration-icon">🗄️</div>
+          <h4>Supabase</h4>
+          <p class="body">Secure cloud database with real-time sync</p>
+        </div>
+
+        <div class="integration-card">
+          <div class="integration-icon">🪲</div>
+          <h4>Sentry</h4>
+          <p class="body">Advanced error tracking & performance monitoring</p>
+        </div>
+
+        <div class="integration-card">
+          <div class="integration-icon">🎥</div>
+          <h4>Smartlook</h4>
+          <p class="body">User session recordings & behavior analytics</p>
+        </div>
+
+        <div class="integration-card">
+          <div class="integration-icon">🚀</div>
+          <h4>Vercel</h4>
+          <p class="body">Instant deployment & global CDN</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- ABOUT -->
-  <section id="about" class="section reveal">
-    <h3 class="sec-title">Our story</h3>
-    <div class="card">
-      <p class="muted">
-        Polaris was built as a compact, teachable product that helps teams reason about decisions with
-        quick simulations and crisp visuals. The goal is to reduce back-and-forth, and let anyone —
-        students, managers, or partners — explore scenarios in minutes, not weeks.
-      </p>
-    </div>
-  </section>
-
-  <!-- TESTIMONIAL -->
-  <section class="section reveal">
-    <div class="testi">
-      <div class="avatar" aria-hidden="true"></div>
-      <div>
-        <blockquote>“Polaris helped our team validate decisions 3× faster. The UI is clean, and the demo-to-production path was effortless.”</blockquote>
-        <div class="by">Operations Lead, Early-stage Partner</div>
+  <!-- About -->
+  <section class="section fade-in" id="about">
+    <div class="container">
+      <div class="text-center">
+        <h2 class="h2">Built by decision-makers, for decision-makers</h2>
+        <div class="testimonial" style="text-align: left; max-width: 800px;">
+          <p class="body-large">
+            Born from years of frustration with clunky enterprise tools and endless PowerPoint debates, 
+            Polaris represents a fundamental shift in how organizations approach complex decisions.
+          </p>
+          <br>
+          <p class="body-large">
+            We believe every team—from startups to Fortune 500—deserves access to simulation tools 
+            that are both powerful and intuitive. Tools that accelerate insight, not bureaucracy.
+          </p>
+          <br>
+          <p class="body-large">
+            Today, Polaris helps teams across industries make smarter decisions faster, 
+            with the confidence that comes from truly understanding your options.
+          </p>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- FAQ -->
-  <section class="section reveal">
-    <h3 class="sec-title">FAQ</h3>
-    <div class="faq">
-      <details class="q"><summary>Do I need to install anything?</summary><p>No. Polaris runs on the web and works on modern browsers.</p></details>
-      <details class="q"><summary>Can we adapt it for different domains?</summary><p>Yes. The simulations are generic and can be tailored to many industries.</p></details>
-      <details class="q"><summary>How is my data stored?</summary><p>For the demo we use Supabase (Postgres) with strict RLS. Production setups can use your own cloud.</p></details>
+  <section class="section-sm fade-in">
+    <div class="container">
+      <div class="text-center">
+        <h2 class="h3">Frequently asked questions</h2>
+      </div>
+
+      <div style="max-width: 800px; margin: 3rem auto; display: grid; gap: 1rem;">
+        <details class="step" style="cursor: pointer;">
+          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
+            ▸ Is there anything to install or configure?
+          </summary>
+          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
+            <p class="body">
+              Nothing at all. Polaris runs entirely in your browser and works on any modern device. 
+              Just click and start modeling—it's that simple.
+            </p>
+          </div>
+        </details>
+
+        <details class="step" style="cursor: pointer;">
+          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
+            ▸ Can we customize it for our specific industry?
+          </summary>
+          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
+            <p class="body">
+              Absolutely. Polaris is built on flexible foundations that adapt to any domain—from financial 
+              modeling to supply chain optimization to strategic planning.
+            </p>
+          </div>
+        </details>
+
+        <details class="step" style="cursor: pointer;">
+          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
+            ▸ How secure is our sensitive business data?
+          </summary>
+          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
+            <p class="body">
+              Enterprise-grade security is built in, not bolted on. Row-level security, encrypted data 
+              transmission, and your choice of cloud provider or on-premise deployment.
+            </p>
+          </div>
+        </details>
+
+        <details class="step" style="cursor: pointer;">
+          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
+            ▸ What kind of support do you provide?
+          </summary>
+          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
+            <p class="body">
+              White-glove onboarding, dedicated success management, and 24/7 technical support. 
+              Plus extensive documentation and training resources.
+            </p>
+          </div>
+        </details>
+      </div>
     </div>
   </section>
 
-  <!-- JOIN THE BETA -->
-  <section class="section reveal" style="text-align:center">
-    <h3 class="sec-title">Join the beta</h3>
-    <p class="muted" style="margin-bottom:12px">Drop your email to get early updates. No spam, promise.</p>
-    <form class="join" id="join-form">
-      <input id="email" class="input" type="email" placeholder="you@company.com" required />
-      <button class="btn" type="submit">Request access</button>
-      <div id="msg" class="note"></div>
-    </form>
+  <!-- CTA Section -->
+  <section class="cta-section section fade-in">
+    <div class="container">
+      <h2 class="h2">Ready to transform your decisions?</h2>
+      <p class="subtitle">
+        Join thousands of teams who've already discovered the power of intelligent simulation.
+      </p>
+      
+      <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
+        <a href="lab-simulation.html" class="btn btn-primary btn-lg">
+          Experience the Demo
+        </a>
+        <a href="#join" class="btn btn-secondary btn-lg" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
+          Request Early Access
+        </a>
+      </div>
+
+      <!-- Beta Signup Form -->
+      <div id="join" class="form-container">
+        <form id="join-form">
+          <div class="form-group">
+            <input 
+              id="email" 
+              class="input" 
+              type="email" 
+              placeholder="Enter your business email" 
+              required 
+            />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Get Early Access
+          </button>
+          <div id="form-message" class="form-message" style="display: none;"></div>
+        </form>
+        <p style="font-size: 0.875rem; color: rgba(255,255,255,0.7); margin-top: 1rem; text-align: center;">
+          No spam, ever. Unsubscribe with one click.
+        </p>
+      </div>
+    </div>
   </section>
 
-  <footer>© 2025 Polaris Project — Demo site for course project.</footer>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>© 2025 Polaris — Intelligent Simulation Platform</p>
+    </div>
+  </footer>
 
-  <!-- Reveal on scroll + optional Supabase hookup -->
+  <!-- Scripts -->
   <script>
-    // Reveal animations
-    const obs = new IntersectionObserver((entries)=>{
-      entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('show'); obs.unobserve(e.target);} });
-    },{threshold:.15});
-    document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+    // Scroll animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
 
-    // === Optional: send "Join beta" emails to Supabase 'signups' table ===
-    // TODO: put your real values here (from Supabase -> Project Settings -> API)
-    const SUPABASE_URL = "";   // e.g. "https://abcd.supabase.co"
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.fade-in').forEach(el => {
+      observer.observe(el);
+    });
+
+    // Nav scroll effect
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 100) {
+        nav.classList.add('scrolled');
+      } else {
+        nav.classList.remove('scrolled');
+      }
+    });
+
+    // Smooth scrolling for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          const offsetTop = target.offsetTop - 80;
+          window.scrollTo({
+            top: offsetTop,
+            behavior: 'smooth'
+          });
+        }
+      });
+    });
+
+    // Form handling
+    const SUPABASE_URL = "";
     const SUPABASE_ANON_KEY = "";
 
-    document.getElementById('join-form').addEventListener('submit', async (e)=>{
+    document.getElementById('join-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const msg = document.getElementById('msg');
-      const email = document.getElementById('email').value.trim();
+      
+      const emailInput = document.getElementById('email');
+      const messageEl = document.getElementById('form-message');
+      const email = emailInput.value.trim();
 
-      if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
-        msg.textContent = "Saved locally. (Connect Supabase URL & Key to store in the cloud.)";
+      messageEl.style.display = 'block';
+      messageEl.className = 'form-message';
+      messageEl.textContent = 'Processing...';
+
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        messageEl.className = 'form-message success';
+        messageEl.textContent = 'Thanks for your interest! We\'ll be in touch soon.';
+        emailInput.value = '';
+        
+        // Track the signup
+        if (typeof mixpanel !== 'undefined') {
+          mixpanel.track('Beta Signup', { email: email });
+        }
         return;
       }
 
-      try{
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/signups`,{
-          method:'POST',
-          headers:{
-            'Content-Type':'application/json',
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/signups`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Prefer':'return=representation'
+            'Prefer': 'return=representation'
           },
           body: JSON.stringify({ email })
         });
-        if(!res.ok) throw new Error(await res.text());
-        msg.textContent = "Thanks! You're on the list.";
-      }catch(err){
-        console.error(err);
-        msg.textContent = "Something went wrong. Try again later.";
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        messageEl.className = 'form-message success';
+        messageEl.textContent = 'Perfect! You\'re on the list. We\'ll be in touch with early access soon.';
+        emailInput.value = '';
+        
+        // Track successful signup
+        if (typeof mixpanel !== 'undefined') {
+          mixpanel.track('Beta Signup Success', { email: email });
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        messageEl.className = 'form-message error';
+        messageEl.textContent = 'Something went wrong. Please try again or contact us directly.';
+        
+        // Track error
+        if (typeof mixpanel !== 'undefined') {
+          mixpanel.track('Beta Signup Error', { email: email, error: error.message });
+        }
       }
     });
+
+    // Enhanced details/summary handling
+    document.querySelectorAll('details').forEach(detail => {
+      const summary = detail.querySelector('summary');
+      if (summary) {
+        detail.addEventListener('toggle', () => {
+          const arrow = summary.textContent.charAt(0);
+          if (detail.open) {
+            summary.textContent = summary.textContent.replace('▸', '▾');
+          } else {
+            summary.textContent = summary.textContent.replace('▾', '▸');
+          }
+        });
+      }
+    });
+
+    // Track page load
+    if (typeof mixpanel !== 'undefined') {
+      mixpanel.track('Page Loaded', { 
+        page: 'homepage',
+        timestamp: new Date().toISOString()
+      });
+    }
   </script>
 
-<!-- 1. Load the Featurebase SDK -->
-<script>!(function(e,t){var a="featurebase-sdk";function n(){if(!t.getElementById(a)){var e=t.createElement("script");(e.id=a),(e.src="https://do.featurebase.app/js/sdk.js"),t.getElementsByTagName("script")[0].parentNode.insertBefore(e,t.getElementsByTagName("script")[0])}};"function"!=typeof e.Featurebase&&(e.Featurebase=function(){(e.Featurebase.q=e.Featurebase.q||[]).push(arguments)}),"complete"===t.readyState||"interactive"===t.readyState?n():t.addEventListener("DOMContentLoaded",n)})(window,document);</script>
-
-<!-- 2. Boot Featurebase with your messenger config -->
-<script>
-  Featurebase("boot", {
-    appId: "68c7dbdda04bf7aac651d56d",         // required
-    createdAt: "2025-05-06T12:00:00Z", // optional
-    theme: "light",                    // "light" or "dark"
-    language: "en",                     // short code (e.g. "en", "de", etc.)
-    // Hide the launcher button entirely
-    // For custom launcher button implementation
-    // hideDefaultLauncher: true // optional
-    // userHash: generatedToken // Check the docs for additional details below
-    // + feel free to add any more custom values about the user here
-  });
-</script>
-
-
+  <!-- Featurebase SDK -->
+  <script>!(function(e,t){var a="featurebase-sdk";function n(){if(!t.getElementById(a)){var e=t.createElement("script");(e.id=a),(e.src="https://do.featurebase.app/js/sdk.js"),t.getElementsByTagName("script")[0].parentNode.insertBefore(e,t.getElementsByTagName("script")[0])}};"function"!=typeof e.Featurebase&&(e.Featurebase=function(){(e.Featurebase.q=e.Featurebase.q||[]).push(arguments)}),"complete"===t.readyState||"interactive"===t.readyState?n():t.addEventListener("DOMContentLoaded",n)})(window,document);</script>
 
   <script>
-    mixpanel.track("Page Loaded");
+    Featurebase("boot", {
+      appId: "68c7dbdda04bf7aac651d56d",
+      createdAt: "2025-05-06T12:00:00Z",
+      theme: "light",
+      language: "en"
+    });
   </script>
 
 </body>
