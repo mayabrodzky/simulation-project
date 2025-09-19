@@ -208,6 +208,12 @@
       box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
     }
 
+    /* Logo size */
+    .logo-image {
+      height: 50px;   /* שנה כאן כדי להקטין/להגדיל */
+      width: auto;    /* שומר על פרופורציות */
+    }
+
     .nav-links {
       display: flex;
       align-items: center;
@@ -643,8 +649,8 @@
   <nav class="nav" id="nav">
     <div class="nav-content">
       <a href="#" class="brand">
-        <div class="logo">★</div>
-        Polaris
+        <img src="bellatryx-logo.png" alt="Bellatryx Logo" class="logo-image" />
+        Bellatryx
       </a>
       <div class="nav-links">
         <a href="#how">How it works</a>
@@ -664,7 +670,7 @@
           <h1 class="h1">Transform decisions with intelligent simulations</h1>
           <p class="subtitle hero-subtitle">
             Stop guessing. Start knowing. Polaris empowers teams to model complex scenarios, 
-            test critical decisions, and communicate impact with precision—reducing time-to-insight by 75%.
+            test critical decisions, and communicate impact with precision.
           </p>
           <div class="hero-cta">
             <a href="lab-simulation.html" class="btn btn-primary btn-lg">
