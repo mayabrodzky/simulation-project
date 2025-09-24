@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Polaris – Professional Lab Simulation (V14.6 Final)</title>
+  <title>Polaris – Professional Lab Simulation (V14.8 Final)</title>
 
-  <!-- Smartlook -->
   <script type="text/javascript">
     window.smartlook||(function(d){
       var o=smartlook=function(){o.api.push(arguments)},h=d.getElementsByTagName('head')[0];
@@ -34,26 +33,10 @@
     body.sandbox-mode { box-shadow: inset 0 0 0 8px #3b82f6; }
 
     #welcomeMessage {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 3rem;
-      font-weight: 700;
-      color: white;
-      text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
-      z-index: 9999;
-      pointer-events: none;
-      opacity: 0;
-      animation: fadeInOut 4s ease-in-out forwards;
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 3rem; font-weight: 700; color: white;
+      text-shadow: 2px 2px 8px rgba(0,0,0,0.7); z-index: 9999; pointer-events: none; opacity: 0; animation: fadeInOut 4s ease-in-out forwards;
     }
-
-    @keyframes fadeInOut {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-      20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
-    }
-
+    @keyframes fadeInOut { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } 20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); } }
 
     .header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 1rem 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
     .header-content { max-width: 1600px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
@@ -153,9 +136,13 @@
     .staff-assign-option span { font-weight: 600; }
     .staff-assign-option small { color: var(--text-light); }
     .emergency-list { display: grid; gap: 0.75rem; }
-    .emergency-card { background: #fef2f2; border-radius: 12px; padding: 1rem; border-left: 4px solid var(--danger-color); transition: background-color 0.2s; }
+    .emergency-card { background: #fef2f2; border-radius: 12px; padding: 1rem; border-left: 4px solid var(--danger-color); transition: all 0.2s; cursor: pointer; }
+    .emergency-card:hover { transform: translateX(3px); background-color: #fee2e2; }
     .emergency-card strong { color: #b91c1c; }
     .emergency-card div { font-size: 0.875rem; color: var(--text-light); display: flex; justify-content: space-between; }
+    .session-history-item { padding: 0.75rem; border-radius: 8px; background: #f8fafc; cursor: pointer; transition: all 0.2s; border: 1px solid var(--border-color); }
+    .session-history-item:hover { background-color: #f0f9ff; border-color: var(--primary-color); }
+    .session-history-item small { color: var(--text-light); }
     .notification { position: fixed; top: 100px; right: 20px; padding: 1rem 1.5rem; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: slideIn 0.3s; z-index: 2000; max-width: 350px; }
     @keyframes slideIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
   </style>
@@ -196,8 +183,6 @@
       <div class="game-header">
         <span style="font-size: 1.1rem; font-weight: 600;">🏢 Office Floor - Isometric View</span>
         <div class="controls">
-          <button class="btn-control" onclick="Lab.togglePause()" title="Play/Pause">⏯️</button>
-          <button class="btn-control" onclick="Lab.changeSpeed()" title="Speed">⚡</button>
           <button class="btn-control" onclick="Lab.resetCamera()" title="Reset View">🎯</button>
         </div>
       </div>
@@ -227,6 +212,22 @@
           <span class="panel-toggle-icon">▼</span>
         </div>
         <div class="panel-content staff-list" id="staffList"></div>
+      </div>
+
+      <div class="panel" id="sandboxLogPanel" style="display: none;">
+        <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <h3>📝 Sandbox Action Log</h3>
+          <span class="panel-toggle-icon">▼</span>
+        </div>
+        <div class="panel-content" id="sandboxLogList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <h3>📖 Sandbox History</h3>
+          <span class="panel-toggle-icon">▼</span>
+        </div>
+        <div class="panel-content" id="sandboxHistoryList" style="display: grid; gap: 0.5rem;"></div>
       </div>
       <div class="panel">
         <div class="panel-header" onclick="Lab.togglePanel(this)">
@@ -271,12 +272,18 @@
     <div id="equipmentCatalogList"></div>
     <button class="btn" style="margin-top: 1rem;" onclick="Lab.closeAllModals()">Close</button>
   </div>
-
+  
+  <div class="modal" id="sessionDetailsModal">
+    <h3 id="sessionDetailsHeader">Sandbox Session Details</h3>
+    <div id="sessionDetailsContent" style="max-height: 60vh; overflow-y: auto; font-size: 0.9rem; line-height: 1.5; background: #f8fafc; padding: 1rem; border-radius: 8px;">
+    </div>
+    <button class="btn" style="margin-top: 1rem;" onclick="Lab.closeAllModals()">Close</button>
+  </div>
   <script>
     const Lab = {
       canvas: null, ctx: null, width: 0, height: 0, timeOverlay: null,
       camera: { x: 20, y: 100, zoom: 0.85 },
-      state: { money: 25000, materials: 200, samples: 120, time: 480, speed: 1, paused: false },
+      state: { money: 25000, materials: 200, samples: 120, time: 480, speed: 1 },
       isSandboxMode: false, liveStateBackup: null,
       gridWidth: 24, gridHeight: 18,
       labFloor: { x: 3, y: 3, w: 14, h: 8 }, 
@@ -288,9 +295,10 @@
       equipmentCatalog: [],
       selectedStaff: null, activeEmergencyTask: null,
       hoveredEntity: null, highlightedStaffIds: [],
-
+      sandboxSessionHistory: [], currentSandboxSession: null,
+      
       init() {
-        console.log('Initializing Upgraded Lab Simulation V14.6...');
+        console.log('Initializing Upgraded Lab Simulation V14.8...');
         const now = new Date();
         this.state.time = now.getHours() * 60 + now.getMinutes();
         this.canvas = document.getElementById('gameCanvas');
@@ -302,6 +310,7 @@
         this.lastTime = performance.now();
         this.gameLoop();
         this.updateAllPanels();
+        this.updateSessionHistoryPanel();
       },
       updateAllPanels() {
         this.updateStaffPanel(); this.updateEquipmentPanel(); this.updateTaskListPanel(); this.updateStatusCounts(); this.updateEmergencyListPanel(); this.updateOngoingTasksPanel();
@@ -379,47 +388,149 @@
         this.tasks.push({ id: 'TSK003', name: 'Cell Culture Test', reward: 850, timeLimit: 480, penalty: 400, equipmentSequence: [{ name: 'Incubator', duration: 15, skillRequired: 'Incubator Handling' }, { name: 'Biosafety Cabinet', duration: 45, skillRequired: 'Biosafety Protocols' }, { name: 'Microscope A', duration: 30, skillRequired: 'Microscopy' }] });
       },
       createEquipmentCatalog() { this.equipmentCatalog = [ { id: 'cat001', name: 'Microscope B', icon: '🔬', cost: 1500, skill: 'Microscopy' }, { id: 'cat002', name: 'PCR Machine II', icon: '🧬', cost: 3000, skill: 'PCR Operation' }, { id: 'cat003', name: 'Auto-Sampler', icon: '🤖', cost: 5000, skill: 'Spectrophotometry' }, ]; },
-      enterSandboxMode() { if (this.isSandboxMode) return; this.isSandboxMode = true; this.state.paused = true; this.liveStateBackup = JSON.parse(JSON.stringify({ state: this.state, staff: this.staff, equipment: this.equipment, emergencyQueue: this.emergencyQueue })); document.body.classList.add('sandbox-mode'); document.getElementById('sandboxBtn').classList.add('active'); document.getElementById('liveBtn').classList.remove('active'); this.showNotification('Entered Sandbox Mode. Changes will not affect the live simulation.', 'info'); },
-      exitSandboxMode() { if (!this.isSandboxMode) return; this.isSandboxMode = false; const wasPaused = this.liveStateBackup.state.paused; this.state = this.liveStateBackup.state; this.staff = this.liveStateBackup.staff; this.equipment = this.liveStateBackup.equipment; this.emergencyQueue = this.liveStateBackup.emergencyQueue; this.liveStateBackup = null; this.state.paused = wasPaused; document.body.classList.remove('sandbox-mode'); document.getElementById('liveBtn').classList.add('active'); document.getElementById('sandboxBtn').classList.remove('active'); this.updateAllPanels(); this.showNotification('Returned to Live Mode. All changes reverted.', 'info'); },
-      toIso(x, y) { const isoX = (x - y) * this.tileSize / 2; const isoY = (x + y) * this.tileSize / 4; return { x: isoX, y: isoY }; },
-      update(dt) {
-        if (this.state.paused && !this.isSandboxMode) return;
-        const gameDt = dt * this.state.speed;
-        if (!this.isSandboxMode) { this.state.time += gameDt * 0.5; }
-        if (this.state.time >= 1440) this.state.time -= 1440;
-        this.updateTimeOfDayOverlay();
-        if (!this.isSandboxMode && Math.random() < 0.0005 * this.state.speed) { 
-            if (this.emergencyQueue.filter(t => t.status === 'pending').length === 0) {
-                this.triggerEmergency();
-            }
+
+      enterSandboxMode() {
+        if (this.isSandboxMode) return;
+        this.isSandboxMode = true;
+        this.liveStateBackup = JSON.parse(JSON.stringify({ state: this.state, staff: this.staff, equipment: this.equipment, emergencyQueue: this.emergencyQueue }));
+        
+        const newSession = { id: 'SBX' + Date.now(), startTime: new Date(), actions: [] };
+        this.sandboxSessionHistory.unshift(newSession);
+        this.currentSandboxSession = newSession;
+        this.logSandboxAction("Entered Sandbox Mode.");
+        
+        document.body.classList.add('sandbox-mode');
+        document.getElementById('sandboxBtn').classList.add('active');
+        document.getElementById('liveBtn').classList.remove('active');
+        document.getElementById('sandboxLogPanel').style.display = 'block';
+        this.updateSandboxLogPanel();
+        this.showNotification('Entered Sandbox Mode. Changes will not affect the live simulation.', 'info');
+      },
+
+      exitSandboxMode() {
+        if (!this.isSandboxMode) return;
+        this.isSandboxMode = false;
+        this.state = this.liveStateBackup.state;
+        this.staff = this.liveStateBackup.staff;
+        this.equipment = this.liveStateBackup.equipment;
+        this.emergencyQueue = this.liveStateBackup.emergencyQueue;
+        this.liveStateBackup = null;
+        this.currentSandboxSession = null;
+
+        document.body.classList.remove('sandbox-mode');
+        document.getElementById('liveBtn').classList.add('active');
+        document.getElementById('sandboxBtn').classList.remove('active');
+        document.getElementById('sandboxLogPanel').style.display = 'none';
+        
+        this.updateAllPanels();
+        this.updateSessionHistoryPanel();
+        this.showNotification('Returned to Live Mode. All changes reverted.', 'info');
+      },
+      
+      logSandboxAction(actionText) {
+        if (!this.isSandboxMode || !this.currentSandboxSession) return;
+        const time = new Date();
+        const timestamp = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}`;
+        this.currentSandboxSession.actions.unshift(`[${timestamp}] ${actionText}`);
+        this.updateSandboxLogPanel();
+      },
+
+      updateSandboxLogPanel() {
+        if (!this.isSandboxMode || !this.currentSandboxSession) return;
+        const listEl = document.getElementById('sandboxLogList');
+        if (!listEl) return;
+        if (this.currentSandboxSession.actions.length === 0) {
+            listEl.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No actions logged yet.</div>`;
+            return;
         }
-        if (!this.isSandboxMode) { this.updateEmergencies(gameDt); }
+        listEl.innerHTML = this.currentSandboxSession.actions.map(entry => 
+            `<div style="font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid #f1f5f9;">${entry}</div>`
+        ).join('');
+      },
+
+      updateSessionHistoryPanel() {
+        const listEl = document.getElementById('sandboxHistoryList');
+        if (!listEl) return;
+        if (this.sandboxSessionHistory.length === 0) {
+            listEl.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No sandbox sessions recorded.</div>`;
+            return;
+        }
+        listEl.innerHTML = this.sandboxSessionHistory.map(session => {
+            const date = session.startTime.toLocaleDateString();
+            const time = session.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `<div class="session-history-item" onclick="Lab.showSessionDetails('${session.id}')">
+                <strong>Session from ${date}</strong><br>
+                <small>${time} - ${session.actions.length} actions recorded</small>
+            </div>`;
+        }).join('');
+      },
+      
+      showSessionDetails(sessionId) {
+        const session = this.sandboxSessionHistory.find(s => s.id === sessionId);
+        if (!session) return;
+        
+        const headerEl = document.getElementById('sessionDetailsHeader');
+        const contentEl = document.getElementById('sessionDetailsContent');
+        const time = session.startTime.toLocaleString();
+        headerEl.textContent = `Log for Session: ${time}`;
+        
+        if (session.actions.length === 0) {
+            contentEl.innerHTML = "No actions were recorded in this session.";
+        } else {
+            contentEl.innerHTML = session.actions.slice().reverse().map(action => `<div>${action}</div>`).join('');
+        }
+        
+        document.getElementById('modalOverlay').className = 'modal-overlay active';
+        document.getElementById('sessionDetailsModal').className = 'modal active';
+      },
+
+      toIso(x, y) { const isoX = (x - y) * this.tileSize / 2; const isoY = (x + y) * this.tileSize / 4; return { x: isoX, y: isoY }; },
+
+      update(dt) {
+        const gameDt = dt * this.state.speed;
+        
+        if (!this.isSandboxMode) { 
+            this.state.time += gameDt * 0.5; 
+            if (this.state.time >= 1440) this.state.time -= 1440;
+            
+            if (Math.random() < 0.0005 * this.state.speed) { 
+                if (this.emergencyQueue.filter(t => t.status === 'pending').length === 0) {
+                    this.triggerEmergency();
+                }
+            }
+            this.updateEmergencies(gameDt);
+        }
+
+        this.updateTimeOfDayOverlay();
+        
         this.staff.forEach(person => {
           if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
-          if (!this.isSandboxMode) { if(person.state === 'working') person.energy -= gameDt * 0.2; if(person.state === 'break') person.energy += gameDt * 1; if(person.energy < 20 && person.state !== 'break') person.state = 'break'; if(person.energy > 95 && person.state === 'break') person.state = 'idle'; }
+          if(person.state === 'working') person.energy -= gameDt * 0.2; 
+          if(person.state === 'break') person.energy += gameDt * 1; 
+          if(person.energy < 20 && person.state !== 'break') person.state = 'break'; 
+          if(person.energy > 95 && person.state === 'break') person.state = 'idle';
+
           if (person.activeTask) {
             const task = person.activeTask;
-            if (task.timeLimit !== undefined && !this.isSandboxMode) { task.timeLimit -= gameDt; if (task.timeLimit <= 0) { this.failTask(person, task); return; } }
+            if (task.timeLimit !== undefined) { 
+                task.timeLimit -= gameDt; 
+                if (task.timeLimit <= 0) { this.failTask(person, task); return; } 
+            }
             if (task.type === 'training') {
                 const equipment = this.equipment.find(eq => eq.id === task.equipmentId);
-                if (Math.round(person.x) === equipment.x && Math.round(person.y) === equipment.y) {
+                if (equipment && Math.round(person.x) === equipment.x && Math.round(person.y) === equipment.y) {
                     if (person.state !== 'working') {
                         if (!equipment.inUse) {
-                            person.state = 'working';
-                            equipment.inUse = true;
-                            equipment.assignedTo = person.id;
-                            this.updateAllPanels();
+                            person.state = 'working'; equipment.inUse = true; equipment.assignedTo = person.id; this.updateAllPanels();
                         } else { person.state = 'idle'; }
                     }
                     if (person.state === 'working') {
-                        if (!this.isSandboxMode) { person.taskTimer -= gameDt; }
+                        person.taskTimer -= gameDt;
                         if (person.taskTimer <= 0) {
-                            person.skills.push(task.skillToLearn);
+                            if (!person.skills.includes(task.skillToLearn)) person.skills.push(task.skillToLearn);
                             this.showNotification(`${person.name} is now certified for ${task.skillToLearn}!`, 'success');
                             if (equipment) { equipment.inUse = false; equipment.assignedTo = null; }
-                            person.activeTask = null;
-                            person.state = 'idle';
-                            this.updateAllPanels();
+                            person.activeTask = null; person.state = 'idle'; this.updateAllPanels();
                         }
                     }
                 }
@@ -428,9 +539,9 @@
                 if (!currentStep) { person.activeTask = null; return; }
                 const equipment = this.equipment.find(e => e.name === currentStep.name);
                 if (person.state === 'working') {
-                    if (!this.isSandboxMode) { person.taskTimer -= gameDt; }
+                    person.taskTimer -= gameDt;
                     if (person.taskTimer <= 0) {
-                        equipment.inUse = false; equipment.assignedTo = null;
+                        if (equipment) { equipment.inUse = false; equipment.assignedTo = null; }
                         person.taskStep++;
                         if (person.taskStep >= task.equipmentSequence.length) {
                             this.state.money += task.reward;
@@ -440,40 +551,48 @@
                         } else {
                             const nextStep = task.equipmentSequence[person.taskStep];
                             const nextEquipment = this.equipment.find(e => e.name === nextStep.name);
-                            person.targetX = nextEquipment.x; person.targetY = nextEquipment.y; person.state = 'idle';
+                            if (nextEquipment) { person.targetX = nextEquipment.x; person.targetY = nextEquipment.y; }
+                            person.state = 'idle';
                         }
                         this.updateAllPanels();
                     }
-                } else if (Math.round(person.x) === equipment.x && Math.round(person.y) === equipment.y) {
+                } else if (equipment && Math.round(person.x) === equipment.x && Math.round(person.y) === equipment.y) {
                     if (!equipment.inUse) {
                         person.targetX = null; person.targetY = null; person.state = 'working';
-                        person.taskTimer = currentStep.duration;
-                        equipment.inUse = true; equipment.assignedTo = person.id;
-                        this.updateAllPanels();
+                        person.taskTimer = currentStep.duration; equipment.inUse = true; equipment.assignedTo = person.id; this.updateAllPanels();
                     } else { person.state = 'idle'; }
                 }
             }
           }
-          if (person.targetX !== null && person.targetY !== null) { const dx = person.targetX - person.x; const dy = person.targetY - person.y; const dist = Math.sqrt(dx * dx + dy * dy); if (dist > 0.1) { const moveSpeed = this.isSandboxMode ? person.speed * 5 : person.speed; person.x += (dx / dist) * moveSpeed * gameDt * 60; person.y += (dy / dist) * moveSpeed * gameDt * 60; } else { person.x = person.targetX; person.y = person.targetY; } } else if (person.state === 'idle' && !person.activeTask && Math.random() < 0.005 && !this.isSandboxMode) { const f = this.labFloor; person.targetX = f.x + 1 + Math.random() * (f.w - 2); person.targetY = f.y + 1 + Math.random() * (f.h - 2); }
+          if (person.targetX !== null && person.targetY !== null) { 
+              const dx = person.targetX - person.x; const dy = person.targetY - person.y; const dist = Math.sqrt(dx * dx + dy * dy); 
+              if (dist > 0.1) { 
+                  const moveSpeed = this.isSandboxMode ? person.speed * 5 : person.speed; 
+                  person.x += (dx / dist) * moveSpeed * gameDt * 60; person.y += (dy / dist) * moveSpeed * gameDt * 60; 
+              } else { person.x = person.targetX; person.y = person.targetY; } 
+          } else if (person.state === 'idle' && !person.activeTask && Math.random() < 0.005) { 
+              const f = this.labFloor; person.targetX = f.x + 1 + Math.random() * (f.w - 2); person.targetY = f.y + 1 + Math.random() * (f.h - 2); 
+          }
           const f = this.labFloor;
           person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));
           person.y = Math.max(f.y + 0.5, Math.min(f.y + f.h - 0.5, person.y));
         });
-        this.equipment.forEach(eq => { if (eq.inUse && !this.isSandboxMode) { eq.condition -= gameDt * 0.05; eq.totalWorkTime += gameDt; } });
+        this.equipment.forEach(eq => { if (eq.inUse) { eq.condition -= gameDt * 0.05; eq.totalWorkTime += gameDt; } });
         this.updateUI(); this.updateStatusCounts(); this.updateEmergencyListPanel(); this.updateOngoingTasksPanel();
       },
+
       updateTimeOfDayOverlay() { const hours = this.state.time / 60; let color = 'rgba(0,0,0,0)'; if (hours < 6 || hours >= 21) { color = 'rgba(12, 28, 64, 0.4)'; } else if (hours >= 6 && hours < 9) { color = 'rgba(255, 215, 135, 0.15)'; } else if (hours >= 18 && hours < 21) { color = 'rgba(255, 140, 0, 0.25)'; } this.timeOverlay.style.backgroundColor = color; },
-      failTask(person, task) { this.state.money -= task.penalty; this.showNotification(`Task "${task.name}" failed! Penalty: $${task.penalty}`, 'error'); const currentStep = task.equipmentSequence[person.taskStep]; if (currentStep) { const equipment = this.equipment.find(e => e.name === currentStep.name); if (equipment && equipment.assignedTo === person.id) { equipment.inUse = false; equipment.assignedTo = null; this.updateEquipmentPanel(); } } if (task.isEmergency) { const emergency = this.emergencyQueue.find(e => e.id === task.id); if(emergency) emergency.status = 'failed'; } person.activeTask = null; person.taskStep = 0; person.state = 'idle'; this.updateAllPanels(); },
+      failTask(person, task) { this.state.money -= task.penalty; const failMessage = `Task "${task.name}" failed! Penalty: $${task.penalty}`; this.showNotification(failMessage, 'error'); this.logSandboxAction(failMessage); const currentStep = task.equipmentSequence[person.taskStep]; if (currentStep) { const equipment = this.equipment.find(e => e.name === currentStep.name); if (equipment && equipment.assignedTo === person.id) { equipment.inUse = false; equipment.assignedTo = null; this.updateEquipmentPanel(); } } if (task.isEmergency) { const emergency = this.emergencyQueue.find(e => e.id === task.id); if(emergency) emergency.status = 'failed'; } person.activeTask = null; person.taskStep = 0; person.state = 'idle'; this.updateAllPanels(); },
       drawIsoBox(x, y, w, h, z, topColor, sideColor1 = '#a1a1a1', sideColor2 = '#8a8a8a') { const zc = z; const p1 = this.toIso(x, y); const p2 = this.toIso(x + w, y); const p3 = this.toIso(x + w, y + h); const p4 = this.toIso(x, y + h); this.ctx.fillStyle = sideColor1; this.ctx.beginPath(); this.ctx.moveTo(p4.x, p4.y); this.ctx.lineTo(p3.x, p3.y); this.ctx.lineTo(p3.x, p3.y - zc); this.ctx.lineTo(p4.x, p4.y - zc); this.ctx.closePath(); this.ctx.fill(); this.ctx.fillStyle = sideColor2; this.ctx.beginPath(); this.ctx.moveTo(p2.x, p2.y); this.ctx.lineTo(p3.x, p3.y); this.ctx.lineTo(p3.x, p3.y - zc); this.ctx.lineTo(p2.x, p2.y - zc); this.ctx.closePath(); this.ctx.fill(); this.ctx.fillStyle = topColor; this.ctx.beginPath(); this.ctx.moveTo(p1.x, p1.y); this.ctx.lineTo(p2.x, p2.y); this.ctx.lineTo(p3.x, p3.y); this.ctx.lineTo(p4.x, p4.y); this.ctx.closePath(); this.ctx.fill(); },
       drawIsoWall(x1, y1, x2, y2, z, color) { const zc = z; const p1 = this.toIso(x1, y1); const p2 = this.toIso(x2, y2); this.ctx.fillStyle = color; this.ctx.beginPath(); this.ctx.moveTo(p1.x, p1.y); this.ctx.lineTo(p2.x, p2.y); this.ctx.lineTo(p2.x, p2.y - zc); this.ctx.lineTo(p1.x, p1.y - zc); this.ctx.closePath(); this.ctx.fill(); },
       render() { this.ctx.clearRect(0, 0, this.width, this.height); this.ctx.save(); this.ctx.translate(this.width / 2 + this.camera.x, this.height / 2 + this.camera.y - 150); this.ctx.scale(this.camera.zoom, this.camera.zoom); this.ctx.translate(-this.gridWidth * this.tileSize / 4, -this.gridHeight * this.tileSize / 8); this.drawExterior(); const f = this.labFloor; const o1 = this.office1; const o2 = this.office2; this.drawIsoBox(f.x, f.y, f.w, f.h, this.tileHeight, '#cccccc'); this.ctx.globalAlpha = 0.05; this.ctx.strokeStyle = '#1e293b'; this.ctx.lineWidth = 1; for(let i = 0; i < f.w; i++) { for(let j = 0; j < f.h; j++) { const p1=this.toIso(f.x+i,f.y+j);const p2=this.toIso(f.x+i+1,f.y+j);const p3=this.toIso(f.x+i+1,f.y+j+1);const p4=this.toIso(f.x+i,f.y+j+1); this.ctx.beginPath(); this.ctx.moveTo(p1.x, p1.y); this.ctx.lineTo(p2.x,p2.y); this.ctx.lineTo(p3.x,p3.y); this.ctx.lineTo(p4.x,p4.y); this.ctx.closePath();this.ctx.stroke();}} this.ctx.globalAlpha = 1; this.drawIsoBox(o1.x, o1.y, o1.w, o1.h, this.tileHeight, '#1e3a8a', '#1e40af', '#1d4ed8'); this.drawIsoBox(o2.x, o2.y, o2.w, o2.h, this.tileHeight, '#1e3a8a', '#1e40af', '#1d4ed8'); this.drawIsoBox(f.x + f.w, f.y, o1.x - (f.x + f.w), f.h, this.tileHeight, '#9ca3af'); this.drawIsoBox(f.x, f.y + f.h, f.w, o2.y - (f.y + f.h), this.tileHeight, '#9ca3af'); const entities = [ ...this.equipment.map(e => ({...e, type: 'equipment', zIndex: e.x + e.y})), ...this.staff.map(s => ({...s, type: 'staff', zIndex: s.x + s.y + 0.1})), ...this.props.map(p => ({...p, type: 'prop', zIndex: p.x + p.y})), ...this.walls.map(w => ({...w, type: 'wall', zIndex: Math.min(w.x1 + w.y1, w.x2 + w.y2) - 0.1 })), ...this.staticPersonnel.map(p => ({...p, type: 'static_person', zIndex: p.x + p.y})) ].sort((a, b) => a.zIndex - b.zIndex); entities.forEach(entity => { if (entity.type === 'equipment') this.drawEquipment(entity); else if (entity.type === 'staff' && entity.state !== 'off' && entity.state !== 'vacation' && entity.state !== 'sick') this.drawStaff(entity); else if (entity.type === 'prop') this.drawProp(entity); else if (entity.type === 'wall') this.drawIsoWall(entity.x1, entity.y1, entity.x2, entity.y2, entity.height, '#94a3b8'); else if (entity.type === 'static_person') this.drawStaticPerson(entity); }); if (this.hoveredEntity) { this.drawHoverLabel(this.hoveredEntity); } this.ctx.restore(); this.drawHUD(); },
-      drawExterior() {// This function is now empty to remove the outer buildings and ground.
-},      drawEquipment(eq) { const eqHeight = 15; const topColor = eq.inUse ? '#6ee7b7' : '#94a3b8'; this.drawIsoBox(eq.x - 0.4, eq.y - 0.4, 0.8, 0.8, eqHeight, topColor, '#475569', '#334155'); const isoTop = this.toIso(eq.x, eq.y); this.ctx.font = `20px Arial`; this.ctx.textAlign = 'center'; this.ctx.fillText(eq.icon, isoTop.x, isoTop.y - (eqHeight * 0.7)); if (this.camera.zoom > 0.8) { this.ctx.fillStyle = 'white'; this.ctx.font = `10px Inter`; this.ctx.fillText(eq.name, isoTop.x, isoTop.y + (this.tileSize / 4)); } },
+      drawExterior() {},
+      drawEquipment(eq) { const eqHeight = 15; const topColor = eq.inUse ? '#6ee7b7' : '#94a3b8'; this.drawIsoBox(eq.x - 0.4, eq.y - 0.4, 0.8, 0.8, eqHeight, topColor, '#475569', '#334155'); const isoTop = this.toIso(eq.x, eq.y); this.ctx.font = `20px Arial`; this.ctx.textAlign = 'center'; this.ctx.fillText(eq.icon, isoTop.x, isoTop.y - (eqHeight * 0.7)); if (this.camera.zoom > 0.8) { this.ctx.fillStyle = 'white'; this.ctx.font = `10px Inter`; this.ctx.fillText(eq.name, isoTop.x, isoTop.y + (this.tileSize / 4)); } },
       drawProp(prop) { let propHeight = 12, topColor = '#a16207', side1 = '#854d0e', side2 = '#713f12'; if (prop.type === 'shelf') { propHeight = 25; topColor = '#9ca3af'; side1 = '#475569'; side2 = '#334155'; } else if (['plant', 'coffee', 'door'].includes(prop.type)) { const iso = this.toIso(prop.x, prop.y); this.ctx.font = `20px Arial`; this.ctx.textAlign = 'center'; this.ctx.fillText(prop.icon, iso.x, iso.y - 10); return; } this.drawIsoBox(prop.x - prop.w/2 + 0.5, prop.y - prop.h/2 + 0.5, prop.w, prop.h, propHeight, topColor, side1, side2); if (prop.icon) { const isoTop = this.toIso(prop.x + 0.5, prop.y + 0.5); this.ctx.font = `20px Arial`; this.ctx.textAlign = 'center'; this.ctx.fillText(prop.icon, isoTop.x, isoTop.y - (propHeight * 0.7)); } },
       drawStaff(person) { const iso = this.toIso(person.x, person.y); const size = 15; const bobOffset = (person.state === 'idle' && !person.activeTask) ? Math.sin(this.lastTime / 200 + person.id) * 2 : 0; const yPos = iso.y - bobOffset; this.ctx.fillStyle = 'rgba(0,0,0,0.3)'; this.ctx.beginPath(); this.ctx.ellipse(iso.x, iso.y + size * 0.4, size * 0.8, size * 0.4, 0, 0, Math.PI * 2); this.ctx.fill(); this.ctx.fillStyle = person.color; this.ctx.fillRect(iso.x - size * 0.7, yPos - size, size * 1.4, size * 1.5); this.ctx.fillStyle = '#fbbf24'; this.ctx.beginPath(); this.ctx.arc(iso.x, yPos - size * 1.3, size * 0.6, 0, Math.PI * 2); this.ctx.fill(); if (person.activeTask && person.state === 'working') { let progress = 0; let currentDuration = 0; if(person.activeTask.type === 'training') { currentDuration = person.activeTask.duration; } else { const currentStep = person.activeTask.equipmentSequence[person.taskStep]; if (currentStep) currentDuration = currentStep.duration; } if(currentDuration > 0) { progress = 1 - (person.taskTimer / currentDuration); } this.ctx.fillStyle = 'rgba(0,0,0,0.3)'; this.ctx.fillRect(iso.x - size, yPos - size * 2.6, size * 2, 4); this.ctx.fillStyle = '#6366f1'; this.ctx.fillRect(iso.x - size, yPos - size * 2.6, size * 2 * progress, 4); } if(this.highlightedStaffIds.includes(person.id)) { this.ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)'; this.ctx.lineWidth = 3; this.ctx.beginPath(); this.ctx.arc(iso.x, yPos - size * 0.5, size * 1.2, 0, Math.PI * 2); this.ctx.stroke(); } if (this.camera.zoom > 0.8) { this.ctx.fillStyle = 'white'; this.ctx.font = `10px Inter`; this.ctx.textAlign = 'center'; this.ctx.fillText(person.name, iso.x, yPos + size * 1.5); } },
       drawStaticPerson(person) {},
       drawHoverLabel(entity) { const iso = this.toIso(entity.x, entity.y); const text = entity.name; this.ctx.font = `bold 12px Inter`; const textMetrics = this.ctx.measureText(text); const width = textMetrics.width + 16; const height = 24; const x = iso.x - width / 2; const y = iso.y - 50; this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; this.ctx.fillRect(x, y, width, height); this.ctx.fillStyle = 'white'; this.ctx.textAlign = 'center'; this.ctx.textBaseline = 'middle'; this.ctx.fillText(text, iso.x, y + height / 2); },
-      drawHUD() { const h=Math.floor(this.state.time/60) % 24; const m=Math.floor(this.state.time%60); this.ctx.fillStyle='rgba(0,0,0,0.7)'; this.ctx.fillRect(10,10,150,40); this.ctx.fillStyle='white'; this.ctx.font='16px Inter'; this.ctx.textAlign='left'; this.ctx.fillText(`🕐 ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`,20,35); this.ctx.fillText(`⚡ ${this.state.speed}x`,100,35); },
+      drawHUD() { const h=Math.floor(this.state.time/60) % 24; const m=Math.floor(this.state.time%60); this.ctx.fillStyle='rgba(0,0,0,0.7)'; this.ctx.fillRect(10,10,120,40); this.ctx.fillStyle='white'; this.ctx.font='16px Inter'; this.ctx.textAlign='left'; this.ctx.fillText(`🕐 ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`,20,35); },
       gameLoop() { const now=performance.now();const dt=(now-this.lastTime)/1000;this.lastTime=now;this.update(dt);this.render();requestAnimationFrame(()=>this.gameLoop()); },
       updateUI() { document.getElementById('money').textContent=this.state.money.toFixed(0); document.getElementById('materials').textContent=this.state.materials; document.getElementById('samples').textContent=this.state.samples; },
       updateStatusCounts() { const c={working:0,break:0,off:0,sick:0,vacation:0,training:0};this.staff.forEach(p=>{if(p.state==='working'||p.state==='idle'){c.working++;}else if(p.state==='break'){c.break++;}else if(p.state==='off'){c.off++;}else if(p.state==='sick'){c.sick++;}else if(p.state==='vacation'){c.vacation++;}if(p.activeTask&&p.activeTask.type==='training'){c.training++;}});document.getElementById('workingCount').textContent=c.working;document.getElementById('breakCount').textContent=c.break;document.getElementById('offCount').textContent=c.off;document.getElementById('sickCount').textContent=c.sick;document.getElementById('vacationCount').textContent=c.vacation;document.getElementById('trainingCount').textContent=c.training;},
@@ -484,25 +603,36 @@
       updateOngoingTasksPanel() { const panel = document.getElementById('ongoingTasksPanel'); if (!panel) return; const activeStaff = this.staff.filter(p => p.activeTask); if (activeStaff.length === 0) { panel.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No tasks in progress.</div>`; return; } panel.innerHTML = activeStaff.map(p => { const task = p.activeTask; let progress = 0; let statusText = 'Moving to equipment'; if (p.state === 'working') { if (task.type === 'training') { statusText = 'Training in progress'; progress = Math.max(0, 100 * (1 - (p.taskTimer / task.duration))); } else { statusText = 'Processing'; const currentStep = task.equipmentSequence[p.taskStep]; if (currentStep) { progress = Math.max(0, 100 * (1 - (p.taskTimer / currentStep.duration))); } } } return `<div class="ongoing-task-card"><strong>${task.name}</strong><div class="info">Assigned to: ${p.name} (${statusText})</div><div class="progress-bar"><div class="progress-fill" style="width: ${progress}%; background: #a78bfa;"></div></div></div>`; }).join('');},
       openTaskModal(staffId) { this.selectedStaff=this.staff[staffId];if(this.selectedStaff.state!=='idle'||this.selectedStaff.activeTask){this.showNotification(`Cannot assign task: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,'error');return;}document.getElementById('selectedStaffName').textContent=this.selectedStaff.name;document.getElementById('modalOverlay').className='modal-overlay active';document.getElementById('taskModal').className='modal active';const o=document.getElementById('taskOptions');let h='';this.tasks.forEach((t,i)=>{const q=t.equipmentSequence.every(s=>this.selectedStaff.skills.includes(s.skillRequired));h+=`<div class="task-option" ${!q?'disabled':''} onclick="${q?`Lab.assignNewTask(${i})`:''}"><strong>${t.name}</strong><div style="font-size:0.875rem;color:#64748b;">Reward: $${t.reward} | Time: ${this.formatTime(t.timeLimit,true)} | ${q?'✅ Qualified':'❌ Not Qualified'}</div></div>`;});this.equipment.forEach(eq=>{if(!this.selectedStaff.skills.includes(eq.skill)){h+=`<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})"><strong>🎓 Train: ${eq.name}</strong><div style="font-size:0.875rem;color:#64748b;">Cost: $300 | Duration: 60 min</div></div>`;}});o.innerHTML=h;},
       closeAllModals() { document.querySelectorAll('.modal.active, .modal-overlay.active').forEach(el => el.classList.remove('active')); this.selectedStaff=null; this.activeEmergencyTask=null; },
-      assignNewTask(taskIndex,isEmergency=false,emergencyId=null){if(!this.selectedStaff)return;let taskSource;if(isEmergency){taskSource=this.emergencyQueue.find(t=>t.id===emergencyId);}else{taskSource=this.tasks[taskIndex];}if(!taskSource)return;if(this.selectedStaff.state!=='idle'||this.selectedStaff.activeTask){this.showNotification(`Assignment failed: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,'error');return;}const isQualified=taskSource.equipmentSequence.every(s=>this.selectedStaff.skills.includes(s.skillRequired));if(!isQualified){this.showNotification(`Assignment failed: ${this.selectedStaff.name} is not qualified for this task.`,'error');return;}const firstStep=taskSource.equipmentSequence[0];const firstEquipment=this.equipment.find(e=>e.name===firstStep.name);if(firstEquipment.inUse){const user=this.staff.find(s=>s.id===firstEquipment.assignedTo);const userName=user?`by ${user.name}`:'';this.showNotification(`Assignment failed: ${firstEquipment.name} is currently in use ${userName}.`,'error');return;}const taskCopy=JSON.parse(JSON.stringify(taskSource));if(isEmergency){taskCopy.isEmergency=true;taskSource.status='in-progress';taskSource.assignedTo=this.selectedStaff.id;}this.selectedStaff.activeTask=taskCopy;this.selectedStaff.taskStep=0;this.selectedStaff.targetX=firstEquipment.x;this.selectedStaff.targetY=firstEquipment.y;this.showNotification(`${this.selectedStaff.name} assigned to "${taskCopy.name}"`,'info');this.closeAllModals();this.updateAllPanels();},
-      assignTraining(skillToLearn,equipmentId){if(!this.selectedStaff)return;const cost=300;const trainingDuration = 60; const equipment=this.equipment.find(eq=>eq.id===equipmentId);if(this.state.money<cost){this.showNotification(`Training failed: Insufficient funds (Cost: $${cost}, Budget: $${this.state.money.toFixed(0)}).`,'error');return;}if(equipment.inUse){const user=this.staff.find(s=>s.id===equipment.assignedTo);const userName=user?`by ${user.name}`:'';this.showNotification(`Training failed: ${equipment.name} is unavailable for training, it's in use ${userName}.`,'error');return;}this.state.money-=cost;this.selectedStaff.activeTask={type:'training',name:`Training on ${equipment.name}`,skillToLearn:skillToLearn,equipmentId:equipmentId, duration: trainingDuration};this.selectedStaff.taskTimer=trainingDuration;this.selectedStaff.targetX=equipment.x;this.selectedStaff.targetY=equipment.y;this.showNotification(`${this.selectedStaff.name} started training on ${equipment.name}.`,'info');this.closeAllModals();this.updateAllPanels();},
+      assignNewTask(taskIndex,isEmergency=false,emergencyId=null){if(!this.selectedStaff)return;let taskSource;if(isEmergency){taskSource=this.emergencyQueue.find(t=>t.id===emergencyId);}else{taskSource=this.tasks[taskIndex];}if(!taskSource)return;if(this.selectedStaff.state!=='idle'||this.selectedStaff.activeTask){this.showNotification(`Assignment failed: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,'error');return;}const isQualified=taskSource.equipmentSequence.every(s=>this.selectedStaff.skills.includes(s.skillRequired));if(!isQualified){this.showNotification(`Assignment failed: ${this.selectedStaff.name} is not qualified for this task.`,'error');return;}const firstStep=taskSource.equipmentSequence[0];const firstEquipment=this.equipment.find(e=>e.name===firstStep.name);if(firstEquipment && firstEquipment.inUse){const user=this.staff.find(s=>s.id===firstEquipment.assignedTo);const userName=user?`by ${user.name}`:'';this.showNotification(`Assignment failed: ${firstEquipment.name} is currently in use ${userName}.`,'error');return;}const taskCopy=JSON.parse(JSON.stringify(taskSource));if(isEmergency){taskCopy.isEmergency=true;taskSource.status='in-progress';taskSource.assignedTo=this.selectedStaff.id;}this.selectedStaff.activeTask=taskCopy;this.selectedStaff.taskStep=0;if (firstEquipment) { this.selectedStaff.targetX=firstEquipment.x;this.selectedStaff.targetY=firstEquipment.y; } const actionMessage = `${this.selectedStaff.name} assigned to "${taskCopy.name}"`; this.showNotification(actionMessage,'info'); this.logSandboxAction(actionMessage); this.closeAllModals();this.updateAllPanels(); },
+      assignTraining(skillToLearn,equipmentId){if(!this.selectedStaff)return;const cost=300;const trainingDuration = 60; const equipment=this.equipment.find(eq=>eq.id===equipmentId);if(this.state.money<cost){this.showNotification(`Training failed: Insufficient funds (Cost: $${cost}, Budget: $${this.state.money.toFixed(0)}).`,'error');return;}if(equipment.inUse){const user=this.staff.find(s=>s.id===equipment.assignedTo);const userName=user?`by ${user.name}`:'';this.showNotification(`Training failed: ${equipment.name} is unavailable for training, it's in use ${userName}.`,'error');return;}this.state.money-=cost;this.selectedStaff.activeTask={type:'training',name:`Training on ${equipment.name}`,skillToLearn:skillToLearn,equipmentId:equipmentId, duration: trainingDuration};this.selectedStaff.taskTimer=trainingDuration;this.selectedStaff.targetX=equipment.x;this.selectedStaff.targetY=equipment.y; const actionMessage = `${this.selectedStaff.name} started training on ${equipment.name}. (-$${cost})`; this.showNotification(actionMessage,'info'); this.logSandboxAction(actionMessage); this.closeAllModals();this.updateAllPanels(); },
       openEmergencyModalById(id) { const task = this.emergencyQueue.find(t => t.id === id); if (task) this.openEmergencyModal(task); },
       openEmergencyModal(task){this.activeEmergencyTask=task;document.getElementById('emergencyTaskName').innerHTML=`<strong>Task:</strong> ${task.name}`;document.getElementById('emergencyTaskReward').innerHTML=`<strong>Reward:</strong> $${task.reward}`;document.getElementById('emergencyTaskPenalty').innerHTML=`<strong>Penalty:</strong> $${task.penalty}`;document.getElementById('emergencyTaskDeadline').innerHTML=`<strong>Deadline:</strong> ${this.formatTime(task.timeLimit,true)}`;const staffListEl=document.getElementById('emergencyStaffList');staffListEl.innerHTML='';const availableStaff=this.staff.filter(p=>p.state==='idle'&&!p.activeTask&&task.equipmentSequence.every(step=>p.skills.includes(step.skillRequired)));if(availableStaff.length>0){availableStaff.forEach(p=>{staffListEl.innerHTML+=`<div class="staff-assign-option" onclick="Lab.assignEmergencyTask(${p.id})"><span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small></div>`;});}else{staffListEl.innerHTML=`<div style="color: #b91c1c; text-align: center; font-weight: 600;">No qualified and available staff found!</div>`;}document.getElementById('modalOverlay').className='modal-overlay active';document.getElementById('emergencyModal').className='modal active';},
       assignEmergencyTask(staffId) {this.selectedStaff=this.staff.find(p=>p.id===staffId);this.assignNewTask(null,true,this.activeEmergencyTask.id);},
       triggerEmergency() { const t={id:'EMG'+Date.now(),name:'Critical Sample Analysis',reward:2500,penalty:4000,timeLimit:120,equipmentSequence:[{name:'Mass Spectrometer',duration:30,skillRequired:'Mass Spectrometry'},{name:'Biosafety Cabinet',duration:30,skillRequired:'Biosafety Protocols'}],status:'pending'};this.emergencyQueue.push(t); this.openEmergencyModal(t); },
       updateEmergencies(gameDt) {this.emergencyQueue.forEach(t=>{if(t.status==='pending'||t.status==='in-progress'){t.timeLimit-=gameDt;if(this.activeEmergencyTask&&this.activeEmergencyTask.id===t.id){document.getElementById('emergencyTaskDeadline').innerHTML=`<strong>Deadline:</strong> ${this.formatTime(t.timeLimit,true)}`;}if(t.timeLimit<=0){if(t.status==='pending'){t.status='failed';this.state.money-=t.penalty;this.showNotification(`Unassigned emergency task failed! Penalty: $${t.penalty}!`,'error');}else if(t.status==='in-progress'){const s=this.staff.find(s=>s.id===t.assignedTo);if(s&&s.activeTask&&s.activeTask.id===t.id){this.failTask(s,s.activeTask);}}if(this.activeEmergencyTask&&this.activeEmergencyTask.id===t.id){this.closeAllModals();}}}});this.emergencyQueue=this.emergencyQueue.filter(t=>t.status==='pending'||t.status==='in-progress');},
-      setStaffStatus(staffId,newStatus){const p=this.staff[staffId];if(p.state==='off')return;if(p.state===newStatus){p.state='idle';}else{if(p.activeTask){this.failTask(p,p.activeTask);}p.state=newStatus;}this.updateAllPanels();},
-      toggleShift(staffId) {const p=this.staff[staffId];if(p.state==='off'){p.state='idle';p.energy=100;}else if(p.state==='idle'||p.state==='break'){p.state='off';p.activeTask=null;const eq=this.equipment.find(e=>e.assignedTo===p.id);if(eq){eq.inUse=false;eq.assignedTo=null;}}this.updateAllPanels();this.showNotification(`${p.name} has ${p.state==='off'?'ended':'started'} their shift`,'info');},
-      repairEquipment(eqId){const eq=this.equipment[eqId];const cost=200;if(this.state.money>=cost){this.state.money-=cost;eq.condition=Math.min(100,eq.condition+50);this.updateAllPanels();this.showNotification(`${eq.name} repaired!`,'success');}else{this.showNotification('Insufficient funds!','error');}},
-      calibrateEquipment(eqId){const eq=this.equipment[eqId];const cost=100;if(this.state.money>=cost){this.state.money-=cost;eq.condition=Math.min(100,eq.condition+25);this.updateAllPanels();this.showNotification(`${eq.name} calibrated!`,'success');}else{this.showNotification('Insufficient funds!','error');}},
-      togglePause() {if(this.isSandboxMode){this.showNotification('Pause is disabled in Sandbox mode. Return to Live to control time.','error');return;}this.state.paused=!this.state.paused;this.showNotification(this.state.paused?'Paused':'Resumed','info');},
-      changeSpeed() {this.state.speed=this.state.speed===1?2:this.state.speed===2?4:1;this.showNotification(`Speed: ${this.state.speed}x`,'info');},
+      setStaffStatus(staffId,newStatus){const p=this.staff[staffId];if(p.state==='off')return;const oldStatus = p.state; if(p.state===newStatus){p.state='idle';}else{if(p.activeTask){this.failTask(p,p.activeTask);}p.state=newStatus;} this.logSandboxAction(`${p.name}'s status changed from ${oldStatus} to ${p.state}.`); this.updateAllPanels(); },
+      toggleShift(staffId) {const p=this.staff[staffId];if(p.state==='off'){p.state='idle';p.energy=100;}else if(p.state==='idle'||p.state==='break'){p.state='off';p.activeTask=null;const eq=this.equipment.find(e=>e.assignedTo===p.id);if(eq){eq.inUse=false;eq.assignedTo=null;}} const actionMessage = `${p.name} has ${p.state==='off'?'ended':'started'} their shift`; this.showNotification(actionMessage,'info'); this.logSandboxAction(actionMessage); this.updateAllPanels(); },
+      repairEquipment(eqId){const eq=this.equipment[eqId];const cost=200;if(this.state.money>=cost){this.state.money-=cost;eq.condition=Math.min(100,eq.condition+50); const actionMessage = `${eq.name} repaired for $${cost}.`; this.showNotification(actionMessage,'success'); this.logSandboxAction(actionMessage); this.updateAllPanels(); }else{this.showNotification('Insufficient funds!','error');} },
+      calibrateEquipment(eqId){const eq=this.equipment[eqId];const cost=100;if(this.state.money>=cost){this.state.money-=cost;eq.condition=Math.min(100,eq.condition+25); const actionMessage = `${eq.name} calibrated for $${cost}.`; this.showNotification(actionMessage,'success'); this.logSandboxAction(actionMessage); this.updateAllPanels(); }else{this.showNotification('Insufficient funds!','error');} },
       resetCamera() {this.camera.x=20;this.camera.y=100;this.camera.zoom=0.85;this.showNotification('View reset','info');},
       togglePanel(headerEl) {const c=headerEl.nextElementSibling;const i=headerEl.querySelector('.panel-toggle-icon');c.classList.toggle('collapsed');if(c.classList.contains('collapsed')){i.style.transform='rotate(-90deg)';}else{i.style.transform='rotate(0deg)';}},
       formatTime(totalSeconds,showSeconds=false){if(totalSeconds<0)totalSeconds=0;const h=Math.floor(totalSeconds/3600);const m=Math.floor((totalSeconds%3600)/60);const s=Math.floor(totalSeconds%60);if(showSeconds){return `${m}m ${s.toString().padStart(2,'0')}s`;}if(h>0){return`${h}h ${m}m`;}if(m>0){return`${m}m ${s}s`;}return`${s}s`;},
       showNotification(message,type){const n=document.createElement('div');n.className='notification';n.style.borderLeft=`4px solid ${type==='success'?'#10b981':type==='error'?'#ef4444':'#3b82f6'}`;n.innerHTML=`<div style="display:flex;align-items:center;gap:1rem;"><span style="font-size:20px;">${type==='success'?'✅':type==='error'?'❌':'ℹ️'}</span><span>${message}</span></div>`;document.body.appendChild(n);setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),300);},4000);},
       openBuyModal() { document.getElementById('modalOverlay').className = 'modal-overlay active'; document.getElementById('buyEquipmentModal').className = 'modal active'; const listEl = document.getElementById('equipmentCatalogList'); listEl.innerHTML = this.equipmentCatalog.map(item => ` <div class="equipment-catalog-item"> <span style="font-size: 24px;">${item.icon}</span> <div class="info"> <strong>${item.name}</strong> <div style="font-size: 0.8rem; color: var(--text-light)">Requires Skill: ${item.skill}</div> </div> <div class="cost">$${item.cost}</div> <button class="btn btn-primary" onclick="Lab.buyEquipment('${item.id}')" ${this.state.money < item.cost ? 'disabled' : ''}>Buy</button> </div> `).join(''); },
-      buyEquipment(catalogId) { const item = this.equipmentCatalog.find(i => i.id === catalogId); if (!item) return; if (this.state.money < item.cost) { this.showNotification('Not enough money to buy this equipment!', 'error'); return; } const f = this.labFloor; let foundSpot = false; let newX = 0, newY = 0; for (let y = f.y + 1; y < f.y + f.h - 1 && !foundSpot; y++) { for (let x = f.x + 1; x < f.x + f.w - 1 && !foundSpot; x++) { const isOccupied = this.equipment.some(eq => Math.round(eq.x) === x && Math.round(eq.y) === y); if (!isOccupied) { newX = x; newY = y; foundSpot = true; } } } if (foundSpot) { this.state.money -= item.cost; const newEquipment = { ...item, id: this.equipment.length, x: newX, y: newY, condition: 100, inUse: false, assignedTo: null, totalWorkTime: 0 }; this.equipment.push(newEquipment); this.showNotification(`${item.name} purchased and placed in the lab!`, 'success'); this.updateAllPanels(); this.closeAllModals(); } else { this.showNotification('No available space in the lab to place new equipment!', 'error'); } }
+      buyEquipment(catalogId) { const item = this.equipmentCatalog.find(i => i.id === catalogId); if (!item) return; if (this.state.money < item.cost) { this.showNotification('Not enough money to buy this equipment!', 'error'); return; } const f = this.labFloor; let foundSpot = false; let newX = 0, newY = 0; for (let y = f.y + 1; y < f.y + f.h - 1 && !foundSpot; y++) { for (let x = f.x + 1; x < f.x + f.w - 1 && !foundSpot; x++) { const isOccupied = this.equipment.some(eq => Math.round(eq.x) === x && Math.round(eq.y) === y); if (!isOccupied) { newX = x; newY = y; foundSpot = true; } } } 
+        if (foundSpot) { 
+            this.state.money -= item.cost; 
+            const newEquipment = { ...item, id: this.equipment.length, x: newX, y: newY, condition: 100, inUse: false, assignedTo: null, totalWorkTime: 0 }; 
+            this.equipment.push(newEquipment); 
+            const actionMessage = `${item.name} purchased for $${item.cost} and placed in the lab.`;
+            this.showNotification(actionMessage, 'success'); 
+            this.logSandboxAction(actionMessage);
+            this.updateAllPanels(); 
+            this.closeAllModals(); 
+        } else { 
+            this.showNotification('No available space in the lab to place new equipment!', 'error'); 
+        } 
+      }
     };
     
     window.addEventListener('DOMContentLoaded', () => { Lab.init(); });
