@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Polaris — Set Up Your Business</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    .brand { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; object-fit: contain; }
+    .brand span { font-size: 1.25rem; font-weight: 700; color: white; }
+
+    /* Progress */
+    .progress-bar { display: flex; align-items: center; gap: 0; margin-bottom: 2rem; }
+    .step-dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.875rem; border: 2px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.05); transition: all 0.3s; }
+    .step-dot.active { background: linear-gradient(135deg,#2563eb,#7c3aed); border-color: transparent; color: white; }
+    .step-dot.done { background: #10b981; border-color: transparent; color: white; }
+    .step-line { width: 60px; height: 2px; background: rgba(255,255,255,0.15); transition: background 0.3s; }
+    .step-line.done { background: #10b981; }
+    .step-label { font-size: 0.75rem; color: rgba(255,255,255,0.5); text-align: center; margin-top: 0.4rem; }
+    .step-wrap { display: flex; flex-direction: column; align-items: center; }
+
+    .card {
+      background: white; border-radius: 20px; padding: 2.5rem;
+      width: 100%; max-width: 560px; box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+    }
+
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+
+    h2 { font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-bottom: 0.5rem; }
+    .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 1.75rem; }
+
+    label { display: block; font-size: 0.875rem; font-weight: 600; color: #374151; margin-bottom: 0.4rem; }
+    input[type="text"], input[type="number"] {
+      width: 100%; padding: 0.75rem 1rem; border: 1.5px solid #e2e8f0; border-radius: 10px;
+      font-size: 0.95rem; font-family: inherit; color: #1e293b; outline: none; transition: border-color 0.2s;
+    }
+    input:focus { border-color: #3b82f6; }
+
+    /* Business type grid */
+    .type-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.5rem; }
+    .type-card {
+      border: 2px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 0.5rem;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+    }
+    .type-card:hover { border-color: #3b82f6; background: #eff6ff; }
+    .type-card.selected { border-color: #2563eb; background: #eff6ff; }
+    .type-card .icon { font-size: 1.75rem; display: block; margin-bottom: 0.3rem; }
+    .type-card .label { font-size: 0.75rem; font-weight: 600; color: #374151; }
+
+    /* Employees / Tasks list */
+    .list-item {
+      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem;
+      background: #f8fafc; border-radius: 10px; padding: 0.75rem;
+    }
+    .list-item input { flex: 1; background: white; }
+    .list-item input.short { max-width: 90px; }
+    .btn-remove {
+      width: 32px; height: 32px; border: none; background: #fee2e2; color: #dc2626;
+      border-radius: 8px; cursor: pointer; font-size: 1rem; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-add {
+      width: 100%; padding: 0.65rem; border: 2px dashed #cbd5e1; border-radius: 10px;
+      background: transparent; color: #64748b; font-size: 0.875rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; font-family: inherit;
+    }
+    .btn-add:hover { border-color: #3b82f6; color: #2563eb; background: #eff6ff; }
+
+    /* Suggestion chips */
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .chip {
+      padding: 0.35rem 0.85rem; border-radius: 20px; border: 1.5px solid #e2e8f0;
+      font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.2s; color: #475569;
+    }
+    .chip:hover { border-color: #3b82f6; color: #2563eb; background: #eff6ff; }
+
+    /* Nav buttons */
+    .nav-btns { display: flex; justify-content: space-between; margin-top: 1.75rem; gap: 1rem; }
+    .btn-back {
+      padding: 0.75rem 1.5rem; border: 1.5px solid #e2e8f0; border-radius: 10px;
+      background: white; color: #475569; font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: all 0.2s;
+    }
+    .btn-back:hover { border-color: #94a3b8; }
+    .btn-next {
+      flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: white; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; font-family: inherit; transition: opacity 0.2s;
+    }
+    .btn-next:hover { opacity: 0.9; }
+    .btn-next:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .message { margin-top: 1rem; padding: 0.75rem; border-radius: 8px; font-size: 0.875rem;
+      text-align: center; display: none; }
+    .message.error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+    .col-header { font-size: 0.75rem; font-weight: 600; color: #94a3b8; margin-bottom: 0.5rem; display: flex; gap: 0.5rem; }
+    .col-header span:first-child { flex: 1; }
+    .col-header span.short { width: 90px; }
+  </style>
+</head>
+<body>
+
+<a href="index.html" class="brand">
+  <img src="polaris-logo.png" alt="Polaris" />
+  <span>Polaris</span>
+</a>
+
+<!-- Progress indicator -->
+<div class="progress-bar">
+  <div class="step-wrap">
+    <div class="step-dot active" id="dot1">1</div>
+    <div class="step-label">Business</div>
+  </div>
+  <div class="step-line" id="line1"></div>
+  <div class="step-wrap">
+    <div class="step-dot" id="dot2">2</div>
+    <div class="step-label">Team</div>
+  </div>
+  <div class="step-line" id="line2"></div>
+  <div class="step-wrap">
+    <div class="step-dot" id="dot3">3</div>
+    <div class="step-label">Tasks</div>
+  </div>
+</div>
+
+<div class="card">
+
+  <!-- Step 1: Business info -->
+  <div class="step-panel active" id="step1">
+    <h2>Tell us about your business</h2>
+    <p class="subtitle">This will personalize your simulation experience.</p>
+
+    <div style="margin-bottom: 1.25rem;">
+      <label for="bizName">Business name</label>
+      <input type="text" id="bizName" placeholder="e.g. Maya's Café, Alpha Company, City Store…" />
+    </div>
+
+    <label>Type of business</label>
+    <div class="type-grid" id="typeGrid">
+      <div class="type-card" data-type="restaurant"><span class="icon">🍽️</span><span class="label">Restaurant</span></div>
+      <div class="type-card" data-type="retail"><span class="icon">🛍️</span><span class="label">Retail</span></div>
+      <div class="type-card" data-type="office"><span class="icon">🏢</span><span class="label">Office</span></div>
+      <div class="type-card" data-type="healthcare"><span class="icon">⚕️</span><span class="label">Healthcare</span></div>
+      <div class="type-card" data-type="education"><span class="icon">🎓</span><span class="label">Education</span></div>
+      <div class="type-card" data-type="military"><span class="icon">🛡️</span><span class="label">Military</span></div>
+      <div class="type-card" data-type="workshop"><span class="icon">🔧</span><span class="label">Workshop</span></div>
+      <div class="type-card" data-type="other"><span class="icon">💡</span><span class="label">Other</span></div>
+    </div>
+
+    <div class="message error" id="msg1"></div>
+    <div class="nav-btns">
+      <button class="btn-next" onclick="nextStep(1)">Next — Add Your Team →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Employees -->
+  <div class="step-panel" id="step2">
+    <h2>Who's on your team?</h2>
+    <p class="subtitle">Add the people who work in your business.</p>
+
+    <div class="col-header"><span>Name</span><span class="short">Role / Title</span><span style="width:32px;"></span></div>
+    <div id="employeeList"></div>
+    <button class="btn-add" onclick="addEmployee()">+ Add team member</button>
+
+    <div class="message error" id="msg2"></div>
+    <div class="nav-btns">
+      <button class="btn-back" onclick="goStep(1)">← Back</button>
+      <button class="btn-next" onclick="nextStep(2)">Next — Define Tasks →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Tasks -->
+  <div class="step-panel" id="step3">
+    <h2>What tasks does your team do?</h2>
+    <p class="subtitle">Add the main tasks or activities in your business.</p>
+
+    <p style="font-size:0.8rem;font-weight:600;color:#94a3b8;margin-bottom:0.5rem;">SUGGESTED</p>
+    <div class="chips" id="taskChips"></div>
+
+    <div class="col-header"><span>Task name</span><span class="short">Reward ($)</span><span class="short">Duration (min)</span><span style="width:32px;"></span></div>
+    <div id="taskList"></div>
+    <button class="btn-add" onclick="addTask()">+ Add task</button>
+
+    <div class="message error" id="msg3"></div>
+    <div class="nav-btns">
+      <button class="btn-back" onclick="goStep(2)">← Back</button>
+      <button class="btn-next" id="finishBtn" onclick="finish()">🚀 Launch My Simulation</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Redirect if not logged in
+  const token = localStorage.getItem('polaris_token');
+  if (!token) window.location.href = 'login.html';
+
+  let selectedType = '';
+
+  const defaultTasks = {
+    restaurant: ['Take Order', 'Prepare Meal', 'Serve Tables', 'Handle Payment', 'Clean Station'],
+    retail:     ['Assist Customer', 'Process Sale', 'Stock Shelves', 'Inventory Check', 'Handle Returns'],
+    office:     ['Client Meeting', 'Write Report', 'Project Review', 'Team Briefing', 'Admin Tasks'],
+    healthcare: ['Patient Consultation', 'Administer Treatment', 'Update Records', 'Staff Briefing', 'Equipment Check'],
+    education:  ['Teach Class', 'Grade Assignments', 'Student Meeting', 'Curriculum Planning', 'Admin Tasks'],
+    military:   ['Patrol', 'Unit Briefing', 'Equipment Check', 'Training Drill', 'Incident Response'],
+    workshop:   ['Manufacture Part', 'Quality Control', 'Equipment Maintenance', 'Order Fulfillment', 'Safety Check'],
+    other:      ['Daily Task', 'Team Meeting', 'Review', 'Planning Session', 'Report'],
+  };
+
+  // ── Type selection ────────────────────────────────────────────────────────
+  document.querySelectorAll('.type-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedType = card.dataset.type;
+    });
+  });
+
+  // ── Step navigation ───────────────────────────────────────────────────────
+  function goStep(n) {
+    document.querySelectorAll('.step-panel').forEach((p, i) => {
+      p.classList.toggle('active', i + 1 === n);
+    });
+    for (let i = 1; i <= 3; i++) {
+      document.getElementById('dot' + i).className = 'step-dot' + (i < n ? ' done' : i === n ? ' active' : '');
+    }
+    for (let i = 1; i <= 2; i++) {
+      document.getElementById('line' + i).className = 'step-line' + (i < n ? ' done' : '');
+    }
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 4000);
+  }
+
+  function nextStep(from) {
+    if (from === 1) {
+      const name = document.getElementById('bizName').value.trim();
+      if (!name) return showError('msg1', 'Please enter your business name.');
+      if (!selectedType) return showError('msg1', 'Please select a business type.');
+      buildTaskChips();
+      if (document.getElementById('employeeList').children.length === 0) addEmployee();
+      goStep(2);
+    } else if (from === 2) {
+      const employees = getEmployees();
+      if (employees.length === 0) return showError('msg2', 'Add at least one team member.');
+      if (employees.some(e => !e.name)) return showError('msg2', 'All team members need a name.');
+      if (document.getElementById('taskList').children.length === 0) {
+        defaultTasks[selectedType]?.slice(0, 3).forEach(name => addTask(name));
+      }
+      goStep(3);
+    }
+  }
+
+  // ── Employees ─────────────────────────────────────────────────────────────
+  function addEmployee(name = '', role = '') {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <input type="text" placeholder="Full name" value="${name}" class="emp-name" />
+      <input type="text" placeholder="Role" value="${role}" class="emp-role short" />
+      <button class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
+    document.getElementById('employeeList').appendChild(div);
+  }
+
+  function getEmployees() {
+    return Array.from(document.querySelectorAll('#employeeList .list-item')).map(row => ({
+      name: row.querySelector('.emp-name').value.trim(),
+      role: row.querySelector('.emp-role').value.trim() || 'Team Member',
+    }));
+  }
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+  function buildTaskChips() {
+    const chips = document.getElementById('taskChips');
+    chips.innerHTML = '';
+    (defaultTasks[selectedType] || []).forEach(name => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.textContent = name;
+      chip.onclick = () => { addTask(name); chip.style.opacity = '0.4'; chip.style.pointerEvents = 'none'; };
+      chips.appendChild(chip);
+    });
+  }
+
+  function addTask(name = '', reward = 500, duration = 30) {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `
+      <input type="text" placeholder="Task name" value="${name}" class="task-name" />
+      <input type="number" placeholder="500" value="${reward}" class="task-reward short" min="0" />
+      <input type="number" placeholder="30" value="${duration}" class="task-dur short" min="1" />
+      <button class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
+    document.getElementById('taskList').appendChild(div);
+  }
+
+  function getTasks() {
+    return Array.from(document.querySelectorAll('#taskList .list-item')).map(row => ({
+      name: row.querySelector('.task-name').value.trim(),
+      reward: parseInt(row.querySelector('.task-reward').value) || 500,
+      duration: parseInt(row.querySelector('.task-dur').value) || 30,
+    }));
+  }
+
+  // ── Finish ─────────────────────────────────────────────────────────────────
+  async function finish() {
+    const tasks = getTasks();
+    if (tasks.length === 0) return showError('msg3', 'Add at least one task.');
+    if (tasks.some(t => !t.name)) return showError('msg3', 'All tasks need a name.');
+
+    const btn = document.getElementById('finishBtn');
+    btn.disabled = true; btn.textContent = '⏳ Saving…';
+
+    try {
+      const res = await fetch('/api/business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          name: document.getElementById('bizName').value.trim(),
+          type: selectedType,
+          employees: getEmployees(),
+          tasks,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        showError('msg3', d.error || 'Something went wrong.');
+        btn.disabled = false; btn.textContent = '🚀 Launch My Simulation';
+        return;
+      }
+
+      window.location.href = 'lab-simulation.html';
+    } catch {
+      showError('msg3', 'Could not reach the server. Is it running?');
+      btn.disabled = false; btn.textContent = '🚀 Launch My Simulation';
+    }
+  }
+</script>
+
+</body>
+</html>

@@ -128,6 +128,41 @@ app.get('/api/admin/signups', async (req, res) => {
   res.json({ count: signups.length, signups });
 });
 
+// ── Business profile ──────────────────────────────────────────────────────────
+
+app.get('/api/business', requireAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from('businesses').select('*')
+    .eq('user_id', req.user.id).single();
+
+  if (error || !data) return res.status(404).json({ error: 'No business profile found.' });
+  res.json(data);
+});
+
+app.post('/api/business', requireAuth, async (req, res) => {
+  const { name, type, employees, tasks, budget } = req.body;
+  if (!name || !type) return res.status(400).json({ error: 'Name and type are required.' });
+
+  const record = {
+    id: 'BIZ' + req.user.id,
+    user_id: req.user.id,
+    name,
+    type,
+    employees: employees || [],
+    tasks: tasks || [],
+    budget: budget || 25000,
+  };
+
+  const { error } = await supabase.from('businesses').upsert(record);
+  if (error) {
+    console.error('[business save error]', error.message);
+    return res.status(500).json({ error: 'Failed to save business profile.' });
+  }
+
+  console.log(`[business saved] ${req.user.email} — ${name}`);
+  res.status(201).json(record);
+});
+
 // ── Sessions ───────────────────────────────────────────────────────────────────
 
 app.post('/api/sessions', requireAuth, async (req, res) => {
