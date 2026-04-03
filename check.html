@@ -166,7 +166,6 @@
         <div class="stat"><span>🧪</span><div><div style="font-weight: 700;"><span id="materials">200</span></div><div style="font-size: 0.75rem; color: #64748b;">Materials</div></div></div>
         <div class="stat"><span>🔬</span><div><div style="font-weight: 700;"><span id="samples">120</span></div><div style="font-size: 0.75rem; color: #64748b;">Samples</div></div></div>
       </div>
-      <div id="authBar" style="display:flex;align-items:center;gap:0.75rem;"></div>
     </div>
   </header>
 
@@ -218,10 +217,7 @@
       <div class="panel" id="sandboxLogPanel" style="display: none;">
         <div class="panel-header" onclick="Lab.togglePanel(this)">
           <h3>📝 Sandbox Action Log</h3>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <button class="btn btn-secondary btn-small" id="saveSessionBtn" onclick="event.stopPropagation(); Lab.saveSessionToServer(this)" title="Save this session to the server">💾 Save</button>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
+          <span class="panel-toggle-icon">▼</span>
         </div>
         <div class="panel-content" id="sandboxLogList"></div>
       </div>
@@ -462,12 +458,9 @@
         listEl.innerHTML = this.sandboxSessionHistory.map(session => {
             const date = session.startTime.toLocaleDateString();
             const time = session.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const savedBadge = session.savedToServer
-              ? `<span style="color:#10b981;font-size:0.75rem;margin-left:0.5rem;" title="Saved to server">☁️ Saved</span>`
-              : '';
             return `<div class="session-history-item" onclick="Lab.showSessionDetails('${session.id}')">
-                <strong>Session from ${date}</strong>${savedBadge}<br>
-                <small>${time} — ${session.actions.length} actions recorded</small>
+                <strong>Session from ${date}</strong><br>
+                <small>${time} - ${session.actions.length} actions recorded</small>
             </div>`;
         }).join('');
       },
@@ -489,50 +482,6 @@
         
         document.getElementById('modalOverlay').className = 'modal-overlay active';
         document.getElementById('sessionDetailsModal').className = 'modal active';
-      },
-
-      async saveSessionToServer(btnEl) {
-        if (!this.currentSandboxSession) {
-          this.showNotification('No active sandbox session to save.', 'error');
-          return;
-        }
-        if (!Auth.isLoggedIn()) {
-          this.showNotification('Sign in to save your sessions.', 'info');
-          window.location.href = 'login.html';
-          return;
-        }
-        if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Saving...'; }
-        try {
-          const response = await fetch('/api/sessions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + Auth.token,
-            },
-            body: JSON.stringify({
-              sessionId: this.currentSandboxSession.id,
-              startTime: this.currentSandboxSession.startTime,
-              actions: this.currentSandboxSession.actions,
-              finalState: {
-                money: Math.round(this.state.money),
-                materials: this.state.materials,
-                samples: this.state.samples,
-              }
-            })
-          });
-          if (response.status === 401) {
-            Auth.logout();
-            return;
-          }
-          if (!response.ok) throw new Error('Server error');
-          this.currentSandboxSession.savedToServer = true;
-          if (btnEl) { btnEl.textContent = '✅ Saved'; }
-          this.showNotification('Session saved to your account.', 'success');
-          this.updateSessionHistoryPanel();
-        } catch {
-          if (btnEl) { btnEl.disabled = false; btnEl.textContent = '💾 Save'; }
-          this.showNotification('Could not save — is the server running? (npm start)', 'error');
-        }
       },
 
       toIso(x, y) { const isoX = (x - y) * this.tileSize / 2; const isoY = (x + y) * this.tileSize / 4; return { x: isoX, y: isoY }; },
@@ -686,35 +635,7 @@
       }
     };
     
-    // ── Auth state ───────────────────────────────────────────────────────────
-    const Auth = {
-      token: localStorage.getItem('polaris_token') || null,
-      user:  JSON.parse(localStorage.getItem('polaris_user') || 'null'),
-
-      isLoggedIn() { return !!this.token; },
-
-      logout() {
-        localStorage.removeItem('polaris_token');
-        localStorage.removeItem('polaris_user');
-        window.location.reload();
-      },
-
-      renderBar() {
-        const bar = document.getElementById('authBar');
-        if (!bar) return;
-        if (this.isLoggedIn()) {
-          bar.innerHTML = `
-            <span style="font-size:0.8rem;color:#475569;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.user.email}">👤 ${this.user.email}</span>
-            <button onclick="Auth.logout()" style="padding:0.35rem 0.75rem;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:0.8rem;font-weight:600;color:#64748b;">Log out</button>`;
-        } else {
-          bar.innerHTML = `
-            <span style="font-size:0.8rem;color:#64748b;background:#fef9c3;border:1px solid #fde047;padding:0.3rem 0.75rem;border-radius:20px;">Demo Mode</span>
-            <a href="login.html" style="padding:0.35rem 0.75rem;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:white;text-decoration:none;font-size:0.8rem;font-weight:600;">Sign In</a>`;
-        }
-      },
-    };
-
-    window.addEventListener('DOMContentLoaded', () => { Auth.renderBar(); Lab.init(); });
+    window.addEventListener('DOMContentLoaded', () => { Lab.init(); });
   </script>
 </body>
 </html>

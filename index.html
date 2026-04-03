@@ -1056,12 +1056,9 @@
     });
 
     // Form handling
-    const SUPABASE_URL = "";
-    const SUPABASE_ANON_KEY = "";
-
     document.getElementById('join-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const emailInput = document.getElementById('email');
       const messageEl = document.getElementById('form-message');
       const email = emailInput.value.trim();
@@ -1070,38 +1067,23 @@
       messageEl.className = 'form-message';
       messageEl.textContent = 'Processing...';
 
-      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        messageEl.className = 'form-message success';
-        messageEl.textContent = 'Thanks for your interest! We\'ll be in touch soon.';
-        emailInput.value = '';
-        
-        // Track the signup
-        if (typeof mixpanel !== 'undefined') {
-          mixpanel.track('Beta Signup', { email: email });
-        }
-        return;
-      }
-
       try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/signups`, {
+        const response = await fetch('/api/signups', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Prefer': 'return=representation'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
 
+        const data = await response.json();
+
         if (!response.ok) {
-          throw new Error('Network response was not ok');
+          throw new Error(data.error || 'Something went wrong');
         }
 
         messageEl.className = 'form-message success';
         messageEl.textContent = 'Perfect! You\'re on the list. We\'ll be in touch with early access soon.';
         emailInput.value = '';
-        
+
         // Track successful signup
         if (typeof mixpanel !== 'undefined') {
           mixpanel.track('Beta Signup Success', { email: email });

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Polaris — Sign In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+      padding: 1rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      text-decoration: none;
+    }
+    .brand img { width: 40px; height: 40px; object-fit: contain; }
+    .brand span { font-size: 1.25rem; font-weight: 700; color: #1e293b; }
+
+    .tabs {
+      display: flex;
+      background: #f1f5f9;
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 2rem;
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 0.6rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #64748b;
+      transition: all 0.2s;
+      border: none;
+      background: transparent;
+    }
+    .tab.active {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 0.4rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: #1e293b;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    input:focus { border-color: #3b82f6; }
+
+    .btn-submit {
+      width: 100%;
+      padding: 0.875rem;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-top: 0.5rem;
+    }
+    .btn-submit:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .message {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      text-align: center;
+      display: none;
+    }
+    .message.error   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .message.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+    .divider {
+      text-align: center;
+      margin: 1.5rem 0 1rem;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .link-back {
+      display: block;
+      text-align: center;
+      font-size: 0.875rem;
+      color: #64748b;
+      text-decoration: none;
+    }
+    .link-back:hover { color: #3b82f6; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <a href="index.html" class="brand">
+    <img src="polaris-logo.png" alt="Polaris" />
+    <span>Polaris</span>
+  </a>
+
+  <div class="tabs">
+    <button class="tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+    <button class="tab"        id="tabRegister" onclick="switchTab('register')">Create Account</button>
+  </div>
+
+  <!-- Login form -->
+  <form id="loginForm">
+    <div class="form-group">
+      <label for="loginEmail">Email</label>
+      <input id="loginEmail" type="email" placeholder="you@company.com" required />
+    </div>
+    <div class="form-group">
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" type="password" placeholder="••••••••" required />
+    </div>
+    <button type="submit" class="btn-submit" id="loginBtn">Sign In</button>
+    <div class="message" id="loginMsg"></div>
+  </form>
+
+  <!-- Register form (hidden by default) -->
+  <form id="registerForm" style="display:none;">
+    <div class="form-group">
+      <label for="regEmail">Email</label>
+      <input id="regEmail" type="email" placeholder="you@company.com" required />
+    </div>
+    <div class="form-group">
+      <label for="regPassword">Password</label>
+      <input id="regPassword" type="password" placeholder="Min. 6 characters" required />
+    </div>
+    <div class="form-group">
+      <label for="regConfirm">Confirm Password</label>
+      <input id="regConfirm" type="password" placeholder="Repeat password" required />
+    </div>
+    <button type="submit" class="btn-submit" id="registerBtn">Create Account</button>
+    <div class="message" id="registerMsg"></div>
+  </form>
+
+  <div class="divider">or</div>
+  <a href="lab-simulation.html" class="link-back">Continue as guest (demo mode)</a>
+</div>
+
+<script>
+  // Redirect if already logged in
+  const existingToken = localStorage.getItem('polaris_token');
+  if (existingToken) {
+    fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + existingToken } })
+      .then(r => { if (r.ok) window.location.href = 'lab-simulation.html'; })
+      .catch(() => {});
+  }
+
+  function switchTab(tab) {
+    const isLogin = tab === 'login';
+    document.getElementById('tabLogin').classList.toggle('active', isLogin);
+    document.getElementById('tabRegister').classList.toggle('active', !isLogin);
+    document.getElementById('loginForm').style.display    = isLogin ? '' : 'none';
+    document.getElementById('registerForm').style.display = isLogin ? 'none' : '';
+  }
+
+  function showMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'message ' + type;
+    el.style.display = 'block';
+  }
+
+  // ── Login ──────────────────────────────────────────────────────────────────
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn   = document.getElementById('loginBtn');
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+
+    try {
+      const res  = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showMsg('loginMsg', data.error, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+        return;
+      }
+
+      localStorage.setItem('polaris_token', data.token);
+      localStorage.setItem('polaris_user',  JSON.stringify(data.user));
+      showMsg('loginMsg', 'Welcome back! Redirecting…', 'success');
+      setTimeout(() => window.location.href = 'lab-simulation.html', 800);
+
+    } catch {
+      showMsg('loginMsg', 'Could not reach the server. Is it running?', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+
+  // ── Register ───────────────────────────────────────────────────────────────
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn      = document.getElementById('registerBtn');
+    const email    = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const confirm  = document.getElementById('regConfirm').value;
+
+    if (password !== confirm) {
+      showMsg('registerMsg', 'Passwords do not match.', 'error');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Creating account…';
+
+    try {
+      const res  = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showMsg('registerMsg', data.error, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+        return;
+      }
+
+      localStorage.setItem('polaris_token', data.token);
+      localStorage.setItem('polaris_user',  JSON.stringify(data.user));
+      showMsg('registerMsg', 'Account created! Redirecting…', 'success');
+      setTimeout(() => window.location.href = 'lab-simulation.html', 800);
+
+    } catch {
+      showMsg('registerMsg', 'Could not reach the server. Is it running?', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Create Account';
+    }
+  });
+</script>
+
+</body>
+</html>
