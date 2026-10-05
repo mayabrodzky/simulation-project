@@ -2,3 +2,8 @@ node_modules/
 data/
 .env
 *.log
+
+# Build output and tool caches
+dist/
+.vite/
+.vercel/
