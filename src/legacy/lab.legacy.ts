@@ -1,0 +1,498 @@
+// @ts-nocheck
+/**
+ * The original inline <script> from lab-simulation.html, moved here verbatim.
+ *
+ * Nothing in this file has been changed yet. It is shrunk piece by piece over
+ * Phase 1 as logic moves into src/engine, src/render, src/scenarios and src/ui,
+ * and it is deleted entirely once nothing is left. @ts-nocheck suppresses type
+ * checking until then; the rest of src/ is strict from the first line.
+ */
+    const Lab = {
+      canvas: null, ctx: null, width: 0, height: 0, timeOverlay: null,
+      camera: { x: 20, y: 100, zoom: 0.85 },
+      state: { money: 25000, materials: 200, samples: 120, time: 480, speed: 1 },
+      isSandboxMode: false, liveStateBackup: null,
+      gridWidth: 24, gridHeight: 18,
+      labFloor: { x: 3, y: 3, w: 14, h: 8 }, 
+      office1: { x: 17, y: 3, w: 5, h: 8 },
+      office2: { x: 3, y: 11, w: 14, h: 5 },
+      tileSize: 50, tileHeight: 10, 
+      staff: [], equipment: [], props: [], walls: [], staticPersonnel: [],
+      tasks: [], activeTasks: [], emergencyQueue: [], 
+      equipmentCatalog: [],
+      selectedStaff: null, activeEmergencyTask: null,
+      hoveredEntity: null, highlightedStaffIds: [],
+      sandboxSessionHistory: [], currentSandboxSession: null,
+      
+      init() {
+        console.log('Initializing Upgraded Lab Simulation V14.8...');
+        const now = new Date();
+        this.state.time = now.getHours() * 60 + now.getMinutes();
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.timeOverlay = document.getElementById('timeOverlay');
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
+        this.createStaff(); this.createEquipment(); this.createEquipmentCatalog(); this.createProps(); this.createArchitecture(); this.createBuildingOccupants(); this.defineTasks(); this.setupEventHandlers();
+        this.lastTime = performance.now();
+        this.gameLoop();
+        this.updateAllPanels();
+        this.updateSessionHistoryPanel();
+      },
+      updateAllPanels() {
+        this.updateStaffPanel(); this.updateEquipmentPanel(); this.updateTaskListPanel(); this.updateStatusCounts(); this.updateEmergencyListPanel(); this.updateOngoingTasksPanel();
+      },
+      resizeCanvas() {
+        const rect = this.canvas.getBoundingClientRect();
+        this.canvas.width = rect.width; this.canvas.height = rect.height;
+        this.width = rect.width; this.height = rect.height;
+      },
+      setupEventHandlers() {
+        let isDragging = false, dragStartX = 0, dragStartY = 0;
+        this.canvas.addEventListener('mousedown', (e) => { isDragging = true; dragStartX = e.clientX; dragStartY = e.clientY; });
+        this.canvas.addEventListener('mousemove', (e) => { 
+            if (isDragging) { this.camera.x += e.clientX - dragStartX; this.camera.y += e.clientY - dragStartY; dragStartX = e.clientX; dragStartY = e.clientY; }
+            this.handleMouseMove(e);
+        });
+        this.canvas.addEventListener('mouseup', () => { isDragging = false; });
+        this.canvas.addEventListener('mouseleave', () => { this.hoveredEntity = null; });
+        this.canvas.addEventListener('wheel', (e) => { e.preventDefault(); const d = e.deltaY > 0 ? 0.9 : 1.1; this.camera.zoom = Math.max(0.5, Math.min(2.0, this.camera.zoom * d)); });
+        document.getElementById('sandboxBtn').addEventListener('click', () => this.enterSandboxMode());
+        document.getElementById('liveBtn').addEventListener('click', () => this.exitSandboxMode());
+      },
+      handleMouseMove(e) {
+          const rect = this.canvas.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          let foundEntity = null;
+          const allEntities = [...this.staff, ...this.equipment];
+          for (const entity of allEntities) {
+              const iso = this.getScreenCoords(entity.x, entity.y);
+              const dist = Math.sqrt(Math.pow(mouseX - iso.x, 2) + Math.pow(mouseY - iso.y, 2));
+              if (dist < 20 * this.camera.zoom) { foundEntity = entity; break; }
+          }
+          this.hoveredEntity = foundEntity;
+      },
+      getScreenCoords(gridX, gridY) {
+          let iso = this.toIso(gridX, gridY);
+          const screenX = iso.x * this.camera.zoom + this.width / 2 + this.camera.x - (this.gridWidth * this.tileSize / 4 * this.camera.zoom);
+          const screenY = iso.y * this.camera.zoom + this.height / 2 + this.camera.y - 150 - (this.gridHeight * this.tileSize / 8 * this.camera.zoom);
+          return { x: screenX, y: screenY };
+      },
+      highlightQualifiedStaff(taskId) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        this.highlightedStaffIds = this.staff.filter(p => task.equipmentSequence.every(step => (!step.skillRequired || p.skills.includes(step.skillRequired)))).map(p => p.id);
+        this.updateStaffPanel();
+      },
+      clearStaffHighlights() {
+          this.highlightedStaffIds = [];
+          this.updateStaffPanel();
+      },
+      createStaff() {
+        const staffData = (this.businessProfile && this.businessProfile.employees.length > 0)
+          ? this.businessProfile.employees.map(e => ({ name: e.name, role: e.role, skills: [e.role] }))
+          : [{name:'Dr. Amit Katz',role:'Senior Researcher',skills:['Microscopy','PCR Operation','Mass Spectrometry','Biosafety Protocols']},{name:'Dr. Michal Levi',role:'Lab Director',skills:['Management','Spectrophotometry','Incubator Handling']},{name:'Dana Cohen',role:'Research Assistant',skills:['Centrifuge Usage']},{name:'Hadas Ben Hamo',role:'Lab Technician',skills:['Centrifuge Usage','Microscopy']},{name:'Dr. Lihi Dayan',role:'Data Analyst',skills:['Mass Spectrometry','Spectrophotometry']},{name:'Amir Barzilay',role:'Junior Researcher',skills:[]},{name:'Nina Zur',role:'Quality Control',skills:['Biosafety Protocols','Microscopy']},{name:'Alex Tom',role:'Lab Assistant',skills:[]}];
+        const f = this.labFloor;
+        staffData.forEach((data, i) => { this.staff.push({ id: i, ...data, x: f.x + 2 + (i % 4) * 3, y: f.y + 2 + Math.floor(i / 4) * 2, targetX: null, targetY: null, state: i < 6 ? 'idle' : 'off', energy: 80 + Math.random() * 20, speed: 0.02, color: `hsl(${i * 45}, 70%, 50%)`, activeTask: null, taskStep: 0, taskTimer: 0 }); });
+      },
+      createEquipment() {
+        const f = this.labFloor;
+        const equipmentData = (this.businessProfile && this.businessProfile.tasks.length > 0)
+          ? this.businessProfile.tasks.map((t, i) => ({
+              name: 'Workstation', icon: '💼',
+              x: f.x + 3 + (i % 5) * 2.5, y: f.y + 2 + Math.floor(i / 5) * 4, skill: null
+            }))
+          : [{name:'Microscope A',icon:'🔬',x:f.x+5,y:f.y+2,skill:'Microscopy'},{name:'Centrifuge',icon:'🌀',x:f.x+7,y:f.y+2,skill:'Centrifuge Usage'},{name:'PCR Machine',icon:'🧬',x:f.x+9,y:f.y+2,skill:'PCR Operation'},{name:'Incubator',icon:'🌡️',x:f.x+11,y:f.y+2,skill:'Incubator Handling'},{name:'Spectrophotometer',icon:'📊',x:f.x+5,y:f.y+6,skill:'Spectrophotometry'},{name:'Mass Spectrometer',icon:'⚗️',x:f.x+7,y:f.y+6,skill:'Mass Spectrometry'},{name:'Flow Cytometer',icon:'💠',x:f.x+9,y:f.y+6,skill:'Flow Cytometry'},{name:'Freezer -80°C',icon:'❄️',x:f.x+1,y:f.y+1.5,skill:'Cryo Storage'},{name:'Biosafety Cabinet',icon:'🛡️',x:f.x+1,y:f.y+3.5,skill:'Biosafety Protocols'}];
+        equipmentData.forEach((data, i) => { this.equipment.push({ id: this.equipment.length, ...data, condition: 70 + Math.random() * 30, inUse: false, assignedTo: null, totalWorkTime: 0 }); });
+      },
+      createProps() {
+        const f = this.labFloor; const o1 = this.office1; const o2 = this.office2;
+        this.props = [ { type: 'desk', x: f.x + 1.5, y: f.y + 6.5, w: 2, h: 1, icon: '💻' }, { type: 'shelf', x: f.x + 12.5, y: f.y + 1.5, w: 1, h: 2, icon: '🗄️' }, { type: 'plant', x: f.x + 0.5, y: f.y + 0.5, icon: '🌿' }, { type: 'coffee', x: f.x + 12.5, y: f.y + 6.5, w: 1, h: 1, icon: '☕' }, { type: 'desk', x: o1.x + 1, y: o1.y + 1.5, w: 1, h: 2, icon: '💻' }, { type: 'desk', x: o1.x + 3, y: o1.y + 1.5, w: 1, h: 2, icon: '💻' }, { type: 'desk', x: o1.x + 1, y: o1.y + 5.5, w: 1, h: 2, icon: '💻' }, { type: 'desk', x: o1.x + 3, y: o1.y + 5.5, w: 1, h: 2, icon: '💻' }, { type: 'plant', x: o1.x + 4.5, y: o1.y + 0.5, icon: '🌿' }, { type: 'desk', x: o2.x + 2, y: o2.y + 1, w: 2, h: 1, icon: '💻' }, { type: 'desk', x: o2.x + 6, y: o2.y + 1, w: 2, h: 1, icon: '💻' }, { type: 'desk', x: o2.x + 10, y: o2.y + 1, w: 2, h: 1, icon: '💻' }, { type: 'desk', x: o2.x + 4, y: o2.y + 3, w: 2, h: 1, icon: '💻' }, { type: 'desk', x: o2.x + 8, y: o2.y + 3, w: 2, h: 1, icon: '💻' }, ];
+      },
+      createBuildingOccupants() { this.staticPersonnel = []; },
+      createArchitecture() {
+          const f = this.labFloor; const o1 = this.office1; const o2 = this.office2; const h = 25;
+          this.walls = [ { x1: f.x, y1: f.y, x2: f.x + f.w/2 - 1, y2: f.y, height: h }, { x1: f.x + f.w/2 + 1, y1: f.y, x2: f.x + f.w, y2: f.y, height: h }, { x1: f.x, y1: f.y, x2: f.x, y2: f.y + f.h, height: h }, { x1: o1.x, y1: o1.y, x2: o1.x + o1.w, y2: o1.y, height: h }, { x1: o1.x + o1.w, y1: o1.y, x2: o1.x + o1.w, y2: o1.y + o1.h, height: h }, { x1: o2.x, y1: o2.y + o2.h, x2: o2.x + o2.w, y2: o2.y + o2.h, height: h }, { x1: o2.x + o2.w, y1: o1.y + o1.h, x2: o2.x + o2.w, y2: o2.y + o2.h, height: h }, { x1: o2.x, y1: f.y + f.h, x2: o2.x, y2: o2.y + o2.h, height: h }, { x1: f.x + f.w, y1: f.y, x2: f.x + f.w, y2: f.y + f.h/2 - 1, height: h }, { x1: f.x + f.w, y1: f.y + f.h/2 + 1, x2: f.x + f.w, y2: o1.y + o1.h, height: h }, { x1: f.x, y1: f.y + f.h, x2: f.x + f.w/2 - 2, y2: f.y + f.h, height: h }, { x1: f.x + f.w/2, y1: f.y + f.h, x2: o2.x + o2.w, y2: o2.y, height: h }, ];
+          this.props.push({ type: 'door', x: f.x + f.w/2, y: f.y - 0.5, w: 2, h: 1, icon: '🚪' });
+      },
+      defineTasks() {
+        if (this.businessProfile && this.businessProfile.tasks.length > 0) {
+          this.businessProfile.tasks.forEach((t, i) => {
+            this.tasks.push({
+              id: 'TSK' + String(i + 1).padStart(3, '0'),
+              name: t.name,
+              reward: t.reward || 500,
+              timeLimit: (t.duration || 30) * 12,
+              penalty: Math.round((t.reward || 500) * 0.3),
+              equipmentSequence: [{ name: 'Workstation', duration: t.duration || 30, skillRequired: null }]
+            });
+          });
+        } else {
+          this.tasks.push({ id: 'TSK001', name: 'Blood Sample Analysis', reward: 500, timeLimit: 300, penalty: 250, equipmentSequence: [{ name: 'Centrifuge', duration: 20, skillRequired: 'Centrifuge Usage' }, { name: 'Microscope A', duration: 40, skillRequired: 'Microscopy' }] });
+          this.tasks.push({ id: 'TSK002', name: 'DNA Sequencing', reward: 1200, timeLimit: 600, penalty: 500, equipmentSequence: [{ name: 'PCR Machine', duration: 60, skillRequired: 'PCR Operation' }, { name: 'Spectrophotometer', duration: 30, skillRequired: 'Spectrophotometry' }] });
+          this.tasks.push({ id: 'TSK003', name: 'Cell Culture Test', reward: 850, timeLimit: 480, penalty: 400, equipmentSequence: [{ name: 'Incubator', duration: 15, skillRequired: 'Incubator Handling' }, { name: 'Biosafety Cabinet', duration: 45, skillRequired: 'Biosafety Protocols' }, { name: 'Microscope A', duration: 30, skillRequired: 'Microscopy' }] });
+        }
+      },
+      createEquipmentCatalog() {
+        this.equipmentCatalog = (this.businessProfile)
+          ? [ { id: 'cat001', name: 'Workstation', icon: '💼', cost: 1000, skill: null }, { id: 'cat002', name: 'Meeting Room', icon: '🪑', cost: 2000, skill: null }, { id: 'cat003', name: 'Storage Unit', icon: '🗄️', cost: 500, skill: null }, ]
+          : [ { id: 'cat001', name: 'Microscope B', icon: '🔬', cost: 1500, skill: 'Microscopy' }, { id: 'cat002', name: 'PCR Machine II', icon: '🧬', cost: 3000, skill: 'PCR Operation' }, { id: 'cat003', name: 'Auto-Sampler', icon: '🤖', cost: 5000, skill: 'Spectrophotometry' }, ];
+      },
+
+      enterSandboxMode() {
+        if (this.isSandboxMode) return;
+        this.isSandboxMode = true;
+        this.liveStateBackup = JSON.parse(JSON.stringify({ state: this.state, staff: this.staff, equipment: this.equipment, emergencyQueue: this.emergencyQueue }));
+        
+        const newSession = { id: 'SBX' + Date.now(), startTime: new Date(), actions: [] };
+        this.sandboxSessionHistory.unshift(newSession);
+        this.currentSandboxSession = newSession;
+        this.logSandboxAction("Entered Sandbox Mode.");
+        
+        document.body.classList.add('sandbox-mode');
+        document.getElementById('sandboxBtn').classList.add('active');
+        document.getElementById('liveBtn').classList.remove('active');
+        document.getElementById('sandboxLogPanel').style.display = 'block';
+        this.updateSandboxLogPanel();
+        this.showNotification('Entered Sandbox Mode. Changes will not affect the live simulation.', 'info');
+      },
+
+      exitSandboxMode() {
+        if (!this.isSandboxMode) return;
+        this.isSandboxMode = false;
+        this.state = this.liveStateBackup.state;
+        this.staff = this.liveStateBackup.staff;
+        this.equipment = this.liveStateBackup.equipment;
+        this.emergencyQueue = this.liveStateBackup.emergencyQueue;
+        this.liveStateBackup = null;
+        this.currentSandboxSession = null;
+
+        document.body.classList.remove('sandbox-mode');
+        document.getElementById('liveBtn').classList.add('active');
+        document.getElementById('sandboxBtn').classList.remove('active');
+        document.getElementById('sandboxLogPanel').style.display = 'none';
+        
+        this.updateAllPanels();
+        this.updateSessionHistoryPanel();
+        this.showNotification('Returned to Live Mode. All changes reverted.', 'info');
+      },
+      
+      logSandboxAction(actionText) {
+        if (!this.isSandboxMode || !this.currentSandboxSession) return;
+        const time = new Date();
+        const timestamp = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}:${time.getSeconds().toString().padStart(2, '0')}`;
+        this.currentSandboxSession.actions.unshift(`[${timestamp}] ${actionText}`);
+        this.updateSandboxLogPanel();
+      },
+
+      updateSandboxLogPanel() {
+        if (!this.isSandboxMode || !this.currentSandboxSession) return;
+        const listEl = document.getElementById('sandboxLogList');
+        if (!listEl) return;
+        if (this.currentSandboxSession.actions.length === 0) {
+            listEl.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No actions logged yet.</div>`;
+            return;
+        }
+        listEl.innerHTML = this.currentSandboxSession.actions.map(entry => 
+            `<div style="font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid #f1f5f9;">${entry}</div>`
+        ).join('');
+      },
+
+      updateSessionHistoryPanel() {
+        const listEl = document.getElementById('sandboxHistoryList');
+        if (!listEl) return;
+        if (this.sandboxSessionHistory.length === 0) {
+            listEl.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No sandbox sessions recorded.</div>`;
+            return;
+        }
+        listEl.innerHTML = this.sandboxSessionHistory.map(session => {
+            const date = session.startTime.toLocaleDateString();
+            const time = session.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const savedBadge = session.savedToServer
+              ? `<span style="color:#10b981;font-size:0.75rem;margin-left:0.5rem;" title="Saved to server">☁️ Saved</span>`
+              : '';
+            return `<div class="session-history-item" onclick="Lab.showSessionDetails('${session.id}')">
+                <strong>Session from ${date}</strong>${savedBadge}<br>
+                <small>${time} — ${session.actions.length} actions recorded</small>
+            </div>`;
+        }).join('');
+      },
+      
+      showSessionDetails(sessionId) {
+        const session = this.sandboxSessionHistory.find(s => s.id === sessionId);
+        if (!session) return;
+        
+        const headerEl = document.getElementById('sessionDetailsHeader');
+        const contentEl = document.getElementById('sessionDetailsContent');
+        const time = session.startTime.toLocaleString();
+        headerEl.textContent = `Log for Session: ${time}`;
+        
+        if (session.actions.length === 0) {
+            contentEl.innerHTML = "No actions were recorded in this session.";
+        } else {
+            contentEl.innerHTML = session.actions.slice().reverse().map(action => `<div>${action}</div>`).join('');
+        }
+        
+        document.getElementById('modalOverlay').className = 'modal-overlay active';
+        document.getElementById('sessionDetailsModal').className = 'modal active';
+      },
+
+      async saveSessionToServer(btnEl) {
+        if (!this.currentSandboxSession) {
+          this.showNotification('No active sandbox session to save.', 'error');
+          return;
+        }
+        if (!Auth.isLoggedIn()) {
+          this.showNotification('Sign in to save your sessions.', 'info');
+          window.location.href = 'login.html';
+          return;
+        }
+        if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Saving...'; }
+        try {
+          const response = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + Auth.token,
+            },
+            body: JSON.stringify({
+              sessionId: this.currentSandboxSession.id,
+              startTime: this.currentSandboxSession.startTime,
+              actions: this.currentSandboxSession.actions,
+              finalState: {
+                money: Math.round(this.state.money),
+                materials: this.state.materials,
+                samples: this.state.samples,
+              }
+            })
+          });
+          if (response.status === 401) {
+            Auth.logout();
+            return;
+          }
+          if (!response.ok) throw new Error('Server error');
+          this.currentSandboxSession.savedToServer = true;
+          if (btnEl) { btnEl.textContent = '✅ Saved'; }
+          this.showNotification('Session saved to your account.', 'success');
+          this.updateSessionHistoryPanel();
+        } catch {
+          if (btnEl) { btnEl.disabled = false; btnEl.textContent = '💾 Save'; }
+          this.showNotification('Could not save — is the server running? (npm start)', 'error');
+        }
+      },
+
+      toIso(x, y) { const isoX = (x - y) * this.tileSize / 2; const isoY = (x + y) * this.tileSize / 4; return { x: isoX, y: isoY }; },
+
+      update(dt) {
+        const gameDt = dt * this.state.speed;
+        
+        if (!this.isSandboxMode) { 
+            this.state.time += gameDt * 0.5; 
+            if (this.state.time >= 1440) this.state.time -= 1440;
+            
+            if (Math.random() < 0.0005 * this.state.speed) { 
+                if (this.emergencyQueue.filter(t => t.status === 'pending').length === 0) {
+                    this.triggerEmergency();
+                }
+            }
+            this.updateEmergencies(gameDt);
+        }
+
+        this.updateTimeOfDayOverlay();
+        
+        this.staff.forEach(person => {
+          if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
+          if(person.state === 'working') person.energy -= gameDt * 0.2; 
+          if(person.state === 'break') person.energy += gameDt * 1; 
+          if(person.energy < 20 && person.state !== 'break') person.state = 'break'; 
+          if(person.energy > 95 && person.state === 'break') person.state = 'idle';
+
+          if (person.activeTask) {
+            const task = person.activeTask;
+            if (task.timeLimit !== undefined) { 
+                task.timeLimit -= gameDt; 
+                if (task.timeLimit <= 0) { this.failTask(person, task); return; } 
+            }
+            if (task.type === 'training') {
+                const equipment = this.equipment.find(eq => eq.id === task.equipmentId);
+                if (equipment && Math.round(person.x) === equipment.x && Math.round(person.y) === equipment.y) {
+                    if (person.state !== 'working') {
+                        if (!equipment.inUse) {
+                            person.state = 'working'; equipment.inUse = true; equipment.assignedTo = person.id; this.updateAllPanels();
+                        } else { person.state = 'idle'; }
+                    }
+                    if (person.state === 'working') {
+                        person.taskTimer -= gameDt;
+                        if (person.taskTimer <= 0) {
+                            if (!person.skills.includes(task.skillToLearn)) person.skills.push(task.skillToLearn);
+                            this.showNotification(`${person.name} is now certified for ${task.skillToLearn}!`, 'success');
+                            if (equipment) { equipment.inUse = false; equipment.assignedTo = null; }
+                            person.activeTask = null; person.state = 'idle'; this.updateAllPanels();
+                        }
+                    }
+                }
+            } else {
+                const currentStep = task.equipmentSequence[person.taskStep];
+                if (!currentStep) { person.activeTask = null; return; }
+                const equipment = this.equipment.find(e => e.name === currentStep.name);
+                if (person.state === 'working') {
+                    person.taskTimer -= gameDt;
+                    if (person.taskTimer <= 0) {
+                        if (equipment) { equipment.inUse = false; equipment.assignedTo = null; }
+                        person.taskStep++;
+                        if (person.taskStep >= task.equipmentSequence.length) {
+                            this.state.money += task.reward;
+                            this.showNotification(`Task "${task.name}" completed by ${person.name}. +$${task.reward}`, 'success');
+                            if (task.isEmergency) { const emergency = this.emergencyQueue.find(e => e.id === task.id); if(emergency) emergency.status = 'completed'; }
+                            person.activeTask = null; person.taskStep = 0; person.state = 'idle';
+                        } else {
+                            const nextStep = task.equipmentSequence[person.taskStep];
+                            const nextEquipment = this.equipment.find(e => e.name === nextStep.name);
+                            if (nextEquipment) { person.targetX = nextEquipment.x; person.targetY = nextEquipment.y; }
+                            person.state = 'idle';
+                        }
+                        this.updateAllPanels();
+                    }
+                } else if (!equipment) {
+                    person.targetX = null; person.targetY = null; person.state = 'working';
+                    person.taskTimer = currentStep.duration; this.updateAllPanels();
+                } else if (equipment && Math.round(person.x) === equipment.x && Math.round(person.y) === equipment.y) {
+                    if (!equipment.inUse) {
+                        person.targetX = null; person.targetY = null; person.state = 'working';
+                        person.taskTimer = currentStep.duration; equipment.inUse = true; equipment.assignedTo = person.id; this.updateAllPanels();
+                    } else { person.state = 'idle'; }
+                }
+            }
+          }
+          if (person.targetX !== null && person.targetY !== null) { 
+              const dx = person.targetX - person.x; const dy = person.targetY - person.y; const dist = Math.sqrt(dx * dx + dy * dy); 
+              if (dist > 0.1) { 
+                  const moveSpeed = this.isSandboxMode ? person.speed * 5 : person.speed; 
+                  person.x += (dx / dist) * moveSpeed * gameDt * 60; person.y += (dy / dist) * moveSpeed * gameDt * 60; 
+              } else { person.x = person.targetX; person.y = person.targetY; } 
+          } else if (person.state === 'idle' && !person.activeTask && Math.random() < 0.005) { 
+              const f = this.labFloor; person.targetX = f.x + 1 + Math.random() * (f.w - 2); person.targetY = f.y + 1 + Math.random() * (f.h - 2); 
+          }
+          const f = this.labFloor;
+          person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));
+          person.y = Math.max(f.y + 0.5, Math.min(f.y + f.h - 0.5, person.y));
+        });
+        this.equipment.forEach(eq => { if (eq.inUse) { eq.condition -= gameDt * 0.05; eq.totalWorkTime += gameDt; } });
+        this.updateUI(); this.updateStatusCounts(); this.updateEmergencyListPanel(); this.updateOngoingTasksPanel();
+      },
+
+      updateTimeOfDayOverlay() { const hours = this.state.time / 60; let color = 'rgba(0,0,0,0)'; if (hours < 6 || hours >= 21) { color = 'rgba(12, 28, 64, 0.4)'; } else if (hours >= 6 && hours < 9) { color = 'rgba(255, 215, 135, 0.15)'; } else if (hours >= 18 && hours < 21) { color = 'rgba(255, 140, 0, 0.25)'; } this.timeOverlay.style.backgroundColor = color; },
+      failTask(person, task) { this.state.money -= task.penalty; const failMessage = `Task "${task.name}" failed! Penalty: $${task.penalty}`; this.showNotification(failMessage, 'error'); this.logSandboxAction(failMessage); const currentStep = task.equipmentSequence[person.taskStep]; if (currentStep) { const equipment = this.equipment.find(e => e.name === currentStep.name); if (equipment && equipment.assignedTo === person.id) { equipment.inUse = false; equipment.assignedTo = null; this.updateEquipmentPanel(); } } if (task.isEmergency) { const emergency = this.emergencyQueue.find(e => e.id === task.id); if(emergency) emergency.status = 'failed'; } person.activeTask = null; person.taskStep = 0; person.state = 'idle'; this.updateAllPanels(); },
+      drawIsoBox(x, y, w, h, z, topColor, sideColor1 = '#a1a1a1', sideColor2 = '#8a8a8a') { const zc = z; const p1 = this.toIso(x, y); const p2 = this.toIso(x + w, y); const p3 = this.toIso(x + w, y + h); const p4 = this.toIso(x, y + h); this.ctx.fillStyle = sideColor1; this.ctx.beginPath(); this.ctx.moveTo(p4.x, p4.y); this.ctx.lineTo(p3.x, p3.y); this.ctx.lineTo(p3.x, p3.y - zc); this.ctx.lineTo(p4.x, p4.y - zc); this.ctx.closePath(); this.ctx.fill(); this.ctx.fillStyle = sideColor2; this.ctx.beginPath(); this.ctx.moveTo(p2.x, p2.y); this.ctx.lineTo(p3.x, p3.y); this.ctx.lineTo(p3.x, p3.y - zc); this.ctx.lineTo(p2.x, p2.y - zc); this.ctx.closePath(); this.ctx.fill(); this.ctx.fillStyle = topColor; this.ctx.beginPath(); this.ctx.moveTo(p1.x, p1.y); this.ctx.lineTo(p2.x, p2.y); this.ctx.lineTo(p3.x, p3.y); this.ctx.lineTo(p4.x, p4.y); this.ctx.closePath(); this.ctx.fill(); },
+      drawIsoWall(x1, y1, x2, y2, z, color) { const zc = z; const p1 = this.toIso(x1, y1); const p2 = this.toIso(x2, y2); this.ctx.fillStyle = color; this.ctx.beginPath(); this.ctx.moveTo(p1.x, p1.y); this.ctx.lineTo(p2.x, p2.y); this.ctx.lineTo(p2.x, p2.y - zc); this.ctx.lineTo(p1.x, p1.y - zc); this.ctx.closePath(); this.ctx.fill(); },
+      render() { this.ctx.clearRect(0, 0, this.width, this.height); const _bg=this.ctx.createLinearGradient(0,0,0,this.height); _bg.addColorStop(0,'#1a2a40'); _bg.addColorStop(1,'#0a1020'); this.ctx.fillStyle=_bg; this.ctx.fillRect(0,0,this.width,this.height); this.ctx.save(); this.ctx.translate(this.width / 2 + this.camera.x, this.height / 2 + this.camera.y - 150); this.ctx.scale(this.camera.zoom, this.camera.zoom); this.ctx.translate(-this.gridWidth * this.tileSize / 4, -this.gridHeight * this.tileSize / 8); this.drawExterior(); const f = this.labFloor; const o1 = this.office1; const o2 = this.office2; this.drawIsoBox(f.x, f.y, f.w, f.h, this.tileHeight, '#ddd5c3', '#b8a898', '#a89888'); this.ctx.globalAlpha = 0.15; this.ctx.strokeStyle = '#8B7355'; this.ctx.lineWidth = 0.8; for(let i = 0; i < f.w; i++) { for(let j = 0; j < f.h; j++) { const p1=this.toIso(f.x+i,f.y+j);const p2=this.toIso(f.x+i+1,f.y+j);const p3=this.toIso(f.x+i+1,f.y+j+1);const p4=this.toIso(f.x+i,f.y+j+1); this.ctx.beginPath(); this.ctx.moveTo(p1.x, p1.y); this.ctx.lineTo(p2.x,p2.y); this.ctx.lineTo(p3.x,p3.y); this.ctx.lineTo(p4.x,p4.y); this.ctx.closePath();this.ctx.stroke();}} this.ctx.globalAlpha = 1; this.drawIsoBox(o1.x, o1.y, o1.w, o1.h, this.tileHeight, '#1e3f7a', '#152d6e', '#0f2057'); this.drawIsoBox(o2.x, o2.y, o2.w, o2.h, this.tileHeight, '#1e3f7a', '#152d6e', '#0f2057'); this.drawIsoBox(f.x+f.w, f.y, o1.x-(f.x+f.w), f.h, this.tileHeight, '#c8c0b0', '#a0988a', '#908878'); this.drawIsoBox(f.x, f.y+f.h, f.w, o2.y-(f.y+f.h), this.tileHeight, '#c8c0b0', '#a0988a', '#908878'); const entities = [ ...this.equipment.map(e => ({...e, type: 'equipment', zIndex: e.x + e.y})), ...this.staff.map(s => ({...s, type: 'staff', zIndex: s.x + s.y + 0.1})), ...this.props.map(p => ({...p, type: 'prop', zIndex: p.x + p.y})), ...this.walls.map(w => ({...w, type: 'wall', zIndex: Math.min(w.x1 + w.y1, w.x2 + w.y2) - 0.1 })), ...this.staticPersonnel.map(p => ({...p, type: 'static_person', zIndex: p.x + p.y})) ].sort((a, b) => a.zIndex - b.zIndex); entities.forEach(entity => { if (entity.type === 'equipment') this.drawEquipment(entity); else if (entity.type === 'staff' && entity.state !== 'off' && entity.state !== 'vacation' && entity.state !== 'sick') this.drawStaff(entity); else if (entity.type === 'prop') this.drawProp(entity); else if (entity.type === 'wall') this.drawIsoWall(entity.x1, entity.y1, entity.x2, entity.y2, entity.height, '#c5bdb0'); else if (entity.type === 'static_person') this.drawStaticPerson(entity); }); if (this.hoveredEntity) { this.drawHoverLabel(this.hoveredEntity); } this.ctx.restore(); this.drawHUD(); },
+      drawExterior() {},
+      drawEquipment(eq) { const eqHeight = 16; const palette = [['#7c3aed','#5b21b6','#4c1d95'],['#0891b2','#0e7490','#164e63'],['#059669','#047857','#065f46'],['#d97706','#b45309','#92400e'],['#2563eb','#1d4ed8','#1e40af'],['#dc2626','#b91c1c','#991b1b'],['#0d9488','#0f766e','#115e59'],['#1d4ed8','#1e40af','#1e3a8a'],['#65a30d','#4d7c0f','#3f6212']]; const colors = eq.inUse ? ['#6ee7b7','#34d399','#10b981'] : (palette[eq.id % palette.length] || palette[0]); const isoTop = this.toIso(eq.x, eq.y); if (eq.inUse) { this.ctx.save(); this.ctx.shadowColor='#6ee7b7'; this.ctx.shadowBlur=15; this.drawIsoBox(eq.x-0.42,eq.y-0.42,0.84,0.84,eqHeight,colors[0],colors[1],colors[2]); this.ctx.restore(); } else { this.drawIsoBox(eq.x-0.42,eq.y-0.42,0.84,0.84,eqHeight,colors[0],colors[1],colors[2]); } this.ctx.font='18px Arial'; this.ctx.textAlign='center'; this.ctx.fillText(eq.icon, isoTop.x, isoTop.y-eqHeight*0.75); if (this.camera.zoom > 0.75) { this.ctx.fillStyle=eq.inUse?'#ecfdf5':'rgba(255,255,255,0.92)'; this.ctx.font='bold 9px Inter'; this.ctx.fillText(eq.name, isoTop.x, isoTop.y+this.tileSize/4+2); } },
+      drawProp(prop) { let propHeight = 12, topColor = '#a16207', side1 = '#854d0e', side2 = '#713f12'; if (prop.type === 'shelf') { propHeight = 25; topColor = '#9ca3af'; side1 = '#475569'; side2 = '#334155'; } else if (['plant', 'coffee', 'door'].includes(prop.type)) { const iso = this.toIso(prop.x, prop.y); this.ctx.font = `20px Arial`; this.ctx.textAlign = 'center'; this.ctx.fillText(prop.icon, iso.x, iso.y - 10); return; } this.drawIsoBox(prop.x - prop.w/2 + 0.5, prop.y - prop.h/2 + 0.5, prop.w, prop.h, propHeight, topColor, side1, side2); if (prop.icon) { const isoTop = this.toIso(prop.x + 0.5, prop.y + 0.5); this.ctx.font = `20px Arial`; this.ctx.textAlign = 'center'; this.ctx.fillText(prop.icon, isoTop.x, isoTop.y - (propHeight * 0.7)); } },
+      drawStaff(person) { const iso=this.toIso(person.x,person.y); const size=14; const bob=(person.state==='idle'&&!person.activeTask)?Math.sin(this.lastTime/200+person.id)*2:0; const y=iso.y-bob; const stateColor={working:'#10b981',idle:person.color,break:'#f59e0b',sick:'#a78bfa',vacation:'#06b6d4',off:'#94a3b8'}; const hairColors=['#1e293b','#92400e','#7c3aed','#0c4a6e','#374151']; this.ctx.fillStyle='rgba(0,0,0,0.22)'; this.ctx.beginPath(); this.ctx.ellipse(iso.x,iso.y+size*0.25,size*0.65,size*0.28,0,0,Math.PI*2); this.ctx.fill(); this.ctx.fillStyle='#1e293b'; this.ctx.fillRect(iso.x-size*0.38,y+size*0.05,size*0.28,size*0.7); this.ctx.fillRect(iso.x+size*0.1,y+size*0.05,size*0.28,size*0.7); this.ctx.fillStyle=stateColor[person.state]||person.color; this.ctx.beginPath(); if(this.ctx.roundRect){this.ctx.roundRect(iso.x-size*0.65,y-size*1.0,size*1.3,size*1.1,4);}else{this.ctx.rect(iso.x-size*0.65,y-size*1.0,size*1.3,size*1.1);} this.ctx.fill(); this.ctx.fillStyle='#FDDBB4'; this.ctx.fillRect(iso.x-size*0.16,y-size*1.2,size*0.32,size*0.24); this.ctx.beginPath(); this.ctx.arc(iso.x,y-size*1.58,size*0.52,0,Math.PI*2); this.ctx.fill(); this.ctx.fillStyle=hairColors[person.id%hairColors.length]; this.ctx.beginPath(); this.ctx.arc(iso.x,y-size*1.78,size*0.42,Math.PI,0); this.ctx.fill(); this.ctx.fillStyle='#1e293b'; this.ctx.beginPath(); this.ctx.arc(iso.x-size*0.18,y-size*1.58,size*0.09,0,Math.PI*2); this.ctx.arc(iso.x+size*0.18,y-size*1.58,size*0.09,0,Math.PI*2); this.ctx.fill(); if(person.activeTask&&person.state==='working'){const isT=person.activeTask.type==='training'; const dur=isT?person.activeTask.duration:(person.activeTask.equipmentSequence&&person.activeTask.equipmentSequence[person.taskStep]?person.activeTask.equipmentSequence[person.taskStep].duration:0); const progress=dur>0?Math.max(0,Math.min(1,1-person.taskTimer/dur)):0; this.ctx.fillStyle='rgba(0,0,0,0.35)'; this.ctx.fillRect(iso.x-size,y-size*2.5,size*2,4); this.ctx.fillStyle='#818cf8'; this.ctx.fillRect(iso.x-size,y-size*2.5,size*2*progress,4);} if(this.highlightedStaffIds.includes(person.id)){this.ctx.strokeStyle='rgba(16,185,129,0.9)'; this.ctx.lineWidth=2.5; this.ctx.beginPath(); this.ctx.arc(iso.x,y-size*0.4,size*1.25,0,Math.PI*2); this.ctx.stroke();} if(this.camera.zoom>0.8){const firstName=person.name.split(' ')[0]; this.ctx.font='bold 9px Inter'; const nameW=this.ctx.measureText(firstName).width+10; this.ctx.fillStyle='rgba(15,23,42,0.7)'; this.ctx.beginPath(); if(this.ctx.roundRect){this.ctx.roundRect(iso.x-nameW/2,y+size*0.85,nameW,13,3);}else{this.ctx.rect(iso.x-nameW/2,y+size*0.85,nameW,13);} this.ctx.fill(); this.ctx.fillStyle='white'; this.ctx.textAlign='center'; this.ctx.fillText(firstName,iso.x,y+size*0.85+9);} },
+      drawStaticPerson(person) {},
+      drawHoverLabel(entity) { const iso = this.toIso(entity.x, entity.y); const text = entity.name; this.ctx.font = `bold 12px Inter`; const textMetrics = this.ctx.measureText(text); const width = textMetrics.width + 16; const height = 24; const x = iso.x - width / 2; const y = iso.y - 50; this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; this.ctx.fillRect(x, y, width, height); this.ctx.fillStyle = 'white'; this.ctx.textAlign = 'center'; this.ctx.textBaseline = 'middle'; this.ctx.fillText(text, iso.x, y + height / 2); },
+      drawHUD() { const h=Math.floor(this.state.time/60)%24; const m=Math.floor(this.state.time%60); const timeStr=h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0'); const isNight=h<6||h>=21; this.ctx.fillStyle=isNight?'rgba(15,23,42,0.88)':'rgba(255,255,255,0.88)'; this.ctx.strokeStyle=isNight?'rgba(99,102,241,0.5)':'rgba(59,130,246,0.3)'; this.ctx.lineWidth=1.5; this.ctx.beginPath(); if(this.ctx.roundRect){this.ctx.roundRect(10,10,115,36,8);}else{this.ctx.rect(10,10,115,36);} this.ctx.fill(); this.ctx.stroke(); this.ctx.fillStyle=isNight?'#c7d2fe':'#1e293b'; this.ctx.font='bold 14px Inter'; this.ctx.textAlign='left'; this.ctx.fillText((isNight?'🌙':'☀️')+' '+timeStr,20,33); },
+      gameLoop() { const now=performance.now();const dt=(now-this.lastTime)/1000;this.lastTime=now;this.update(dt);this.render();requestAnimationFrame(()=>this.gameLoop()); },
+      updateUI() { document.getElementById('money').textContent=this.state.money.toFixed(0); document.getElementById('materials').textContent=this.state.materials; document.getElementById('samples').textContent=this.state.samples; },
+      updateStatusCounts() { const c={working:0,break:0,off:0,sick:0,vacation:0,training:0};this.staff.forEach(p=>{if(p.state==='working'||p.state==='idle'){c.working++;}else if(p.state==='break'){c.break++;}else if(p.state==='off'){c.off++;}else if(p.state==='sick'){c.sick++;}else if(p.state==='vacation'){c.vacation++;}if(p.activeTask&&p.activeTask.type==='training'){c.training++;}});document.getElementById('workingCount').textContent=c.working;document.getElementById('breakCount').textContent=c.break;document.getElementById('offCount').textContent=c.off;document.getElementById('sickCount').textContent=c.sick;document.getElementById('vacationCount').textContent=c.vacation;document.getElementById('trainingCount').textContent=c.training;},
+      updateStaffPanel() { const listEl = document.getElementById('staffList'); listEl.innerHTML = this.staff.map(p => { const energy = Math.floor(p.energy); const energyColor = energy > 60 ? '#10b981' : energy > 30 ? '#f59e0b' : '#ef4444'; const skillsHTML = p.skills.map(skill => `<span class="skill-tag">${skill}</span>`).join(''); const isHighlighted = this.highlightedStaffIds.includes(p.id); return ` <div class="staff-card ${isHighlighted ? 'qualified-highlight' : ''}"> <div class="staff-header"> <span class="staff-name">${p.name}</span> <span class="staff-badge badge-${p.state}">${p.state}</span> </div> <div class="energy-bar-container"> <div class="energy-bar-label"><span>Energy</span><span>${energy}%</span></div> <div class="energy-bar"><div class="energy-fill" style="width: ${energy}%; background: ${energyColor};"></div></div> </div> <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.25rem;">Task: ${p.activeTask ? p.activeTask.name : 'None'}</div> <div class="skills-container">${skillsHTML || '<span style="font-size: 0.75rem; color: var(--text-light);">No special skills.</span>'}</div> <div class="staff-actions"> <button class="btn btn-primary btn-full" onclick="Lab.openTaskModal(${p.id})" ${p.state !== 'idle' ? 'disabled' : ''}>Assign Task</button> <button class="btn btn-secondary" onclick="Lab.toggleShift(${p.id})">${p.state === 'off' ? 'Start Shift' : 'End Shift'}</button> <button class="btn btn-secondary" onclick="Lab.setStaffStatus(${p.id}, 'sick')">${p.state === 'sick' ? 'Clear Sick' : 'Set Sick'}</button> </div> </div>`; }).join(''); },
+      updateEquipmentPanel() { document.getElementById('equipmentList').innerHTML = this.equipment.map((eq, i) => `<div class="equipment-card"><div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;"><span style="font-size: 24px;">${eq.icon}</span><div style="flex: 1;"><strong>${eq.name}</strong><div class="equipment-info">${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use: ${this.formatTime(eq.totalWorkTime)}</div></div></div><div class="condition-bar"><div class="condition-fill" style="width: ${eq.condition}%; background: ${eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444'};"></div></div><div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;"><button class="btn" onclick="Lab.repairEquipment(${i})">Repair ($200)</button><button class="btn" onclick="Lab.calibrateEquipment(${i})">Calibrate ($100)</button></div></div>`).join(''); },
+      updateEmergencyListPanel() { const p=document.getElementById('emergencyListPanel'); if (!p) return; p.innerHTML='';const a=this.emergencyQueue.filter(t=>t.status==='pending'||t.status==='in-progress');if(a.length===0){p.innerHTML=`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No active emergencies.</div>`;return;}a.forEach(t=>{const s=t.status==='pending'?'Waiting':'In Progress';p.innerHTML+=`<div class="emergency-card" onclick="Lab.openEmergencyModalById('${t.id}')"><strong>${t.name}</strong><div><span>${s}</span><span>Time Left: ${this.formatTime(t.timeLimit,true)}</span></div></div>`;});},
+      updateTaskListPanel() { const panel = document.getElementById('taskListPanel'); if (!panel) return; panel.innerHTML = this.tasks.map(task => { const totalTime = task.equipmentSequence.reduce((acc, step) => acc + step.duration, 0); const skills = task.equipmentSequence.map(s => s.skillRequired).join(', '); const qualifiedStaff = this.staff.filter(p => p.state === 'idle' && task.equipmentSequence.every(step => (!step.skillRequired || p.skills.includes(step.skillRequired)))).map(p => p.name).join(', ') || 'None available'; return ` <div class="task-def-card" onmouseenter="Lab.highlightQualifiedStaff('${task.id}')" onmouseleave="Lab.clearStaffHighlights()"> <strong>${task.name}</strong> <div class="details"> <span>Time: ${this.formatTime(totalTime)} | Reward: $${task.reward}</span><br> <strong>Required Skills:</strong> ${skills}<br><strong>Qualified Staff:</strong> ${qualifiedStaff}</div> </div>`; }).join(''); },
+      updateOngoingTasksPanel() { const panel = document.getElementById('ongoingTasksPanel'); if (!panel) return; const activeStaff = this.staff.filter(p => p.activeTask); if (activeStaff.length === 0) { panel.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No tasks in progress.</div>`; return; } panel.innerHTML = activeStaff.map(p => { const task = p.activeTask; let progress = 0; let statusText = 'Moving to equipment'; if (p.state === 'working') { if (task.type === 'training') { statusText = 'Training in progress'; progress = Math.max(0, 100 * (1 - (p.taskTimer / task.duration))); } else { statusText = 'Processing'; const currentStep = task.equipmentSequence[p.taskStep]; if (currentStep) { progress = Math.max(0, 100 * (1 - (p.taskTimer / currentStep.duration))); } } } return `<div class="ongoing-task-card"><strong>${task.name}</strong><div class="info">Assigned to: ${p.name} (${statusText})</div><div class="progress-bar"><div class="progress-fill" style="width: ${progress}%; background: #a78bfa;"></div></div></div>`; }).join('');},
+      openTaskModal(staffId) { this.selectedStaff=this.staff[staffId];if(this.selectedStaff.state!=='idle'||this.selectedStaff.activeTask){this.showNotification(`Cannot assign task: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,'error');return;}document.getElementById('selectedStaffName').textContent=this.selectedStaff.name;document.getElementById('modalOverlay').className='modal-overlay active';document.getElementById('taskModal').className='modal active';const o=document.getElementById('taskOptions');let h='';this.tasks.forEach((t,i)=>{const q=t.equipmentSequence.every(s=>(!s.skillRequired||this.selectedStaff.skills.includes(s.skillRequired)));h+=`<div class="task-option" ${!q?'disabled':''} onclick="${q?`Lab.assignNewTask(${i})`:''}"><strong>${t.name}</strong><div style="font-size:0.875rem;color:#64748b;">Reward: $${t.reward} | Time: ${this.formatTime(t.timeLimit,true)} | ${q?'✅ Qualified':'❌ Not Qualified'}</div></div>`;});this.equipment.forEach(eq=>{if(!this.selectedStaff.skills.includes(eq.skill)){h+=`<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})"><strong>🎓 Train: ${eq.name}</strong><div style="font-size:0.875rem;color:#64748b;">Cost: $300 | Duration: 60 min</div></div>`;}});o.innerHTML=h;},
+      closeAllModals() { document.querySelectorAll('.modal.active, .modal-overlay.active').forEach(el => el.classList.remove('active')); this.selectedStaff=null; this.activeEmergencyTask=null; },
+      assignNewTask(taskIndex,isEmergency=false,emergencyId=null){if(!this.selectedStaff)return;let taskSource;if(isEmergency){taskSource=this.emergencyQueue.find(t=>t.id===emergencyId);}else{taskSource=this.tasks[taskIndex];}if(!taskSource)return;if(this.selectedStaff.state!=='idle'||this.selectedStaff.activeTask){this.showNotification(`Assignment failed: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,'error');return;}const isQualified=taskSource.equipmentSequence.every(s=>(!s.skillRequired||this.selectedStaff.skills.includes(s.skillRequired)));if(!isQualified){this.showNotification(`Assignment failed: ${this.selectedStaff.name} is not qualified for this task.`,'error');return;}const firstStep=taskSource.equipmentSequence[0];const firstEquipment=this.equipment.find(e=>e.name===firstStep.name);if(firstEquipment && firstEquipment.inUse){const user=this.staff.find(s=>s.id===firstEquipment.assignedTo);const userName=user?`by ${user.name}`:'';this.showNotification(`Assignment failed: ${firstEquipment.name} is currently in use ${userName}.`,'error');return;}const taskCopy=JSON.parse(JSON.stringify(taskSource));if(isEmergency){taskCopy.isEmergency=true;taskSource.status='in-progress';taskSource.assignedTo=this.selectedStaff.id;}this.selectedStaff.activeTask=taskCopy;this.selectedStaff.taskStep=0;if (firstEquipment) { this.selectedStaff.targetX=firstEquipment.x;this.selectedStaff.targetY=firstEquipment.y; } const actionMessage = `${this.selectedStaff.name} assigned to "${taskCopy.name}"`; this.showNotification(actionMessage,'info'); this.logSandboxAction(actionMessage); this.closeAllModals();this.updateAllPanels(); },
+      assignTraining(skillToLearn,equipmentId){if(!this.selectedStaff)return;const cost=300;const trainingDuration = 60; const equipment=this.equipment.find(eq=>eq.id===equipmentId);if(this.state.money<cost){this.showNotification(`Training failed: Insufficient funds (Cost: $${cost}, Budget: $${this.state.money.toFixed(0)}).`,'error');return;}if(equipment.inUse){const user=this.staff.find(s=>s.id===equipment.assignedTo);const userName=user?`by ${user.name}`:'';this.showNotification(`Training failed: ${equipment.name} is unavailable for training, it's in use ${userName}.`,'error');return;}this.state.money-=cost;this.selectedStaff.activeTask={type:'training',name:`Training on ${equipment.name}`,skillToLearn:skillToLearn,equipmentId:equipmentId, duration: trainingDuration};this.selectedStaff.taskTimer=trainingDuration;this.selectedStaff.targetX=equipment.x;this.selectedStaff.targetY=equipment.y; const actionMessage = `${this.selectedStaff.name} started training on ${equipment.name}. (-$${cost})`; this.showNotification(actionMessage,'info'); this.logSandboxAction(actionMessage); this.closeAllModals();this.updateAllPanels(); },
+      openEmergencyModalById(id) { const task = this.emergencyQueue.find(t => t.id === id); if (task) this.openEmergencyModal(task); },
+      openEmergencyModal(task){this.activeEmergencyTask=task;document.getElementById('emergencyTaskName').innerHTML=`<strong>Task:</strong> ${task.name}`;document.getElementById('emergencyTaskReward').innerHTML=`<strong>Reward:</strong> $${task.reward}`;document.getElementById('emergencyTaskPenalty').innerHTML=`<strong>Penalty:</strong> $${task.penalty}`;document.getElementById('emergencyTaskDeadline').innerHTML=`<strong>Deadline:</strong> ${this.formatTime(task.timeLimit,true)}`;const staffListEl=document.getElementById('emergencyStaffList');staffListEl.innerHTML='';const availableStaff=this.staff.filter(p=>p.state==='idle'&&!p.activeTask&&task.equipmentSequence.every(step=>(!step.skillRequired || p.skills.includes(step.skillRequired))));if(availableStaff.length>0){availableStaff.forEach(p=>{staffListEl.innerHTML+=`<div class="staff-assign-option" onclick="Lab.assignEmergencyTask(${p.id})"><span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small></div>`;});}else{staffListEl.innerHTML=`<div style="color: #b91c1c; text-align: center; font-weight: 600;">No qualified and available staff found!</div>`;}document.getElementById('modalOverlay').className='modal-overlay active';document.getElementById('emergencyModal').className='modal active';},
+      assignEmergencyTask(staffId) {this.selectedStaff=this.staff.find(p=>p.id===staffId);this.assignNewTask(null,true,this.activeEmergencyTask.id);},
+      triggerEmergency() { const t={id:'EMG'+Date.now(),name:'Critical Sample Analysis',reward:2500,penalty:4000,timeLimit:120,equipmentSequence:[{name:'Mass Spectrometer',duration:30,skillRequired:'Mass Spectrometry'},{name:'Biosafety Cabinet',duration:30,skillRequired:'Biosafety Protocols'}],status:'pending'};this.emergencyQueue.push(t); this.openEmergencyModal(t); },
+      updateEmergencies(gameDt) {this.emergencyQueue.forEach(t=>{if(t.status==='pending'||t.status==='in-progress'){t.timeLimit-=gameDt;if(this.activeEmergencyTask&&this.activeEmergencyTask.id===t.id){document.getElementById('emergencyTaskDeadline').innerHTML=`<strong>Deadline:</strong> ${this.formatTime(t.timeLimit,true)}`;}if(t.timeLimit<=0){if(t.status==='pending'){t.status='failed';this.state.money-=t.penalty;this.showNotification(`Unassigned emergency task failed! Penalty: $${t.penalty}!`,'error');}else if(t.status==='in-progress'){const s=this.staff.find(s=>s.id===t.assignedTo);if(s&&s.activeTask&&s.activeTask.id===t.id){this.failTask(s,s.activeTask);}}if(this.activeEmergencyTask&&this.activeEmergencyTask.id===t.id){this.closeAllModals();}}}});this.emergencyQueue=this.emergencyQueue.filter(t=>t.status==='pending'||t.status==='in-progress');},
+      setStaffStatus(staffId,newStatus){const p=this.staff[staffId];if(p.state==='off')return;const oldStatus = p.state; if(p.state===newStatus){p.state='idle';}else{if(p.activeTask){this.failTask(p,p.activeTask);}p.state=newStatus;} this.logSandboxAction(`${p.name}'s status changed from ${oldStatus} to ${p.state}.`); this.updateAllPanels(); },
+      toggleShift(staffId) {const p=this.staff[staffId];if(p.state==='off'){p.state='idle';p.energy=100;}else if(p.state==='idle'||p.state==='break'){p.state='off';p.activeTask=null;const eq=this.equipment.find(e=>e.assignedTo===p.id);if(eq){eq.inUse=false;eq.assignedTo=null;}} const actionMessage = `${p.name} has ${p.state==='off'?'ended':'started'} their shift`; this.showNotification(actionMessage,'info'); this.logSandboxAction(actionMessage); this.updateAllPanels(); },
+      repairEquipment(eqId){const eq=this.equipment[eqId];const cost=200;if(this.state.money>=cost){this.state.money-=cost;eq.condition=Math.min(100,eq.condition+50); const actionMessage = `${eq.name} repaired for $${cost}.`; this.showNotification(actionMessage,'success'); this.logSandboxAction(actionMessage); this.updateAllPanels(); }else{this.showNotification('Insufficient funds!','error');} },
+      calibrateEquipment(eqId){const eq=this.equipment[eqId];const cost=100;if(this.state.money>=cost){this.state.money-=cost;eq.condition=Math.min(100,eq.condition+25); const actionMessage = `${eq.name} calibrated for $${cost}.`; this.showNotification(actionMessage,'success'); this.logSandboxAction(actionMessage); this.updateAllPanels(); }else{this.showNotification('Insufficient funds!','error');} },
+      resetCamera() {this.camera.x=20;this.camera.y=100;this.camera.zoom=0.85;this.showNotification('View reset','info');},
+      togglePanel(headerEl) {const c=headerEl.nextElementSibling;const i=headerEl.querySelector('.panel-toggle-icon');c.classList.toggle('collapsed');if(c.classList.contains('collapsed')){i.style.transform='rotate(-90deg)';}else{i.style.transform='rotate(0deg)';}},
+      formatTime(totalSeconds,showSeconds=false){if(totalSeconds<0)totalSeconds=0;const h=Math.floor(totalSeconds/3600);const m=Math.floor((totalSeconds%3600)/60);const s=Math.floor(totalSeconds%60);if(showSeconds){return `${m}m ${s.toString().padStart(2,'0')}s`;}if(h>0){return`${h}h ${m}m`;}if(m>0){return`${m}m ${s}s`;}return`${s}s`;},
+      showNotification(message,type){const n=document.createElement('div');n.className='notification';n.style.borderLeft=`4px solid ${type==='success'?'#10b981':type==='error'?'#ef4444':'#3b82f6'}`;n.innerHTML=`<div style="display:flex;align-items:center;gap:1rem;"><span style="font-size:20px;">${type==='success'?'✅':type==='error'?'❌':'ℹ️'}</span><span>${message}</span></div>`;document.body.appendChild(n);setTimeout(()=>{n.style.opacity='0';setTimeout(()=>n.remove(),300);},4000);},
+      openBuyModal() { document.getElementById('modalOverlay').className = 'modal-overlay active'; document.getElementById('buyEquipmentModal').className = 'modal active'; const listEl = document.getElementById('equipmentCatalogList'); listEl.innerHTML = this.equipmentCatalog.map(item => ` <div class="equipment-catalog-item"> <span style="font-size: 24px;">${item.icon}</span> <div class="info"> <strong>${item.name}</strong> <div style="font-size: 0.8rem; color: var(--text-light)">Requires Skill: ${item.skill}</div> </div> <div class="cost">$${item.cost}</div> <button class="btn btn-primary" onclick="Lab.buyEquipment('${item.id}')" ${this.state.money < item.cost ? 'disabled' : ''}>Buy</button> </div> `).join(''); },
+      buyEquipment(catalogId) { const item = this.equipmentCatalog.find(i => i.id === catalogId); if (!item) return; if (this.state.money < item.cost) { this.showNotification('Not enough money to buy this equipment!', 'error'); return; } const f = this.labFloor; let foundSpot = false; let newX = 0, newY = 0; for (let y = f.y + 1; y < f.y + f.h - 1 && !foundSpot; y++) { for (let x = f.x + 1; x < f.x + f.w - 1 && !foundSpot; x++) { const isOccupied = this.equipment.some(eq => Math.round(eq.x) === x && Math.round(eq.y) === y); if (!isOccupied) { newX = x; newY = y; foundSpot = true; } } } 
+        if (foundSpot) { 
+            this.state.money -= item.cost; 
+            const newEquipment = { ...item, id: this.equipment.length, x: newX, y: newY, condition: 100, inUse: false, assignedTo: null, totalWorkTime: 0 }; 
+            this.equipment.push(newEquipment); 
+            const actionMessage = `${item.name} purchased for $${item.cost} and placed in the lab.`;
+            this.showNotification(actionMessage, 'success'); 
+            this.logSandboxAction(actionMessage);
+            this.updateAllPanels(); 
+            this.closeAllModals(); 
+        } else { 
+            this.showNotification('No available space in the lab to place new equipment!', 'error'); 
+        } 
+      }
+    };
+    
+    // ── Auth state ───────────────────────────────────────────────────────────
+    const Auth = {
+      token: localStorage.getItem('polaris_token') || null,
+      user:  JSON.parse(localStorage.getItem('polaris_user') || 'null'),
+
+      isLoggedIn() { return !!this.token; },
+
+      logout() {
+        localStorage.removeItem('polaris_token');
+        localStorage.removeItem('polaris_user');
+        window.location.reload();
+      },
+
+      renderBar() {
+        const bar = document.getElementById('authBar');
+        if (!bar) return;
+        if (this.isLoggedIn()) {
+          bar.innerHTML = `
+            <span style="font-size:0.8rem;color:#475569;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.user.email}">👤 ${this.user.email}</span>
+            <button onclick="Auth.logout()" style="padding:0.35rem 0.75rem;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:0.8rem;font-weight:600;color:#64748b;">Log out</button>`;
+        } else {
+          bar.innerHTML = `
+            <span style="font-size:0.8rem;color:#64748b;background:#fef9c3;border:1px solid #fde047;padding:0.3rem 0.75rem;border-radius:20px;">Demo Mode</span>
+            <a href="login.html" style="padding:0.35rem 0.75rem;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:white;text-decoration:none;font-size:0.8rem;font-weight:600;">Sign In</a>`;
+        }
+      },
+    };
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      Auth.renderBar();
+
+      if (Auth.isLoggedIn()) {
+        try {
+          const res = await fetch('/api/business', {
+            headers: { Authorization: 'Bearer ' + Auth.token }
+          });
+          if (res.status === 404) {
+            window.location.href = 'onboarding.html';
+            return;
+          }
+          if (res.ok) {
+            Lab.businessProfile = await res.json();
+            const title = Lab.businessProfile.name + ' — Simulation';
+            document.title = title;
+            document.getElementById('simTitle').textContent = title;
+          }
+        } catch { /* server not running — continue as demo */ }
+      }
+
+      Lab.init();
+    });
+
+// --- Temporary bridge to the global scope --------------------------------
+// This file is now an ES module, so top-level `const Lab` and `const Auth` are
+// module-scoped and invisible to the inline onclick="Lab.…" handlers still in
+// the markup. Without these two lines every one of those 25 handlers would
+// silently stop working. They are deleted once the handlers become delegated
+// data-action events, and that deletion is what proves the migration is done.
+window.Lab = Lab;
+window.Auth = Auth;
