@@ -7,6 +7,9 @@
  * and it is deleted entirely once nothing is left. @ts-nocheck suppresses type
  * checking until then; the rest of src/ is strict from the first line.
  */
+import '../styles/base.css';
+import '../styles/lab.css';
+
 const Lab = {
   canvas: null,
   ctx: null,
