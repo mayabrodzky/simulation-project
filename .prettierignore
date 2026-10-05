@@ -1,0 +1,11 @@
+dist
+node_modules
+package-lock.json
+legacy
+docs/baseline
+*.png
+*.md
+
+# Formatted on its own in a dedicated commit, so the reformat is reviewable
+# separately from any change in behaviour.
+src/legacy
