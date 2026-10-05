@@ -1,11 +1,10 @@
 dist
 node_modules
 package-lock.json
-legacy
+# Leading slash anchors this to the repository root. Without it, the pattern
+# would also match src/legacy — gitignore syntax matches a slashless pattern at
+# every directory level.
+/legacy/
 docs/baseline
 *.png
 *.md
-
-# Formatted on its own in a dedicated commit, so the reformat is reviewable
-# separately from any change in behaviour.
-src/legacy
