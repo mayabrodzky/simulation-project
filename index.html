@@ -1,1141 +1,1273 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Polaris — Transform Decisions with Intelligent Simulations</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polaris — Transform Decisions with Intelligent Simulations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
 
-  <!-- Mixpanel -->
-  <script type="text/javascript">
-    (function(f,b){
-        if(!b.__SV){var a,e,i,g;window.mixpanel=b;b._i=[];
-        b.init=function(a,e,d){function f(b,h){
-        var a=h.split(".");2==a.length&&(b=b[a[0]],h=a[1]);
-        b[h]=function(){b.push([h].concat(Array.prototype.slice.call(arguments,0)))}}
-        var c=b;"undefined"!==typeof d?c=b[d]=[]:d="mixpanel";
-        c.people=c.people||[];c.toString=function(b){var a="mixpanel";
-        "mixpanel"!==d&&(a+="."+d);return a};
-        c.people.toString=function(){return c.toString(1)+".people (stub)"};
-        i="disable time_event track track_pageview track_links track_forms register register_once alias unregister identify name_tag set_config reset people.set people.set_once people.unset people.increment people.append people.union people.track_charge people.clear_charges people.delete_user".split(" ");
-        for(g=0;g<i.length;g++)f(c,i[g]);
-        b._i.push([a,e,d])};b.__SV=1.2;a=f.createElement("script");
-        a.type="text/javascript";a.async=!0;
-        a.src="https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js";
-        e=f.getElementsByTagName("script")[0];e.parentNode.insertBefore(a,e)
-    }})(document,window.mixpanel||[]);
-    mixpanel.init("bfd79bf4361fb470a57eaae6ddaa3ed8", {
-      api_host: "https://api-eu.mixpanel.com"
-    });
-  </script>
+    <!-- Mixpanel -->
+    <script type="text/javascript">
+      (function (f, b) {
+        if (!b.__SV) {
+          var a, e, i, g;
+          window.mixpanel = b;
+          b._i = [];
+          b.init = function (a, e, d) {
+            function f(b, h) {
+              var a = h.split('.');
+              2 == a.length && ((b = b[a[0]]), (h = a[1]));
+              b[h] = function () {
+                b.push([h].concat(Array.prototype.slice.call(arguments, 0)));
+              };
+            }
+            var c = b;
+            'undefined' !== typeof d ? (c = b[d] = []) : (d = 'mixpanel');
+            c.people = c.people || [];
+            c.toString = function (b) {
+              var a = 'mixpanel';
+              'mixpanel' !== d && (a += '.' + d);
+              return a;
+            };
+            c.people.toString = function () {
+              return c.toString(1) + '.people (stub)';
+            };
+            i =
+              'disable time_event track track_pageview track_links track_forms register register_once alias unregister identify name_tag set_config reset people.set people.set_once people.unset people.increment people.append people.union people.track_charge people.clear_charges people.delete_user'.split(
+                ' ',
+              );
+            for (g = 0; g < i.length; g++) f(c, i[g]);
+            b._i.push([a, e, d]);
+          };
+          b.__SV = 1.2;
+          a = f.createElement('script');
+          a.type = 'text/javascript';
+          a.async = !0;
+          a.src = 'https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js';
+          e = f.getElementsByTagName('script')[0];
+          e.parentNode.insertBefore(a, e);
+        }
+      })(document, window.mixpanel || []);
+      mixpanel.init('bfd79bf4361fb470a57eaae6ddaa3ed8', {
+        api_host: 'https://api-eu.mixpanel.com',
+      });
+    </script>
 
-  <style>
-    :root {
-      /* Premium color palette */
-      --gray-50: #f8fafc;
-      --gray-100: #f1f5f9;
-      --gray-200: #e2e8f0;
-      --gray-300: #cbd5e1;
-      --gray-400: #94a3b8;
-      --gray-500: #64748b;
-      --gray-600: #475569;
-      --gray-700: #334155;
-      --gray-800: #1e293b;
-      --gray-900: #0f172a;
-      
-      --blue-50: #eff6ff;
-      --blue-500: #3b82f6;
-      --blue-600: #2563eb;
-      --blue-700: #1d4ed8;
-      
-      --purple-500: #8b5cf6;
-      --purple-600: #7c3aed;
-      
-      --emerald-500: #10b981;
-      --emerald-600: #059669;
-      
-      /* Semantic colors */
-      --primary: var(--blue-600);
-      --primary-hover: var(--blue-700);
-      --accent: var(--purple-500);
-      --success: var(--emerald-500);
-      
-      /* Layout */
-      --max-width: 1200px;
-      --section-padding: 120px;
-      --section-padding-mobile: 80px;
-    }
+    <style>
+      :root {
+        /* Premium color palette */
+        --gray-50: #f8fafc;
+        --gray-100: #f1f5f9;
+        --gray-200: #e2e8f0;
+        --gray-300: #cbd5e1;
+        --gray-400: #94a3b8;
+        --gray-500: #64748b;
+        --gray-600: #475569;
+        --gray-700: #334155;
+        --gray-800: #1e293b;
+        --gray-900: #0f172a;
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+        --blue-50: #eff6ff;
+        --blue-500: #3b82f6;
+        --blue-600: #2563eb;
+        --blue-700: #1d4ed8;
 
-    html {
-      scroll-behavior: smooth;
-    }
+        --purple-500: #8b5cf6;
+        --purple-600: #7c3aed;
 
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      line-height: 1.6;
-      color: var(--gray-800);
-      background: var(--gray-50);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
+        --emerald-500: #10b981;
+        --emerald-600: #059669;
 
-    /* Typography */
-    .h1 {
-      font-size: clamp(2.5rem, 5vw, 4.5rem);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -0.02em;
-      color: var(--gray-900);
-    }
+        /* Semantic colors */
+        --primary: var(--blue-600);
+        --primary-hover: var(--blue-700);
+        --accent: var(--purple-500);
+        --success: var(--emerald-500);
 
-    .h2 {
-      font-size: clamp(2rem, 4vw, 3.5rem);
-      font-weight: 700;
-      line-height: 1.2;
-      letter-spacing: -0.01em;
-      color: var(--gray-900);
-    }
-
-    .h3 {
-      font-size: clamp(1.5rem, 3vw, 2.25rem);
-      font-weight: 600;
-      line-height: 1.3;
-      color: var(--gray-900);
-    }
-
-    .subtitle {
-      font-size: clamp(1.125rem, 2vw, 1.375rem);
-      color: var(--gray-600);
-      font-weight: 400;
-      line-height: 1.6;
-    }
-
-    .body-large {
-      font-size: 1.125rem;
-      color: var(--gray-600);
-      line-height: 1.7;
-    }
-
-    .body {
-      font-size: 1rem;
-      color: var(--gray-600);
-      line-height: 1.6;
-    }
-
-    /* Layout utilities */
-    .container {
-      max-width: var(--max-width);
-      margin: 0 auto;
-      padding: 0 2rem;
-    }
-
-    .section {
-      padding: var(--section-padding) 0;
-    }
-
-    .section-sm {
-      padding: calc(var(--section-padding) * 0.75) 0;
-    }
-
-    @media (max-width: 768px) {
-      .section {
-        padding: var(--section-padding-mobile) 0;
+        /* Layout */
+        --max-width: 1200px;
+        --section-padding: 120px;
+        --section-padding-mobile: 80px;
       }
-      .section-sm {
-        padding: calc(var(--section-padding-mobile) * 0.75) 0;
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family:
+          'Inter',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        line-height: 1.6;
+        color: var(--gray-800);
+        background: var(--gray-50);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Typography */
+      .h1 {
+        font-size: clamp(2.5rem, 5vw, 4.5rem);
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: var(--gray-900);
+      }
+
+      .h2 {
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--gray-900);
+      }
+
+      .h3 {
+        font-size: clamp(1.5rem, 3vw, 2.25rem);
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--gray-900);
+      }
+
+      .subtitle {
+        font-size: clamp(1.125rem, 2vw, 1.375rem);
+        color: var(--gray-600);
+        font-weight: 400;
+        line-height: 1.6;
+      }
+
+      .body-large {
+        font-size: 1.125rem;
+        color: var(--gray-600);
+        line-height: 1.7;
+      }
+
+      .body {
+        font-size: 1rem;
+        color: var(--gray-600);
+        line-height: 1.6;
+      }
+
+      /* Layout utilities */
       .container {
-        padding: 0 1.5rem;
+        max-width: var(--max-width);
+        margin: 0 auto;
+        padding: 0 2rem;
       }
-    }
 
-    /* Navigation */
-    .nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      background: rgba(248, 250, 252, 0.85);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--gray-200);
-      z-index: 100;
-      transition: all 0.3s ease;
-    }
-
-    .nav.scrolled {
-      background: rgba(248, 250, 252, 0.95);
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-    }
-
-    .nav-content {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 1rem 2rem;
-      max-width: var(--max-width);
-      margin: 0 auto;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      font-weight: 800;
-      font-size: 1.5rem;
-      color: var(--gray-900);
-      text-decoration: none;
-    }
-
-    .logo {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--blue-500), var(--purple-500));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: 900;
-      font-size: 1.25rem;
-      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
-    }
-
-    /* Logo size */
-    .logo-image {
-      height: 50px;   /* שנה כאן כדי להקטין/להגדיל */
-      width: auto;    /* שומר על פרופורציות */
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-    }
-
-    .nav-links a {
-      color: var(--gray-600);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s ease;
-    }
-
-    .nav-links a:hover {
-      color: var(--gray-900);
-    }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.875rem 1.5rem;
-      border-radius: 12px;
-      font-weight: 600;
-      font-size: 1rem;
-      text-decoration: none;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      color: white;
-      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.4);
-    }
-
-    .btn-secondary {
-      background: white;
-      color: var(--gray-700);
-      border: 1px solid var(--gray-300);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-    }
-
-    .btn-secondary:hover {
-      background: var(--gray-50);
-      border-color: var(--gray-400);
-      transform: translateY(-1px);
-    }
-
-    .btn-lg {
-      padding: 1rem 2rem;
-      font-size: 1.125rem;
-    }
-
-    /* Hero Section */
-    .hero {
-      background: 
-        radial-gradient(600px 300px at 20% 0%, rgba(59, 130, 246, 0.15), transparent 70%),
-        radial-gradient(800px 400px at 80% 100%, rgba(139, 92, 246, 0.1), transparent 70%),
-        var(--gray-50);
-      padding-top: 6rem;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-        linear-gradient(180deg, transparent, var(--gray-50) 90%);
-      pointer-events: none;
-    }
-
-    .hero-content {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 4rem;
-      align-items: center;
-      position: relative;
-      z-index: 2;
-    }
-
-    .hero-text {
-      max-width: 600px;
-    }
-
-    .hero-subtitle {
-      margin: 1.5rem 0 2.5rem;
-      max-width: 520px;
-    }
-
-    .hero-cta {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .hero-tags {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .tag {
-      padding: 0.5rem 1rem;
-      background: rgba(59, 130, 246, 0.1);
-      border: 1px solid rgba(59, 130, 246, 0.2);
-      border-radius: 999px;
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--blue-700);
-    }
-
-    .hero-visual {
-      background: white;
-      border-radius: 20px;
-      padding: 2rem;
-      box-shadow: 
-        0 20px 50px rgba(0, 0, 0, 0.08),
-        0 0 0 1px rgba(0, 0, 0, 0.05);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero-visual::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 6px;
-      background: linear-gradient(90deg, var(--blue-500), var(--purple-500), var(--emerald-500));
-    }
-
-    /* Features Grid */
-    .features {
-      background: white;
-      border-top: 1px solid var(--gray-200);
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 3rem;
-    }
-
-    .feature-card {
-      text-align: center;
-      padding: 2rem;
-    }
-
-    .feature-icon {
-      width: 64px;
-      height: 64px;
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 1.5rem;
-      font-size: 1.5rem;
-      background: linear-gradient(135deg, var(--blue-50), var(--purple-50));
-      border: 1px solid var(--gray-200);
-      color: var(--blue-600);
-    }
-
-    .feature-card h3 {
-      margin-bottom: 1rem;
-      font-size: 1.25rem;
-    }
-
-    /* Process Section */
-    .process {
-      background: var(--gray-50);
-    }
-
-    .process-steps {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 2rem;
-      margin-top: 4rem;
-    }
-
-    .step {
-      background: white;
-      padding: 2rem;
-      border-radius: 16px;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-      border: 1px solid var(--gray-200);
-      position: relative;
-    }
-
-    .step-number {
-      position: absolute;
-      top: -12px;
-      left: 2rem;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 0.875rem;
-    }
-
-    .step h4 {
-      margin: 1rem 0;
-      font-size: 1.125rem;
-      color: var(--gray-900);
-    }
-
-    /* Testimonial */
-    .testimonial {
-      background: 
-        linear-gradient(135deg, 
-          rgba(59, 130, 246, 0.05), 
-          rgba(139, 92, 246, 0.05)
-        );
-      border-radius: 24px;
-      padding: 3rem;
-      margin: 4rem auto;
-      max-width: 900px;
-      text-align: center;
-    }
-
-    .testimonial-quote {
-      font-size: 1.5rem;
-      font-weight: 500;
-      color: var(--gray-800);
-      margin-bottom: 2rem;
-      line-height: 1.4;
-    }
-
-    .testimonial-author {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 1rem;
-    }
-
-    .author-avatar {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--blue-500), var(--purple-500));
-      border: 3px solid white;
-      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
-    }
-
-    .author-info h4 {
-      font-weight: 600;
-      color: var(--gray-900);
-      margin-bottom: 0.25rem;
-    }
-
-    .author-info p {
-      color: var(--gray-600);
-      font-size: 0.875rem;
-    }
-
-    /* Integrations */
-    .integrations-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem;
-      margin-top: 3rem;
-    }
-
-    .integration-card {
-      background: white;
-      padding: 2rem 1.5rem;
-      border-radius: 12px;
-      text-align: center;
-      border: 1px solid var(--gray-200);
-      transition: all 0.2s ease;
-    }
-
-    .integration-card:hover {
-      border-color: var(--blue-300);
-      transform: translateY(-2px);
-    }
-
-    .integration-icon {
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 1rem;
-      border-radius: 8px;
-      background: var(--gray-100);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.25rem;
-    }
-
-    /* CTA Section */
-    .cta-section {
-      background: linear-gradient(135deg, var(--gray-900), var(--gray-800));
-      color: white;
-      text-align: center;
-    }
-
-    .cta-section .h2 {
-      color: white;
-      margin-bottom: 1rem;
-    }
-
-    .cta-section .subtitle {
-      color: var(--gray-300);
-      margin-bottom: 2rem;
-    }
-
-    /* Footer */
-    .footer {
-      background: var(--gray-900);
-      color: var(--gray-400);
-      text-align: center;
-      padding: 2rem 0;
-    }
-
-    /* Animations */
-    .fade-in {
-      opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.8s ease;
-    }
-
-    .fade-in.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .hero-content {
-        grid-template-columns: 1fr;
-        gap: 3rem;
-        text-align: center;
+      .section {
+        padding: var(--section-padding) 0;
       }
-      
-      .hero-cta {
-        flex-direction: column;
+
+      .section-sm {
+        padding: calc(var(--section-padding) * 0.75) 0;
+      }
+
+      @media (max-width: 768px) {
+        .section {
+          padding: var(--section-padding-mobile) 0;
+        }
+        .section-sm {
+          padding: calc(var(--section-padding-mobile) * 0.75) 0;
+        }
+        .container {
+          padding: 0 1.5rem;
+        }
+      }
+
+      /* Navigation */
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: rgba(248, 250, 252, 0.85);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--gray-200);
+        z-index: 100;
+        transition: all 0.3s ease;
+      }
+
+      .nav.scrolled {
+        background: rgba(248, 250, 252, 0.95);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+      }
+
+      .nav-content {
+        display: flex;
         align-items: center;
+        justify-content: space-between;
+        padding: 1rem 2rem;
+        max-width: var(--max-width);
+        margin: 0 auto;
       }
-      
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-weight: 800;
+        font-size: 1.5rem;
+        color: var(--gray-900);
+        text-decoration: none;
+      }
+
+      .logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--blue-500), var(--purple-500));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 900;
+        font-size: 1.25rem;
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+      }
+
+      /* Logo size */
+      .logo-image {
+        height: 50px; /* שנה כאן כדי להקטין/להגדיל */
+        width: auto; /* שומר על פרופורציות */
+      }
+
       .nav-links {
-        display: none;
-      }
-      
-      .features-grid {
-        grid-template-columns: 1fr;
+        display: flex;
+        align-items: center;
         gap: 2rem;
       }
-      
-      .process-steps {
-        grid-template-columns: 1fr;
+
+      .nav-links a {
+        color: var(--gray-600);
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.2s ease;
       }
-      
-      .testimonial {
+
+      .nav-links a:hover {
+        color: var(--gray-900);
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.875rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 1rem;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        color: white;
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 40px rgba(59, 130, 246, 0.4);
+      }
+
+      .btn-secondary {
+        background: white;
+        color: var(--gray-700);
+        border: 1px solid var(--gray-300);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      }
+
+      .btn-secondary:hover {
+        background: var(--gray-50);
+        border-color: var(--gray-400);
+        transform: translateY(-1px);
+      }
+
+      .btn-lg {
+        padding: 1rem 2rem;
+        font-size: 1.125rem;
+      }
+
+      /* Hero Section */
+      .hero {
+        background:
+          radial-gradient(600px 300px at 20% 0%, rgba(59, 130, 246, 0.15), transparent 70%),
+          radial-gradient(800px 400px at 80% 100%, rgba(139, 92, 246, 0.1), transparent 70%),
+          var(--gray-50);
+        padding-top: 6rem;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(180deg, transparent, var(--gray-50) 90%);
+        pointer-events: none;
+      }
+
+      .hero-content {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 4rem;
+        align-items: center;
+        position: relative;
+        z-index: 2;
+      }
+
+      .hero-text {
+        max-width: 600px;
+      }
+
+      .hero-subtitle {
+        margin: 1.5rem 0 2.5rem;
+        max-width: 520px;
+      }
+
+      .hero-cta {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      .hero-tags {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      .tag {
+        padding: 0.5rem 1rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--blue-700);
+      }
+
+      .hero-visual {
+        background: white;
+        border-radius: 20px;
         padding: 2rem;
-        margin: 2rem auto;
+        box-shadow:
+          0 20px 50px rgba(0, 0, 0, 0.08),
+          0 0 0 1px rgba(0, 0, 0, 0.05);
+        position: relative;
+        overflow: hidden;
       }
-      
-      .testimonial-quote {
+
+      .hero-visual::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, var(--blue-500), var(--purple-500), var(--emerald-500));
+      }
+
+      /* Features Grid */
+      .features {
+        background: white;
+        border-top: 1px solid var(--gray-200);
+      }
+
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 3rem;
+      }
+
+      .feature-card {
+        text-align: center;
+        padding: 2rem;
+      }
+
+      .feature-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 1.5rem;
+        background: linear-gradient(135deg, var(--blue-50), var(--purple-50));
+        border: 1px solid var(--gray-200);
+        color: var(--blue-600);
+      }
+
+      .feature-card h3 {
+        margin-bottom: 1rem;
         font-size: 1.25rem;
       }
-    }
 
-    /* Form Styles */
-    .form-container {
-      max-width: 400px;
-      margin: 2rem auto 0;
-    }
+      /* Process Section */
+      .process {
+        background: var(--gray-50);
+      }
 
-    .form-group {
-      margin-bottom: 1rem;
-    }
+      .process-steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 2rem;
+        margin-top: 4rem;
+      }
 
-    .input {
-      width: 100%;
-      padding: 0.875rem 1rem;
-      border: 1px solid var(--gray-300);
-      border-radius: 8px;
-      font-size: 1rem;
-      background: white;
-      transition: border-color 0.2s ease;
-    }
+      .step {
+        background: white;
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+        border: 1px solid var(--gray-200);
+        position: relative;
+      }
 
-    .input:focus {
-      outline: none;
-      border-color: var(--primary);
-    }
+      .step-number {
+        position: absolute;
+        top: -12px;
+        left: 2rem;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+      }
 
-    .form-message {
-      margin-top: 1rem;
-      padding: 0.75rem;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      text-align: center;
-    }
+      .step h4 {
+        margin: 1rem 0;
+        font-size: 1.125rem;
+        color: var(--gray-900);
+      }
 
-    .form-message.success {
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      color: var(--emerald-600);
-    }
+      /* Testimonial */
+      .testimonial {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05));
+        border-radius: 24px;
+        padding: 3rem;
+        margin: 4rem auto;
+        max-width: 900px;
+        text-align: center;
+      }
 
-    .form-message.error {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.2);
-      color: #dc2626;
-    }
-  </style>
-</head>
-<body>
+      .testimonial-quote {
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: var(--gray-800);
+        margin-bottom: 2rem;
+        line-height: 1.4;
+      }
 
-  <!-- Navigation -->
-  <nav class="nav" id="nav">
-    <div class="nav-content">
-      <a href="#" class="brand">
-        <img src="/bellatryx-logo.png" alt="Bellatryx Logo" class="logo-image" />
-        Bellatryx
-      </a>
-      <div class="nav-links">
-        <a href="#how">How it works</a>
-        <a href="#features">Features</a>
-        <a href="#integrations">Integrations</a>
-        <a href="#about">About</a>
-        <a href="lab-simulation.html" class="btn btn-primary">Try Demo</a>
-      </div>
-    </div>
-  </nav>
+      .testimonial-author {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+      }
 
-  <!-- Hero -->
-  <section class="hero">
-    <div class="container">
-      <div class="hero-content">
-        <div class="hero-text">
-          <h1 class="h1">Transform decisions with intelligent simulations</h1>
-          <p class="subtitle hero-subtitle">
-            Stop guessing. Start knowing. Polaris empowers teams to model complex scenarios, 
-            test critical decisions, and communicate impact with precision.
-          </p>
-          <div class="hero-cta">
-            <a href="lab-simulation.html" class="btn btn-primary btn-lg">
-              ▶ Experience the Demo
-            </a>
-            <a href="#how" class="btn btn-secondary btn-lg">
-              See How It Works
-            </a>
-          </div>
-          <div class="hero-tags">
-            <div class="tag">No Installation Required</div>
-            <div class="tag">Deploy in Minutes</div>
-            <div class="tag">Enterprise Ready</div>
-          </div>
-        </div>
+      .author-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--blue-500), var(--purple-500));
+        border: 3px solid white;
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+      }
 
-        <div class="hero-visual">
-          <svg viewBox="0 0 560 400" width="100%" height="100%">
-            <defs>
-              <linearGradient id="bg1" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stop-color="#f8fafc"/>
-                <stop offset="100%" stop-color="#f1f5f9"/>
-              </linearGradient>
-              <linearGradient id="card1" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stop-color="#ffffff"/>
-                <stop offset="100%" stop-color="#f8fafc"/>
-              </linearGradient>
-              <linearGradient id="accent1" x1="0" x2="1">
-                <stop offset="0%" stop-color="#3b82f6"/>
-                <stop offset="100%" stop-color="#8b5cf6"/>
-              </linearGradient>
-            </defs>
-            
-            <!-- Background -->
-            <rect width="560" height="400" rx="12" fill="url(#bg1)"/>
-            
-            <!-- Main dashboard -->
-            <rect x="20" y="30" width="520" height="60" rx="8" fill="url(#card1)" stroke="#e2e8f0"/>
-            <rect x="30" y="40" width="200" height="8" rx="4" fill="#cbd5e1"/>
-            <rect x="30" y="55" width="140" height="8" rx="4" fill="#e2e8f0"/>
-            
-            <!-- Simulation panels -->
-            <rect x="20" y="110" width="240" height="260" rx="12" fill="url(#card1)" stroke="#e2e8f0"/>
-            <rect x="300" y="110" width="260" height="260" rx="12" fill="url(#card1)" stroke="#e2e8f0"/>
-            
-            <!-- Chart elements in left panel -->
-            <rect x="35" y="130" width="210" height="120" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
-            <path d="M45 220 L85 180 L125 200 L165 160 L205 140 L245 120" stroke="url(#accent1)" stroke-width="3" fill="none"/>
-            <circle cx="85" cy="180" r="4" fill="#3b82f6"/>
-            <circle cx="125" cy="200" r="4" fill="#3b82f6"/>
-            <circle cx="165" cy="160" r="4" fill="#3b82f6"/>
-            
-            <!-- Data points in right panel -->
-            <rect x="315" y="130" width="230" height="40" rx="6" fill="#eff6ff" stroke="#dbeafe"/>
-            <rect x="315" y="180" width="230" height="40" rx="6" fill="#f0fdf4" stroke="#dcfce7"/>
-            <rect x="315" y="230" width="230" height="40" rx="6" fill="#fef7ff" stroke="#f3e8ff"/>
-            
-            <!-- Status indicators -->
-            <circle cx="50" cy="60" r="6" fill="#10b981"/>
-            <circle cx="70" cy="60" r="6" fill="#3b82f6"/>
-            <circle cx="90" cy="60" r="6" fill="#8b5cf6"/>
-          </svg>
-        </div>
-      </div>
-    </div>
-  </section>
+      .author-info h4 {
+        font-weight: 600;
+        color: var(--gray-900);
+        margin-bottom: 0.25rem;
+      }
 
-  <!-- Features -->
-  <section class="features section fade-in" id="features">
-    <div class="container">
-      <div class="text-center">
-        <h2 class="h2">Why industry leaders choose Polaris</h2>
-        <p class="subtitle" style="margin-top: 1rem; max-width: 600px; margin-left: auto; margin-right: auto;">
-          Built for teams who can't afford to guess. Trusted by organizations that demand precision in their most critical decisions.
-        </p>
-      </div>
+      .author-info p {
+        color: var(--gray-600);
+        font-size: 0.875rem;
+      }
 
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>Lightning-Fast Modeling</h3>
-          <p class="body">
-            Build and iterate complex scenarios 10x faster than traditional tools. 
-            Go from hypothesis to validated insights in minutes, not days.
-          </p>
-        </div>
+      /* Integrations */
+      .integrations-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-top: 3rem;
+      }
 
-        <div class="feature-card">
-          <div class="feature-icon">🧭</div>
-          <h3>Crystal-Clear Communication</h3>
-          <p class="body">
-            Transform complex analysis into compelling visuals that stakeholders 
-            actually understand. Eliminate confusion, accelerate buy-in.
-          </p>
-        </div>
+      .integration-card {
+        background: white;
+        padding: 2rem 1.5rem;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid var(--gray-200);
+        transition: all 0.2s ease;
+      }
 
-        <div class="feature-card">
-          <div class="feature-icon">🎯</div>
-          <h3>Enterprise-Grade Precision</h3>
-          <p class="body">
-            Proven accuracy with built-in validation, version control, and audit trails. 
-            Make decisions with confidence, backed by bulletproof data.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
+      .integration-card:hover {
+        border-color: var(--blue-300);
+        transform: translateY(-2px);
+      }
 
-  <!-- How it Works -->
-  <section class="process section fade-in" id="how">
-    <div class="container">
-      <div class="text-center">
-        <h2 class="h2">Three steps to decision mastery</h2>
-        <p class="subtitle" style="margin-top: 1rem;">
-          From setup to action in under 15 minutes. See why teams call it "magic."
-        </p>
-      </div>
+      .integration-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 1rem;
+        border-radius: 8px;
+        background: var(--gray-100);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+      }
 
-      <div class="process-steps">
-        <div class="step">
-          <div class="step-number">1</div>
-          <h4>Configure & Connect</h4>
-          <p class="body">
-            Import your data sources and define your decision parameters. 
-            Our intelligent setup wizard handles the complexity.
-          </p>
-        </div>
+      /* CTA Section */
+      .cta-section {
+        background: linear-gradient(135deg, var(--gray-900), var(--gray-800));
+        color: white;
+        text-align: center;
+      }
 
-        <div class="step">
-          <div class="step-number">2</div>
-          <h4>Model & Simulate</h4>
-          <p class="body">
-            Run unlimited scenarios with real-time validation. 
-            Test assumptions, explore edge cases, discover insights.
-          </p>
-        </div>
+      .cta-section .h2 {
+        color: white;
+        margin-bottom: 1rem;
+      }
 
-        <div class="step">
-          <div class="step-number">3</div>
-          <h4>Present & Decide</h4>
-          <p class="body">
-            Generate executive-ready reports with clear recommendations. 
-            Move from analysis to action with complete confidence.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
+      .cta-section .subtitle {
+        color: var(--gray-300);
+        margin-bottom: 2rem;
+      }
 
-  <!-- Testimonial -->
-  <section class="section fade-in">
-    <div class="container">
-      <div class="testimonial">
-        <blockquote class="testimonial-quote">
-          "Polaris transformed our decision-making process completely. What used to take our team weeks 
-          now happens in hours. The ROI was immediate—we caught a critical market shift that saved us $2M."
-        </blockquote>
-        <div class="testimonial-author">
-          <div class="author-avatar"></div>
-          <div class="author-info">
-            <h4>Sarah Chen</h4>
-            <p>VP Strategy, Fortune 500 Retailer</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+      /* Footer */
+      .footer {
+        background: var(--gray-900);
+        color: var(--gray-400);
+        text-align: center;
+        padding: 2rem 0;
+      }
 
-  <!-- Integrations -->
-  <section class="section fade-in" id="integrations">
-    <div class="container">
-      <div class="text-center">
-        <h2 class="h2">Built for your existing workflow</h2>
-        <p class="subtitle" style="margin-top: 1rem;">
-          Seamless integration with the tools your team already uses. No disruption, just enhancement.
-        </p>
-      </div>
+      /* Animations */
+      .fade-in {
+        opacity: 0;
+        transform: translateY(30px);
+        transition: all 0.8s ease;
+      }
 
-      <div class="integrations-grid">
-        <div class="integration-card">
-          <div class="integration-icon">🗄️</div>
-          <h4>Supabase</h4>
-          <p class="body">Secure cloud database with real-time sync</p>
-        </div>
+      .fade-in.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
 
-        <div class="integration-card">
-          <div class="integration-icon">🪲</div>
-          <h4>Sentry</h4>
-          <p class="body">Advanced error tracking & performance monitoring</p>
-        </div>
+      /* Responsive */
+      @media (max-width: 768px) {
+        .hero-content {
+          grid-template-columns: 1fr;
+          gap: 3rem;
+          text-align: center;
+        }
 
-        <div class="integration-card">
-          <div class="integration-icon">🎥</div>
-          <h4>Smartlook</h4>
-          <p class="body">User session recordings & behavior analytics</p>
-        </div>
+        .hero-cta {
+          flex-direction: column;
+          align-items: center;
+        }
 
-        <div class="integration-card">
-          <div class="integration-icon">🚀</div>
-          <h4>Vercel</h4>
-          <p class="body">Instant deployment & global CDN</p>
-        </div>
-      </div>
-    </div>
-  </section>
+        .nav-links {
+          display: none;
+        }
 
-  <!-- About -->
-  <section class="section fade-in" id="about">
-    <div class="container">
-      <div class="text-center">
-        <h2 class="h2">Built by decision-makers, for decision-makers</h2>
-        <div class="testimonial" style="text-align: left; max-width: 800px;">
-          <p class="body-large">
-            Born from years of frustration with clunky enterprise tools and endless PowerPoint debates, 
-            Polaris represents a fundamental shift in how organizations approach complex decisions.
-          </p>
-          <br>
-          <p class="body-large">
-            We believe every team—from startups to Fortune 500—deserves access to simulation tools 
-            that are both powerful and intuitive. Tools that accelerate insight, not bureaucracy.
-          </p>
-          <br>
-          <p class="body-large">
-            Today, Polaris helps teams across industries make smarter decisions faster, 
-            with the confidence that comes from truly understanding your options.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
+        .features-grid {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
 
-  <!-- FAQ -->
-  <section class="section-sm fade-in">
-    <div class="container">
-      <div class="text-center">
-        <h2 class="h3">Frequently asked questions</h2>
-      </div>
+        .process-steps {
+          grid-template-columns: 1fr;
+        }
 
-      <div style="max-width: 800px; margin: 3rem auto; display: grid; gap: 1rem;">
-        <details class="step" style="cursor: pointer;">
-          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
-            ▸ Is there anything to install or configure?
-          </summary>
-          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
-            <p class="body">
-              Nothing at all. Polaris runs entirely in your browser and works on any modern device. 
-              Just click and start modeling—it's that simple.
-            </p>
-          </div>
-        </details>
+        .testimonial {
+          padding: 2rem;
+          margin: 2rem auto;
+        }
 
-        <details class="step" style="cursor: pointer;">
-          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
-            ▸ Can we customize it for our specific industry?
-          </summary>
-          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
-            <p class="body">
-              Absolutely. Polaris is built on flexible foundations that adapt to any domain—from financial 
-              modeling to supply chain optimization to strategic planning.
-            </p>
-          </div>
-        </details>
+        .testimonial-quote {
+          font-size: 1.25rem;
+        }
+      }
 
-        <details class="step" style="cursor: pointer;">
-          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
-            ▸ How secure is our sensitive business data?
-          </summary>
-          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
-            <p class="body">
-              Enterprise-grade security is built in, not bolted on. Row-level security, encrypted data 
-              transmission, and your choice of cloud provider or on-premise deployment.
-            </p>
-          </div>
-        </details>
+      /* Form Styles */
+      .form-container {
+        max-width: 400px;
+        margin: 2rem auto 0;
+      }
 
-        <details class="step" style="cursor: pointer;">
-          <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none;">
-            ▸ What kind of support do you provide?
-          </summary>
-          <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem;">
-            <p class="body">
-              White-glove onboarding, dedicated success management, and 24/7 technical support. 
-              Plus extensive documentation and training resources.
-            </p>
-          </div>
-        </details>
-      </div>
-    </div>
-  </section>
+      .form-group {
+        margin-bottom: 1rem;
+      }
 
-  <!-- CTA Section -->
-  <section class="cta-section section fade-in">
-    <div class="container">
-      <h2 class="h2">Ready to transform your decisions?</h2>
-      <p class="subtitle">
-        Join thousands of teams who've already discovered the power of intelligent simulation.
-      </p>
-      
-      <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
-        <a href="lab-simulation.html" class="btn btn-primary btn-lg">
-          Experience the Demo
+      .input {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--gray-300);
+        border-radius: 8px;
+        font-size: 1rem;
+        background: white;
+        transition: border-color 0.2s ease;
+      }
+
+      .input:focus {
+        outline: none;
+        border-color: var(--primary);
+      }
+
+      .form-message {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        text-align: center;
+      }
+
+      .form-message.success {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        color: var(--emerald-600);
+      }
+
+      .form-message.error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        color: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+      <div class="nav-content">
+        <a href="#" class="brand">
+          <img src="/bellatryx-logo.png" alt="Bellatryx Logo" class="logo-image" />
+          Bellatryx
         </a>
-        <a href="#join" class="btn btn-secondary btn-lg" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
-          Request Early Access
-        </a>
+        <div class="nav-links">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#integrations">Integrations</a>
+          <a href="#about">About</a>
+          <a href="lab-simulation.html" class="btn btn-primary">Try Demo</a>
+        </div>
       </div>
+    </nav>
 
-      <!-- Beta Signup Form -->
-      <div id="join" class="form-container">
-        <form id="join-form">
-          <div class="form-group">
-            <input 
-              id="email" 
-              class="input" 
-              type="email" 
-              placeholder="Enter your business email" 
-              required 
-            />
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <div class="hero-text">
+            <h1 class="h1">Transform decisions with intelligent simulations</h1>
+            <p class="subtitle hero-subtitle">
+              Stop guessing. Start knowing. Polaris empowers teams to model complex scenarios, test
+              critical decisions, and communicate impact with precision.
+            </p>
+            <div class="hero-cta">
+              <a href="lab-simulation.html" class="btn btn-primary btn-lg">
+                ▶ Experience the Demo
+              </a>
+              <a href="#how" class="btn btn-secondary btn-lg"> See How It Works </a>
+            </div>
+            <div class="hero-tags">
+              <div class="tag">No Installation Required</div>
+              <div class="tag">Deploy in Minutes</div>
+              <div class="tag">Enterprise Ready</div>
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%;">
-            Get Early Access
-          </button>
-          <div id="form-message" class="form-message" style="display: none;"></div>
-        </form>
-        <p style="font-size: 0.875rem; color: rgba(255,255,255,0.7); margin-top: 1rem; text-align: center;">
-          No spam, ever. Unsubscribe with one click.
-        </p>
+
+          <div class="hero-visual">
+            <svg viewBox="0 0 560 400" width="100%" height="100%">
+              <defs>
+                <linearGradient id="bg1" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#f8fafc" />
+                  <stop offset="100%" stop-color="#f1f5f9" />
+                </linearGradient>
+                <linearGradient id="card1" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#ffffff" />
+                  <stop offset="100%" stop-color="#f8fafc" />
+                </linearGradient>
+                <linearGradient id="accent1" x1="0" x2="1">
+                  <stop offset="0%" stop-color="#3b82f6" />
+                  <stop offset="100%" stop-color="#8b5cf6" />
+                </linearGradient>
+              </defs>
+
+              <!-- Background -->
+              <rect width="560" height="400" rx="12" fill="url(#bg1)" />
+
+              <!-- Main dashboard -->
+              <rect
+                x="20"
+                y="30"
+                width="520"
+                height="60"
+                rx="8"
+                fill="url(#card1)"
+                stroke="#e2e8f0"
+              />
+              <rect x="30" y="40" width="200" height="8" rx="4" fill="#cbd5e1" />
+              <rect x="30" y="55" width="140" height="8" rx="4" fill="#e2e8f0" />
+
+              <!-- Simulation panels -->
+              <rect
+                x="20"
+                y="110"
+                width="240"
+                height="260"
+                rx="12"
+                fill="url(#card1)"
+                stroke="#e2e8f0"
+              />
+              <rect
+                x="300"
+                y="110"
+                width="260"
+                height="260"
+                rx="12"
+                fill="url(#card1)"
+                stroke="#e2e8f0"
+              />
+
+              <!-- Chart elements in left panel -->
+              <rect
+                x="35"
+                y="130"
+                width="210"
+                height="120"
+                rx="6"
+                fill="#f8fafc"
+                stroke="#e2e8f0"
+              />
+              <path
+                d="M45 220 L85 180 L125 200 L165 160 L205 140 L245 120"
+                stroke="url(#accent1)"
+                stroke-width="3"
+                fill="none"
+              />
+              <circle cx="85" cy="180" r="4" fill="#3b82f6" />
+              <circle cx="125" cy="200" r="4" fill="#3b82f6" />
+              <circle cx="165" cy="160" r="4" fill="#3b82f6" />
+
+              <!-- Data points in right panel -->
+              <rect
+                x="315"
+                y="130"
+                width="230"
+                height="40"
+                rx="6"
+                fill="#eff6ff"
+                stroke="#dbeafe"
+              />
+              <rect
+                x="315"
+                y="180"
+                width="230"
+                height="40"
+                rx="6"
+                fill="#f0fdf4"
+                stroke="#dcfce7"
+              />
+              <rect
+                x="315"
+                y="230"
+                width="230"
+                height="40"
+                rx="6"
+                fill="#fef7ff"
+                stroke="#f3e8ff"
+              />
+
+              <!-- Status indicators -->
+              <circle cx="50" cy="60" r="6" fill="#10b981" />
+              <circle cx="70" cy="60" r="6" fill="#3b82f6" />
+              <circle cx="90" cy="60" r="6" fill="#8b5cf6" />
+            </svg>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="container">
-      <p>© 2025 Polaris — Intelligent Simulation Platform</p>
-    </div>
-  </footer>
+    <!-- Features -->
+    <section class="features section fade-in" id="features">
+      <div class="container">
+        <div class="text-center">
+          <h2 class="h2">Why industry leaders choose Polaris</h2>
+          <p
+            class="subtitle"
+            style="margin-top: 1rem; max-width: 600px; margin-left: auto; margin-right: auto"
+          >
+            Built for teams who can't afford to guess. Trusted by organizations that demand
+            precision in their most critical decisions.
+          </p>
+        </div>
 
-  <!-- Scripts -->
-  <script>
-    // Scroll animations
-    const observerOptions = {
-      threshold: 0.1,
-      rootMargin: '0px 0px -50px 0px'
-    };
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Lightning-Fast Modeling</h3>
+            <p class="body">
+              Build and iterate complex scenarios 10x faster than traditional tools. Go from
+              hypothesis to validated insights in minutes, not days.
+            </p>
+          </div>
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-          observer.unobserve(entry.target);
+          <div class="feature-card">
+            <div class="feature-icon">🧭</div>
+            <h3>Crystal-Clear Communication</h3>
+            <p class="body">
+              Transform complex analysis into compelling visuals that stakeholders actually
+              understand. Eliminate confusion, accelerate buy-in.
+            </p>
+          </div>
+
+          <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>Enterprise-Grade Precision</h3>
+            <p class="body">
+              Proven accuracy with built-in validation, version control, and audit trails. Make
+              decisions with confidence, backed by bulletproof data.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it Works -->
+    <section class="process section fade-in" id="how">
+      <div class="container">
+        <div class="text-center">
+          <h2 class="h2">Three steps to decision mastery</h2>
+          <p class="subtitle" style="margin-top: 1rem">
+            From setup to action in under 15 minutes. See why teams call it "magic."
+          </p>
+        </div>
+
+        <div class="process-steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <h4>Configure & Connect</h4>
+            <p class="body">
+              Import your data sources and define your decision parameters. Our intelligent setup
+              wizard handles the complexity.
+            </p>
+          </div>
+
+          <div class="step">
+            <div class="step-number">2</div>
+            <h4>Model & Simulate</h4>
+            <p class="body">
+              Run unlimited scenarios with real-time validation. Test assumptions, explore edge
+              cases, discover insights.
+            </p>
+          </div>
+
+          <div class="step">
+            <div class="step-number">3</div>
+            <h4>Present & Decide</h4>
+            <p class="body">
+              Generate executive-ready reports with clear recommendations. Move from analysis to
+              action with complete confidence.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonial -->
+    <section class="section fade-in">
+      <div class="container">
+        <div class="testimonial">
+          <blockquote class="testimonial-quote">
+            "Polaris transformed our decision-making process completely. What used to take our team
+            weeks now happens in hours. The ROI was immediate—we caught a critical market shift that
+            saved us $2M."
+          </blockquote>
+          <div class="testimonial-author">
+            <div class="author-avatar"></div>
+            <div class="author-info">
+              <h4>Sarah Chen</h4>
+              <p>VP Strategy, Fortune 500 Retailer</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Integrations -->
+    <section class="section fade-in" id="integrations">
+      <div class="container">
+        <div class="text-center">
+          <h2 class="h2">Built for your existing workflow</h2>
+          <p class="subtitle" style="margin-top: 1rem">
+            Seamless integration with the tools your team already uses. No disruption, just
+            enhancement.
+          </p>
+        </div>
+
+        <div class="integrations-grid">
+          <div class="integration-card">
+            <div class="integration-icon">🗄️</div>
+            <h4>Supabase</h4>
+            <p class="body">Secure cloud database with real-time sync</p>
+          </div>
+
+          <div class="integration-card">
+            <div class="integration-icon">🪲</div>
+            <h4>Sentry</h4>
+            <p class="body">Advanced error tracking & performance monitoring</p>
+          </div>
+
+          <div class="integration-card">
+            <div class="integration-icon">🎥</div>
+            <h4>Smartlook</h4>
+            <p class="body">User session recordings & behavior analytics</p>
+          </div>
+
+          <div class="integration-card">
+            <div class="integration-icon">🚀</div>
+            <h4>Vercel</h4>
+            <p class="body">Instant deployment & global CDN</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section class="section fade-in" id="about">
+      <div class="container">
+        <div class="text-center">
+          <h2 class="h2">Built by decision-makers, for decision-makers</h2>
+          <div class="testimonial" style="text-align: left; max-width: 800px">
+            <p class="body-large">
+              Born from years of frustration with clunky enterprise tools and endless PowerPoint
+              debates, Polaris represents a fundamental shift in how organizations approach complex
+              decisions.
+            </p>
+            <br />
+            <p class="body-large">
+              We believe every team—from startups to Fortune 500—deserves access to simulation tools
+              that are both powerful and intuitive. Tools that accelerate insight, not bureaucracy.
+            </p>
+            <br />
+            <p class="body-large">
+              Today, Polaris helps teams across industries make smarter decisions faster, with the
+              confidence that comes from truly understanding your options.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section-sm fade-in">
+      <div class="container">
+        <div class="text-center">
+          <h2 class="h3">Frequently asked questions</h2>
+        </div>
+
+        <div style="max-width: 800px; margin: 3rem auto; display: grid; gap: 1rem">
+          <details class="step" style="cursor: pointer">
+            <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none">
+              ▸ Is there anything to install or configure?
+            </summary>
+            <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem">
+              <p class="body">
+                Nothing at all. Polaris runs entirely in your browser and works on any modern
+                device. Just click and start modeling—it's that simple.
+              </p>
+            </div>
+          </details>
+
+          <details class="step" style="cursor: pointer">
+            <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none">
+              ▸ Can we customize it for our specific industry?
+            </summary>
+            <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem">
+              <p class="body">
+                Absolutely. Polaris is built on flexible foundations that adapt to any domain—from
+                financial modeling to supply chain optimization to strategic planning.
+              </p>
+            </div>
+          </details>
+
+          <details class="step" style="cursor: pointer">
+            <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none">
+              ▸ How secure is our sensitive business data?
+            </summary>
+            <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem">
+              <p class="body">
+                Enterprise-grade security is built in, not bolted on. Row-level security, encrypted
+                data transmission, and your choice of cloud provider or on-premise deployment.
+              </p>
+            </div>
+          </details>
+
+          <details class="step" style="cursor: pointer">
+            <summary style="font-weight: 600; padding: 0.5rem 0; list-style: none">
+              ▸ What kind of support do you provide?
+            </summary>
+            <div style="padding-top: 1rem; border-top: 1px solid var(--gray-200); margin-top: 1rem">
+              <p class="body">
+                White-glove onboarding, dedicated success management, and 24/7 technical support.
+                Plus extensive documentation and training resources.
+              </p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section section fade-in">
+      <div class="container">
+        <h2 class="h2">Ready to transform your decisions?</h2>
+        <p class="subtitle">
+          Join thousands of teams who've already discovered the power of intelligent simulation.
+        </p>
+
+        <div
+          style="
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+          "
+        >
+          <a href="lab-simulation.html" class="btn btn-primary btn-lg"> Experience the Demo </a>
+          <a
+            href="#join"
+            class="btn btn-secondary btn-lg"
+            style="
+              background: rgba(255, 255, 255, 0.1);
+              color: white;
+              border-color: rgba(255, 255, 255, 0.2);
+            "
+          >
+            Request Early Access
+          </a>
+        </div>
+
+        <!-- Beta Signup Form -->
+        <div id="join" class="form-container">
+          <form id="join-form">
+            <div class="form-group">
+              <input
+                id="email"
+                class="input"
+                type="email"
+                placeholder="Enter your business email"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%">
+              Get Early Access
+            </button>
+            <div id="form-message" class="form-message" style="display: none"></div>
+          </form>
+          <p
+            style="
+              font-size: 0.875rem;
+              color: rgba(255, 255, 255, 0.7);
+              margin-top: 1rem;
+              text-align: center;
+            "
+          >
+            No spam, ever. Unsubscribe with one click.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <p>© 2025 Polaris — Intelligent Simulation Platform</p>
+      </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+      // Scroll animations
+      const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px',
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, observerOptions);
+
+      document.querySelectorAll('.fade-in').forEach((el) => {
+        observer.observe(el);
+      });
+
+      // Nav scroll effect
+      const nav = document.getElementById('nav');
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 100) {
+          nav.classList.add('scrolled');
+        } else {
+          nav.classList.remove('scrolled');
         }
       });
-    }, observerOptions);
 
-    document.querySelectorAll('.fade-in').forEach(el => {
-      observer.observe(el);
-    });
+      // Smooth scrolling for anchor links
+      document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+        anchor.addEventListener('click', function (e) {
+          e.preventDefault();
+          const target = document.querySelector(this.getAttribute('href'));
+          if (target) {
+            const offsetTop = target.offsetTop - 80;
+            window.scrollTo({
+              top: offsetTop,
+              behavior: 'smooth',
+            });
+          }
+        });
+      });
 
-    // Nav scroll effect
-    const nav = document.getElementById('nav');
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 100) {
-        nav.classList.add('scrolled');
-      } else {
-        nav.classList.remove('scrolled');
-      }
-    });
-
-    // Smooth scrolling for anchor links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
+      // Form handling
+      document.getElementById('join-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-          const offsetTop = target.offsetTop - 80;
-          window.scrollTo({
-            top: offsetTop,
-            behavior: 'smooth'
+
+        const emailInput = document.getElementById('email');
+        const messageEl = document.getElementById('form-message');
+        const email = emailInput.value.trim();
+
+        messageEl.style.display = 'block';
+        messageEl.className = 'form-message';
+        messageEl.textContent = 'Processing...';
+
+        try {
+          const response = await fetch('/api/signups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Something went wrong');
+          }
+
+          messageEl.className = 'form-message success';
+          messageEl.textContent =
+            "Perfect! You're on the list. We'll be in touch with early access soon.";
+          emailInput.value = '';
+
+          // Track successful signup
+          if (typeof mixpanel !== 'undefined') {
+            mixpanel.track('Beta Signup Success', { email: email });
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          messageEl.className = 'form-message error';
+          messageEl.textContent = 'Something went wrong. Please try again or contact us directly.';
+
+          // Track error
+          if (typeof mixpanel !== 'undefined') {
+            mixpanel.track('Beta Signup Error', { email: email, error: error.message });
+          }
+        }
+      });
+
+      // Enhanced details/summary handling
+      document.querySelectorAll('details').forEach((detail) => {
+        const summary = detail.querySelector('summary');
+        if (summary) {
+          detail.addEventListener('toggle', () => {
+            const arrow = summary.textContent.charAt(0);
+            if (detail.open) {
+              summary.textContent = summary.textContent.replace('▸', '▾');
+            } else {
+              summary.textContent = summary.textContent.replace('▾', '▸');
+            }
           });
         }
       });
-    });
 
-    // Form handling
-    document.getElementById('join-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const emailInput = document.getElementById('email');
-      const messageEl = document.getElementById('form-message');
-      const email = emailInput.value.trim();
-
-      messageEl.style.display = 'block';
-      messageEl.className = 'form-message';
-      messageEl.textContent = 'Processing...';
-
-      try {
-        const response = await fetch('/api/signups', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
+      // Track page load
+      if (typeof mixpanel !== 'undefined') {
+        mixpanel.track('Page Loaded', {
+          page: 'homepage',
+          timestamp: new Date().toISOString(),
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Something went wrong');
-        }
-
-        messageEl.className = 'form-message success';
-        messageEl.textContent = 'Perfect! You\'re on the list. We\'ll be in touch with early access soon.';
-        emailInput.value = '';
-
-        // Track successful signup
-        if (typeof mixpanel !== 'undefined') {
-          mixpanel.track('Beta Signup Success', { email: email });
-        }
-
-      } catch (error) {
-        console.error('Error:', error);
-        messageEl.className = 'form-message error';
-        messageEl.textContent = 'Something went wrong. Please try again or contact us directly.';
-        
-        // Track error
-        if (typeof mixpanel !== 'undefined') {
-          mixpanel.track('Beta Signup Error', { email: email, error: error.message });
-        }
       }
-    });
+    </script>
 
-    // Enhanced details/summary handling
-    document.querySelectorAll('details').forEach(detail => {
-      const summary = detail.querySelector('summary');
-      if (summary) {
-        detail.addEventListener('toggle', () => {
-          const arrow = summary.textContent.charAt(0);
-          if (detail.open) {
-            summary.textContent = summary.textContent.replace('▸', '▾');
-          } else {
-            summary.textContent = summary.textContent.replace('▾', '▸');
+    <!-- Featurebase SDK -->
+    <script>
+      !(function (e, t) {
+        var a = 'featurebase-sdk';
+        function n() {
+          if (!t.getElementById(a)) {
+            var e = t.createElement('script');
+            ((e.id = a),
+              (e.src = 'https://do.featurebase.app/js/sdk.js'),
+              t
+                .getElementsByTagName('script')[0]
+                .parentNode.insertBefore(e, t.getElementsByTagName('script')[0]));
           }
-        });
-      }
-    });
+        }
+        ('function' != typeof e.Featurebase &&
+          (e.Featurebase = function () {
+            (e.Featurebase.q = e.Featurebase.q || []).push(arguments);
+          }),
+          'complete' === t.readyState || 'interactive' === t.readyState
+            ? n()
+            : t.addEventListener('DOMContentLoaded', n));
+      })(window, document);
+    </script>
 
-    // Track page load
-    if (typeof mixpanel !== 'undefined') {
-      mixpanel.track('Page Loaded', { 
-        page: 'homepage',
-        timestamp: new Date().toISOString()
+    <script>
+      Featurebase('boot', {
+        appId: '68c7dbdda04bf7aac651d56d',
+        createdAt: '2025-05-06T12:00:00Z',
+        theme: 'light',
+        language: 'en',
       });
-    }
-  </script>
-
-  <!-- Featurebase SDK -->
-  <script>!(function(e,t){var a="featurebase-sdk";function n(){if(!t.getElementById(a)){var e=t.createElement("script");(e.id=a),(e.src="https://do.featurebase.app/js/sdk.js"),t.getElementsByTagName("script")[0].parentNode.insertBefore(e,t.getElementsByTagName("script")[0])}};"function"!=typeof e.Featurebase&&(e.Featurebase=function(){(e.Featurebase.q=e.Featurebase.q||[]).push(arguments)}),"complete"===t.readyState||"interactive"===t.readyState?n():t.addEventListener("DOMContentLoaded",n)})(window,document);</script>
-
-  <script>
-    Featurebase("boot", {
-      appId: "68c7dbdda04bf7aac651d56d",
-      createdAt: "2025-05-06T12:00:00Z",
-      theme: "light",
-      language: "en"
-    });
-  </script>
-
-</body>
+    </script>
+  </body>
 </html>

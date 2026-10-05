@@ -8,3 +8,9 @@ package-lock.json
 docs/baseline
 *.png
 *.md
+
+# Dead code on its way out of the repository: check.html is an abandoned,
+# unlinked fork of the simulation, and server.js is the superseded Express
+# backend. Both are removed later in Phase 1; formatting them is waste.
+/check.html
+/server.js
