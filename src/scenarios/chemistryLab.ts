@@ -100,7 +100,13 @@ export const chemistryLab: Scenario = {
     { name: 'Mass Spectrometer', icon: '⚗️', x: f.x + 7, y: f.y + 6, skill: 'Mass Spectrometry' },
     { name: 'Flow Cytometer', icon: '💠', x: f.x + 9, y: f.y + 6, skill: 'Flow Cytometry' },
     { name: 'Freezer -80°C', icon: '❄️', x: f.x + 1, y: f.y + 1.5, skill: 'Cryo Storage' },
-    { name: 'Biosafety Cabinet', icon: '🛡️', x: f.x + 1, y: f.y + 3.5, skill: 'Biosafety Protocols' },
+    {
+      name: 'Biosafety Cabinet',
+      icon: '🛡️',
+      x: f.x + 1,
+      y: f.y + 3.5,
+      skill: 'Biosafety Protocols',
+    },
   ],
 
   tasks: [

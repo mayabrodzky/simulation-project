@@ -19,6 +19,12 @@ export default tseslint.config(
       // and linting it now would produce hundreds of findings we are not
       // acting on yet.
       'src/legacy/',
+      // Temporary, and removed in the very next commit. The drawing code was
+      // moved here verbatim so the move could be verified by comparing
+      // screenshots; it still carries @ts-nocheck, which leaves types
+      // unresolvable and makes every type-aware rule fire. It is typed when it
+      // is split into modules.
+      'src/render/renderer.ts',
     ],
   },
 
