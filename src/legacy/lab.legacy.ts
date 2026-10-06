@@ -10,49 +10,69 @@
 import '../styles/base.css';
 import '../styles/lab.css';
 import { chemistryLab, scenarioFromBusinessProfile } from '../scenarios';
-import { createRng } from '../engine/rng';
-import { isQualified } from '../engine/rules';
+import {
+  applyCommand,
+  cloneWorld,
+  createWorld,
+  formatDuration,
+  isPanelAffecting,
+  isQualified,
+  tick,
+} from '../engine';
 import { createRenderer } from '../render/renderer';
 
 const Lab = {
   scenario: chemistryLab,
   renderer: null,
-  rng: createRng(1),
   seed: 1,
   canvas: null,
-  ctx: null,
-  width: 0,
-  height: 0,
   timeOverlay: null,
-  // Camera, starting economy and all geometry are filled from the scenario by
-  // applyScenarioSettings() during init. Declared here only so the shape of the
-  // object is still visible at a glance.
+
+  /** The simulation. Everything below that looks like state reads through to it. */
+  world: null,
+
+  // View state: how this lab is being looked at, not what is true of it. Kept
+  // apart from the world so Phase 4 can show two worlds with two cameras.
   camera: { x: 0, y: 0, zoom: 1 },
-  state: { money: 0, materials: 0, samples: 0, time: 0, speed: 1 },
   isSandboxMode: false,
-  liveStateBackup: null,
-  gridWidth: 0,
-  gridHeight: 0,
-  labFloor: { x: 0, y: 0, w: 0, h: 0 },
-  office1: { x: 0, y: 0, w: 0, h: 0 },
-  office2: { x: 0, y: 0, w: 0, h: 0 },
-  tileSize: 0,
-  tileHeight: 0,
-  staff: [],
-  equipment: [],
-  props: [],
-  walls: [],
-  staticPersonnel: [],
-  tasks: [],
-  activeTasks: [],
-  emergencyQueue: [],
-  equipmentCatalog: [],
+  liveWorldBackup: null,
   selectedStaff: null,
   activeEmergencyTask: null,
   hoveredEntity: null,
   highlightedStaffIds: [],
   sandboxSessionHistory: [],
   currentSandboxSession: null,
+
+  // Read-through aliases, so the panel and modal code that still says
+  // this.staff or this.equipment keeps working while it is migrated. They are
+  // getters, not copies: there is one source of truth and it is the world.
+  get staff() {
+    return this.world.staff;
+  },
+  get equipment() {
+    return this.world.equipment;
+  },
+  get tasks() {
+    return this.world.tasks;
+  },
+  get emergencyQueue() {
+    return this.world.emergencies;
+  },
+  get equipmentCatalog() {
+    return this.world.catalog;
+  },
+  get props() {
+    return this.world.props;
+  },
+  get walls() {
+    return this.world.walls;
+  },
+  get staticPersonnel() {
+    return [];
+  },
+  get labFloor() {
+    return this.world.layout.labFloor;
+  },
 
   init() {
     console.log('Initializing Upgraded Lab Simulation V14.8...');
@@ -62,26 +82,25 @@ const Lab = {
     const seedParam = new URLSearchParams(window.location.search).get('seed');
     this.seed = seedParam !== null && seedParam !== '' ? Number(seedParam) : Date.now();
     if (!Number.isFinite(this.seed)) this.seed = Date.now();
-    this.rng = createRng(this.seed);
     console.log('Simulation seed:', this.seed);
     this.scenario = this.businessProfile
       ? scenarioFromBusinessProfile(this.businessProfile)
       : chemistryLab;
-    this.applyScenarioSettings();
+
+    // The clock still starts from the real time of day, which is why the lab
+    // renders in daylight or at night depending on when it is opened. The
+    // engine takes it as a parameter, so a fixed start is now one argument
+    // away when Phase 2 wants comparable runs.
     const now = new Date();
-    this.state.time = now.getHours() * 60 + now.getMinutes();
+    const startMinutes = now.getHours() * 60 + now.getMinutes();
+    this.world = createWorld(this.scenario, this.seed, startMinutes);
+
+    this.camera = { ...this.scenario.layout.initialCamera };
     this.canvas = document.getElementById('gameCanvas');
     this.timeOverlay = document.getElementById('timeOverlay');
     this.renderer = createRenderer(this.canvas);
     this.renderer.resize();
     window.addEventListener('resize', () => this.renderer.resize());
-    this.createStaff();
-    this.createEquipment();
-    this.createEquipmentCatalog();
-    this.createProps();
-    this.createArchitecture();
-    this.createBuildingOccupants();
-    this.defineTasks();
     this.setupEventHandlers();
     this.lastTime = performance.now();
     this.gameLoop();
@@ -93,21 +112,6 @@ const Lab = {
    * of this file already reads, so every existing `this.labFloor` reference
    * keeps working while the literals themselves live in one place.
    */
-  applyScenarioSettings() {
-    const { layout, tuning } = this.scenario;
-    this.gridWidth = layout.gridWidth;
-    this.gridHeight = layout.gridHeight;
-    this.tileSize = layout.tileSize;
-    this.tileHeight = layout.tileHeight;
-    this.labFloor = layout.labFloor;
-    this.office1 = layout.office1;
-    this.office2 = layout.office2;
-    this.camera = { ...layout.initialCamera };
-    this.state.money = tuning.startingMoney;
-    this.state.materials = tuning.startingMaterials;
-    this.state.samples = tuning.startingSamples;
-    this.state.time = tuning.startMinutes;
-  },
   updateAllPanels() {
     this.updateStaffPanel();
     this.updateEquipmentPanel();
@@ -120,13 +124,13 @@ const Lab = {
   buildRenderView() {
     return {
       camera: this.camera,
-      layout: this.scenario.layout,
-      staff: this.staff,
-      equipment: this.equipment,
-      props: this.props,
-      walls: this.walls,
-      staticPersonnel: this.staticPersonnel,
-      state: this.state,
+      layout: this.world.layout,
+      staff: this.world.staff,
+      equipment: this.world.equipment,
+      props: this.world.props,
+      walls: this.world.walls,
+      staticPersonnel: [],
+      state: { time: this.world.minutes },
       nowMs: this.lastTime,
       hoveredEntity: this.hoveredEntity,
       highlightedStaffIds: this.highlightedStaffIds,
@@ -190,74 +194,13 @@ const Lab = {
     this.highlightedStaffIds = [];
     this.updateStaffPanel();
   },
-  createStaff() {
-    const f = this.labFloor;
-    const t = this.scenario.tuning;
-    this.scenario.staff.forEach((data, i) => {
-      this.staff.push({
-        id: i,
-        ...data,
-        x: f.x + 2 + (i % 4) * 3,
-        y: f.y + 2 + Math.floor(i / 4) * 2,
-        targetX: null,
-        targetY: null,
-        state: i < t.staffOnShiftCount ? 'idle' : 'off',
-        energy: t.initialEnergyMin + this.rng.next() * t.initialEnergyRange,
-        speed: t.staffWalkSpeed,
-        color: `hsl(${i * 45}, 70%, 50%)`,
-        activeTask: null,
-        taskStep: 0,
-        taskTimer: 0,
-      });
-    });
-  },
-  createEquipment() {
-    const t = this.scenario.tuning;
-    this.scenario.equipment.forEach((data) => {
-      this.equipment.push({
-        id: this.equipment.length,
-        ...data,
-        condition: t.initialConditionMin + this.rng.next() * t.initialConditionRange,
-        inUse: false,
-        assignedTo: null,
-        totalWorkTime: 0,
-      });
-    });
-  },
-  createProps() {
-    // Props and walls are scenario geometry; the door used to be appended here
-    // by createArchitecture and is now declared with the other props.
-    this.props = this.scenario.props.map((prop) => ({ ...prop }));
-  },
-  createBuildingOccupants() {
-    this.staticPersonnel = [];
-  },
-  createArchitecture() {
-    this.walls = this.scenario.walls.map((wall) => ({ ...wall }));
-  },
-  defineTasks() {
-    this.scenario.tasks.forEach((task) => {
-      this.tasks.push({
-        ...task,
-        equipmentSequence: task.equipmentSequence.map((step) => ({ ...step })),
-      });
-    });
-  },
-  createEquipmentCatalog() {
-    this.equipmentCatalog = this.scenario.catalog.map((item) => ({ ...item }));
-  },
 
   enterSandboxMode() {
     if (this.isSandboxMode) return;
     this.isSandboxMode = true;
-    this.liveStateBackup = JSON.parse(
-      JSON.stringify({
-        state: this.state,
-        staff: this.staff,
-        equipment: this.equipment,
-        emergencyQueue: this.emergencyQueue,
-      }),
-    );
+    // One snapshot of the whole world rather than four hand-picked slices, so
+    // nothing done in the sandbox can leak back into the live run.
+    this.liveWorldBackup = cloneWorld(this.world);
 
     const newSession = { id: 'SBX' + Date.now(), startTime: new Date(), actions: [] };
     this.sandboxSessionHistory.unshift(newSession);
@@ -278,11 +221,8 @@ const Lab = {
   exitSandboxMode() {
     if (!this.isSandboxMode) return;
     this.isSandboxMode = false;
-    this.state = this.liveStateBackup.state;
-    this.staff = this.liveStateBackup.staff;
-    this.equipment = this.liveStateBackup.equipment;
-    this.emergencyQueue = this.liveStateBackup.emergencyQueue;
-    this.liveStateBackup = null;
+    this.world = this.liveWorldBackup;
+    this.liveWorldBackup = null;
     this.currentSandboxSession = null;
 
     document.body.classList.remove('sandbox-mode');
@@ -393,9 +333,9 @@ const Lab = {
           startTime: this.currentSandboxSession.startTime,
           actions: this.currentSandboxSession.actions,
           finalState: {
-            money: Math.round(this.state.money),
-            materials: this.state.materials,
-            samples: this.state.samples,
+            money: Math.round(this.world.money),
+            materials: this.world.materials,
+            samples: this.world.samples,
           },
         }),
       });
@@ -419,183 +359,8 @@ const Lab = {
     }
   },
 
-  update(dt) {
-    const gameDt = dt * this.state.speed;
-
-    if (!this.isSandboxMode) {
-      this.state.time += gameDt * this.scenario.tuning.minutesPerSecond;
-      if (this.state.time >= 1440) this.state.time -= 1440;
-
-      // A rate per simulated second, not a probability per frame. gameDt
-      // already carries the speed multiplier.
-      if (this.rng.chance(this.scenario.tuning.emergencyRatePerSecond, gameDt)) {
-        if (this.emergencyQueue.filter((t) => t.status === 'pending').length === 0) {
-          this.triggerEmergency();
-        }
-      }
-      this.updateEmergencies(gameDt);
-    }
-
-    this.updateTimeOfDayOverlay();
-
-    this.staff.forEach((person) => {
-      if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
-      const tune = this.scenario.tuning;
-      if (person.state === 'working') person.energy -= gameDt * tune.energyDrainPerSecond;
-      if (person.state === 'break') person.energy += gameDt * tune.energyRecoverPerSecond;
-      if (person.energy < tune.energyBreakThreshold && person.state !== 'break')
-        person.state = 'break';
-      if (person.energy > tune.energyRecoveredThreshold && person.state === 'break')
-        person.state = 'idle';
-
-      if (person.activeTask) {
-        const task = person.activeTask;
-        if (task.timeLimit !== undefined) {
-          task.timeLimit -= gameDt;
-          if (task.timeLimit <= 0) {
-            this.failTask(person, task);
-            return;
-          }
-        }
-        if (task.type === 'training') {
-          const equipment = this.equipment.find((eq) => eq.id === task.equipmentId);
-          if (
-            equipment &&
-            Math.round(person.x) === equipment.x &&
-            Math.round(person.y) === equipment.y
-          ) {
-            if (person.state !== 'working') {
-              if (!equipment.inUse) {
-                person.state = 'working';
-                equipment.inUse = true;
-                equipment.assignedTo = person.id;
-                this.updateAllPanels();
-              } else {
-                person.state = 'idle';
-              }
-            }
-            if (person.state === 'working') {
-              person.taskTimer -= gameDt;
-              if (person.taskTimer <= 0) {
-                if (!person.skills.includes(task.skillToLearn))
-                  person.skills.push(task.skillToLearn);
-                this.showNotification(
-                  `${person.name} is now certified for ${task.skillToLearn}!`,
-                  'success',
-                );
-                if (equipment) {
-                  equipment.inUse = false;
-                  equipment.assignedTo = null;
-                }
-                person.activeTask = null;
-                person.state = 'idle';
-                this.updateAllPanels();
-              }
-            }
-          }
-        } else {
-          const currentStep = task.equipmentSequence[person.taskStep];
-          if (!currentStep) {
-            person.activeTask = null;
-            return;
-          }
-          const equipment = this.equipment.find((e) => e.name === currentStep.name);
-          if (person.state === 'working') {
-            person.taskTimer -= gameDt;
-            if (person.taskTimer <= 0) {
-              if (equipment) {
-                equipment.inUse = false;
-                equipment.assignedTo = null;
-              }
-              person.taskStep++;
-              if (person.taskStep >= task.equipmentSequence.length) {
-                this.state.money += task.reward;
-                this.showNotification(
-                  `Task "${task.name}" completed by ${person.name}. +$${task.reward}`,
-                  'success',
-                );
-                if (task.isEmergency) {
-                  const emergency = this.emergencyQueue.find((e) => e.id === task.id);
-                  if (emergency) emergency.status = 'completed';
-                }
-                person.activeTask = null;
-                person.taskStep = 0;
-                person.state = 'idle';
-              } else {
-                const nextStep = task.equipmentSequence[person.taskStep];
-                const nextEquipment = this.equipment.find((e) => e.name === nextStep.name);
-                if (nextEquipment) {
-                  person.targetX = nextEquipment.x;
-                  person.targetY = nextEquipment.y;
-                }
-                person.state = 'idle';
-              }
-              this.updateAllPanels();
-            }
-          } else if (!equipment) {
-            person.targetX = null;
-            person.targetY = null;
-            person.state = 'working';
-            person.taskTimer = currentStep.duration;
-            this.updateAllPanels();
-          } else if (
-            equipment &&
-            Math.round(person.x) === equipment.x &&
-            Math.round(person.y) === equipment.y
-          ) {
-            if (!equipment.inUse) {
-              person.targetX = null;
-              person.targetY = null;
-              person.state = 'working';
-              person.taskTimer = currentStep.duration;
-              equipment.inUse = true;
-              equipment.assignedTo = person.id;
-              this.updateAllPanels();
-            } else {
-              person.state = 'idle';
-            }
-          }
-        }
-      }
-      if (person.targetX !== null && person.targetY !== null) {
-        const dx = person.targetX - person.x;
-        const dy = person.targetY - person.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0.1) {
-          const moveSpeed = this.isSandboxMode ? person.speed * 5 : person.speed;
-          person.x += (dx / dist) * moveSpeed * gameDt * 60;
-          person.y += (dy / dist) * moveSpeed * gameDt * 60;
-        } else {
-          person.x = person.targetX;
-          person.y = person.targetY;
-        }
-      } else if (
-        person.state === 'idle' &&
-        !person.activeTask &&
-        this.rng.chance(this.scenario.tuning.wanderRatePerSecond, gameDt)
-      ) {
-        const f = this.labFloor;
-        person.targetX = f.x + 1 + this.rng.next() * (f.w - 2);
-        person.targetY = f.y + 1 + this.rng.next() * (f.h - 2);
-      }
-      const f = this.labFloor;
-      person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));
-      person.y = Math.max(f.y + 0.5, Math.min(f.y + f.h - 0.5, person.y));
-    });
-    this.equipment.forEach((eq) => {
-      if (eq.inUse) {
-        eq.condition -= gameDt * this.scenario.tuning.conditionWearPerSecond;
-        eq.totalWorkTime += gameDt;
-      }
-    });
-    this.updateUI();
-    this.updateStatusCounts();
-    this.updateEmergencyListPanel();
-    this.updateOngoingTasksPanel();
-  },
-
   updateTimeOfDayOverlay() {
-    const hours = this.state.time / 60;
+    const hours = this.world.minutes / 60;
     let color = 'rgba(0,0,0,0)';
     if (hours < 6 || hours >= 21) {
       color = 'rgba(12, 28, 64, 0.4)';
@@ -606,41 +371,188 @@ const Lab = {
     }
     this.timeOverlay.style.backgroundColor = color;
   },
-  failTask(person, task) {
-    this.state.money -= task.penalty;
-    const failMessage = `Task "${task.name}" failed! Penalty: $${task.penalty}`;
-    this.showNotification(failMessage, 'error');
-    this.logSandboxAction(failMessage);
-    const currentStep = task.equipmentSequence[person.taskStep];
-    if (currentStep) {
-      const equipment = this.equipment.find((e) => e.name === currentStep.name);
-      if (equipment && equipment.assignedTo === person.id) {
-        equipment.inUse = false;
-        equipment.assignedTo = null;
-        this.updateEquipmentPanel();
+  /**
+   * Turns engine events into the things a person sees: a toast, a line in the
+   * sandbox log, a modal closing. The engine reports facts; the wording lives
+   * here, which is what lets the same simulation run with nothing attached.
+   */
+  handleEvents(events) {
+    // Any event other than a refusal changed something a panel shows, so the
+    // panels are rebuilt from the event stream rather than on every frame.
+    if (events.some(isPanelAffecting)) this.updateAllPanels();
+    for (const e of events) {
+      switch (e.type) {
+        case 'task-assigned':
+          this.announce(`${e.staffName} assigned to "${e.taskName}"`, 'info');
+          break;
+        case 'task-completed':
+          this.showNotification(
+            `Task "${e.taskName}" completed by ${e.staffName}. +$${e.reward}`,
+            'success',
+          );
+          break;
+        case 'task-failed':
+          this.announce(`Task "${e.taskName}" failed! Penalty: $${e.penalty}`, 'error');
+          break;
+        case 'training-started':
+          this.announce(`${e.staffName} started training on ${e.skill}. (-$${e.cost})`, 'info');
+          break;
+        case 'training-completed':
+          this.showNotification(`${e.staffName} is now certified for ${e.skill}!`, 'success');
+          break;
+        case 'emergency-raised':
+          this.flashEmergencyPanel();
+          this.openEmergencyModalById(e.emergencyId);
+          break;
+        case 'emergency-expired':
+          this.showNotification(
+            `Unassigned emergency task failed! Penalty: $${e.penalty}!`,
+            'error',
+          );
+          if (this.activeEmergencyTask && this.activeEmergencyTask.id === e.emergencyId) {
+            this.closeAllModals();
+          }
+          break;
+        case 'equipment-serviced':
+          this.announce(
+            `${e.equipmentName} ${e.kind === 'repair' ? 'repaired' : 'calibrated'} for $${e.cost}.`,
+            'info',
+          );
+          break;
+        case 'equipment-purchased':
+          this.announce(
+            `${e.equipmentName} purchased for $${e.cost} and placed in the lab.`,
+            'info',
+          );
+          break;
+        case 'staff-status-changed':
+          this.logSandboxAction(`${e.staffName}'s status changed to ${e.status}.`);
+          break;
+        case 'shift-toggled':
+          this.announce(
+            `${e.staffName} has ${e.onShift ? 'started' : 'ended'} their shift`,
+            'info',
+          );
+          break;
+        case 'rejected':
+          this.showNotification(this.describeRejection(e), 'error');
+          break;
       }
     }
-    if (task.isEmergency) {
-      const emergency = this.emergencyQueue.find((e) => e.id === task.id);
-      if (emergency) emergency.status = 'failed';
-    }
-    person.activeTask = null;
-    person.taskStep = 0;
-    person.state = 'idle';
-    this.updateAllPanels();
   },
+
+  /** A message that is both shown and recorded in the sandbox log. */
+  announce(message, type) {
+    this.showNotification(message, type);
+    this.logSandboxAction(message);
+  },
+
+  describeRejection(e) {
+    switch (e.reason) {
+      case 'not-idle':
+        return `Assignment failed: ${e.detail} is busy.`;
+      case 'unqualified':
+        return `Assignment failed: ${e.detail} is not qualified for this task.`;
+      case 'equipment-in-use': {
+        const [name, user] = (e.detail || '').split('|');
+        return `${name} is currently in use${user ? ` by ${user}` : ''}.`;
+      }
+      case 'no-funds':
+        return `Insufficient funds (cost: $${e.detail}, budget: $${this.world.money.toFixed(0)}).`;
+      case 'already-known':
+        return `Already certified for ${e.detail}.`;
+      case 'no-space':
+        return 'No free space in the lab for new equipment.';
+      default:
+        return 'That is not possible right now.';
+    }
+  },
+
+  /** One way in: a click becomes a command, never a direct change to the world. */
+  dispatch(command) {
+    this.handleEvents(applyCommand(this.world, command));
+  },
+
+  assignNewTask(taskIndex, isEmergency = false, emergencyId = null) {
+    if (!this.selectedStaff) return;
+    const staffId = this.selectedStaff.id;
+    if (isEmergency) {
+      this.dispatch({ type: 'ASSIGN_EMERGENCY', staffId, emergencyId });
+    } else {
+      const task = this.tasks[taskIndex];
+      if (!task) return;
+      this.dispatch({ type: 'ASSIGN_TASK', staffId, taskId: task.id });
+    }
+    this.closeAllModals();
+  },
+
+  assignTraining(skillToLearn, equipmentId) {
+    if (!this.selectedStaff) return;
+    this.dispatch({
+      type: 'START_TRAINING',
+      staffId: this.selectedStaff.id,
+      equipmentId,
+      skill: skillToLearn,
+    });
+    this.closeAllModals();
+  },
+
+  assignEmergencyTask(staffId) {
+    const person = this.staff.find((p) => p.id === staffId);
+    if (!person || !this.activeEmergencyTask) return;
+    this.selectedStaff = person;
+    this.assignNewTask(null, true, this.activeEmergencyTask.id);
+  },
+
+  setStaffStatus(staffId, newStatus) {
+    const person = this.staff.find((p) => p.id === staffId);
+    if (!person) return;
+    this.dispatch({
+      type: 'SET_STATUS',
+      staffId,
+      sick: person.state !== 'sick' && newStatus === 'sick',
+    });
+  },
+
+  toggleShift(staffId) {
+    this.dispatch({ type: 'TOGGLE_SHIFT', staffId });
+  },
+
+  repairEquipment(equipmentId) {
+    this.dispatch({ type: 'SERVICE_EQUIPMENT', equipmentId, kind: 'repair' });
+  },
+
+  calibrateEquipment(equipmentId) {
+    this.dispatch({ type: 'SERVICE_EQUIPMENT', equipmentId, kind: 'calibrate' });
+  },
+
+  buyEquipment(catalogId) {
+    this.dispatch({ type: 'BUY_EQUIPMENT', catalogId });
+    this.closeAllModals();
+  },
+
   gameLoop() {
     const now = performance.now();
     const dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
-    this.update(dt);
+    this.handleEvents(
+      tick(this.world, dt, {
+        freezeClock: this.isSandboxMode,
+        movementMultiplier: this.isSandboxMode ? 5 : 1,
+      }),
+    );
+    this.updateTimeOfDayOverlay();
+    this.updateUI();
+    this.updateStatusCounts();
+    this.updateEmergencyListPanel();
+    this.updateOngoingTasksPanel();
     this.renderer.render(this.buildRenderView());
     requestAnimationFrame(() => this.gameLoop());
   },
   updateUI() {
-    document.getElementById('money').textContent = this.state.money.toFixed(0);
-    document.getElementById('materials').textContent = this.state.materials;
-    document.getElementById('samples').textContent = this.state.samples;
+    document.getElementById('money').textContent = this.world.money.toFixed(0);
+    document.getElementById('materials').textContent = this.world.materials;
+    document.getElementById('samples').textContent = this.world.samples;
   },
   updateStatusCounts() {
     const c = { working: 0, break: 0, off: 0, sick: 0, vacation: 0, training: 0 };
@@ -684,8 +596,8 @@ const Lab = {
   updateEquipmentPanel() {
     document.getElementById('equipmentList').innerHTML = this.equipment
       .map(
-        (eq, i) =>
-          `<div class="equipment-card"><div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;"><span style="font-size: 24px;">${eq.icon}</span><div style="flex: 1;"><strong>${eq.name}</strong><div class="equipment-info">${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use: ${this.formatTime(eq.totalWorkTime)}</div></div></div><div class="condition-bar"><div class="condition-fill" style="width: ${eq.condition}%; background: ${eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444'};"></div></div><div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;"><button class="btn" onclick="Lab.repairEquipment(${i})">Repair ($200)</button><button class="btn" onclick="Lab.calibrateEquipment(${i})">Calibrate ($100)</button></div></div>`,
+        (eq) =>
+          `<div class="equipment-card"><div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;"><span style="font-size: 24px;">${eq.icon}</span><div style="flex: 1;"><strong>${eq.name}</strong><div class="equipment-info">${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use: ${formatDuration(eq.totalWorkTime)}</div></div></div><div class="condition-bar"><div class="condition-fill" style="width: ${eq.condition}%; background: ${eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444'};"></div></div><div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;"><button class="btn" onclick="Lab.repairEquipment(${eq.id})">Repair ($${this.world.tuning.repairCost})</button><button class="btn" onclick="Lab.calibrateEquipment(${eq.id})">Calibrate ($${this.world.tuning.calibrateCost})</button></div></div>`,
       )
       .join('');
   },
@@ -702,7 +614,7 @@ const Lab = {
     }
     a.forEach((t) => {
       const s = t.status === 'pending' ? 'Waiting' : 'In Progress';
-      p.innerHTML += `<div class="emergency-card" onclick="Lab.openEmergencyModalById('${t.id}')"><strong>${t.name}</strong><div><span>${s}</span><span>Time Left: ${this.formatTime(t.timeLimit, true)}</span></div></div>`;
+      p.innerHTML += `<div class="emergency-card" onclick="Lab.openEmergencyModalById('${t.id}')"><strong>${t.name}</strong><div><span>${s}</span><span>Time Left: ${formatDuration(t.timeLimit, true)}</span></div></div>`;
     });
   },
   updateTaskListPanel() {
@@ -717,7 +629,7 @@ const Lab = {
             .filter((p) => p.state === 'idle' && isQualified(p, task))
             .map((p) => p.name)
             .join(', ') || 'None available';
-        return ` <div class="task-def-card" onmouseenter="Lab.highlightQualifiedStaff('${task.id}')" onmouseleave="Lab.clearStaffHighlights()"> <strong>${task.name}</strong> <div class="details"> <span>Time: ${this.formatTime(totalTime)} | Reward: $${task.reward}</span><br> <strong>Required Skills:</strong> ${skills}<br><strong>Qualified Staff:</strong> ${qualifiedStaff}</div> </div>`;
+        return ` <div class="task-def-card" onmouseenter="Lab.highlightQualifiedStaff('${task.id}')" onmouseleave="Lab.clearStaffHighlights()"> <strong>${task.name}</strong> <div class="details"> <span>Time: ${formatDuration(totalTime)} | Reward: $${task.reward}</span><br> <strong>Required Skills:</strong> ${skills}<br><strong>Qualified Staff:</strong> ${qualifiedStaff}</div> </div>`;
       })
       .join('');
   },
@@ -751,7 +663,8 @@ const Lab = {
       .join('');
   },
   openTaskModal(staffId) {
-    this.selectedStaff = this.staff[staffId];
+    this.selectedStaff = this.staff.find((p) => p.id === staffId);
+    if (!this.selectedStaff) return;
     if (this.selectedStaff.state !== 'idle' || this.selectedStaff.activeTask) {
       this.showNotification(
         `Cannot assign task: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,
@@ -766,7 +679,7 @@ const Lab = {
     let h = '';
     this.tasks.forEach((t, i) => {
       const q = isQualified(this.selectedStaff, t);
-      h += `<div class="task-option" ${!q ? 'disabled' : ''} onclick="${q ? `Lab.assignNewTask(${i})` : ''}"><strong>${t.name}</strong><div style="font-size:0.875rem;color:#64748b;">Reward: $${t.reward} | Time: ${this.formatTime(t.timeLimit, true)} | ${q ? '✅ Qualified' : '❌ Not Qualified'}</div></div>`;
+      h += `<div class="task-option" ${!q ? 'disabled' : ''} onclick="${q ? `Lab.assignNewTask(${i})` : ''}"><strong>${t.name}</strong><div style="font-size:0.875rem;color:#64748b;">Reward: $${t.reward} | Time: ${formatDuration(t.timeLimit, true)} | ${q ? '✅ Qualified' : '❌ Not Qualified'}</div></div>`;
     });
     this.equipment.forEach((eq) => {
       if (!this.selectedStaff.skills.includes(eq.skill)) {
@@ -782,97 +695,6 @@ const Lab = {
     this.selectedStaff = null;
     this.activeEmergencyTask = null;
   },
-  assignNewTask(taskIndex, isEmergency = false, emergencyId = null) {
-    if (!this.selectedStaff) return;
-    let taskSource;
-    if (isEmergency) {
-      taskSource = this.emergencyQueue.find((t) => t.id === emergencyId);
-    } else {
-      taskSource = this.tasks[taskIndex];
-    }
-    if (!taskSource) return;
-    if (this.selectedStaff.state !== 'idle' || this.selectedStaff.activeTask) {
-      this.showNotification(
-        `Assignment failed: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,
-        'error',
-      );
-      return;
-    }
-    const qualified = isQualified(this.selectedStaff, taskSource);
-    if (!qualified) {
-      this.showNotification(
-        `Assignment failed: ${this.selectedStaff.name} is not qualified for this task.`,
-        'error',
-      );
-      return;
-    }
-    const firstStep = taskSource.equipmentSequence[0];
-    const firstEquipment = this.equipment.find((e) => e.name === firstStep.name);
-    if (firstEquipment && firstEquipment.inUse) {
-      const user = this.staff.find((s) => s.id === firstEquipment.assignedTo);
-      const userName = user ? `by ${user.name}` : '';
-      this.showNotification(
-        `Assignment failed: ${firstEquipment.name} is currently in use ${userName}.`,
-        'error',
-      );
-      return;
-    }
-    const taskCopy = JSON.parse(JSON.stringify(taskSource));
-    if (isEmergency) {
-      taskCopy.isEmergency = true;
-      taskSource.status = 'in-progress';
-      taskSource.assignedTo = this.selectedStaff.id;
-    }
-    this.selectedStaff.activeTask = taskCopy;
-    this.selectedStaff.taskStep = 0;
-    if (firstEquipment) {
-      this.selectedStaff.targetX = firstEquipment.x;
-      this.selectedStaff.targetY = firstEquipment.y;
-    }
-    const actionMessage = `${this.selectedStaff.name} assigned to "${taskCopy.name}"`;
-    this.showNotification(actionMessage, 'info');
-    this.logSandboxAction(actionMessage);
-    this.closeAllModals();
-    this.updateAllPanels();
-  },
-  assignTraining(skillToLearn, equipmentId) {
-    if (!this.selectedStaff) return;
-    const cost = this.scenario.tuning.trainingCost;
-    const trainingDuration = this.scenario.tuning.trainingDuration;
-    const equipment = this.equipment.find((eq) => eq.id === equipmentId);
-    if (this.state.money < cost) {
-      this.showNotification(
-        `Training failed: Insufficient funds (Cost: $${cost}, Budget: $${this.state.money.toFixed(0)}).`,
-        'error',
-      );
-      return;
-    }
-    if (equipment.inUse) {
-      const user = this.staff.find((s) => s.id === equipment.assignedTo);
-      const userName = user ? `by ${user.name}` : '';
-      this.showNotification(
-        `Training failed: ${equipment.name} is unavailable for training, it's in use ${userName}.`,
-        'error',
-      );
-      return;
-    }
-    this.state.money -= cost;
-    this.selectedStaff.activeTask = {
-      type: 'training',
-      name: `Training on ${equipment.name}`,
-      skillToLearn: skillToLearn,
-      equipmentId: equipmentId,
-      duration: trainingDuration,
-    };
-    this.selectedStaff.taskTimer = trainingDuration;
-    this.selectedStaff.targetX = equipment.x;
-    this.selectedStaff.targetY = equipment.y;
-    const actionMessage = `${this.selectedStaff.name} started training on ${equipment.name}. (-$${cost})`;
-    this.showNotification(actionMessage, 'info');
-    this.logSandboxAction(actionMessage);
-    this.closeAllModals();
-    this.updateAllPanels();
-  },
   openEmergencyModalById(id) {
     const task = this.emergencyQueue.find((t) => t.id === id);
     if (task) this.openEmergencyModal(task);
@@ -885,7 +707,7 @@ const Lab = {
     document.getElementById('emergencyTaskPenalty').innerHTML =
       `<strong>Penalty:</strong> $${task.penalty}`;
     document.getElementById('emergencyTaskDeadline').innerHTML =
-      `<strong>Deadline:</strong> ${this.formatTime(task.timeLimit, true)}`;
+      `<strong>Deadline:</strong> ${formatDuration(task.timeLimit, true)}`;
     const staffListEl = document.getElementById('emergencyStaffList');
     staffListEl.innerHTML = '';
     const availableStaff = this.staff.filter(
@@ -901,23 +723,6 @@ const Lab = {
     document.getElementById('modalOverlay').className = 'modal-overlay active';
     document.getElementById('emergencyModal').className = 'modal active';
   },
-  assignEmergencyTask(staffId) {
-    this.selectedStaff = this.staff.find((p) => p.id === staffId);
-    this.assignNewTask(null, true, this.activeEmergencyTask.id);
-  },
-  triggerEmergency() {
-    const template = this.scenario.emergencies[0];
-    if (!template) return;
-    const t = {
-      id: 'EMG' + Date.now(),
-      ...template,
-      equipmentSequence: template.equipmentSequence.map((step) => ({ ...step })),
-      status: 'pending',
-    };
-    this.emergencyQueue.push(t);
-    this.flashEmergencyPanel();
-    this.openEmergencyModal(t);
-  },
   flashEmergencyPanel() {
     const header = document.getElementById('emergencyPanelHeader');
     if (!header) return;
@@ -930,100 +735,6 @@ const Lab = {
     header.addEventListener('animationend', () => header.classList.remove('emergency-alert'), {
       once: true,
     });
-  },
-  updateEmergencies(gameDt) {
-    this.emergencyQueue.forEach((t) => {
-      if (t.status === 'pending' || t.status === 'in-progress') {
-        t.timeLimit -= gameDt;
-        if (this.activeEmergencyTask && this.activeEmergencyTask.id === t.id) {
-          document.getElementById('emergencyTaskDeadline').innerHTML =
-            `<strong>Deadline:</strong> ${this.formatTime(t.timeLimit, true)}`;
-        }
-        if (t.timeLimit <= 0) {
-          if (t.status === 'pending') {
-            t.status = 'failed';
-            this.state.money -= t.penalty;
-            this.showNotification(
-              `Unassigned emergency task failed! Penalty: $${t.penalty}!`,
-              'error',
-            );
-          } else if (t.status === 'in-progress') {
-            const s = this.staff.find((s) => s.id === t.assignedTo);
-            if (s && s.activeTask && s.activeTask.id === t.id) {
-              this.failTask(s, s.activeTask);
-            }
-          }
-          if (this.activeEmergencyTask && this.activeEmergencyTask.id === t.id) {
-            this.closeAllModals();
-          }
-        }
-      }
-    });
-    this.emergencyQueue = this.emergencyQueue.filter(
-      (t) => t.status === 'pending' || t.status === 'in-progress',
-    );
-  },
-  setStaffStatus(staffId, newStatus) {
-    const p = this.staff[staffId];
-    if (p.state === 'off') return;
-    const oldStatus = p.state;
-    if (p.state === newStatus) {
-      p.state = 'idle';
-    } else {
-      if (p.activeTask) {
-        this.failTask(p, p.activeTask);
-      }
-      p.state = newStatus;
-    }
-    this.logSandboxAction(`${p.name}'s status changed from ${oldStatus} to ${p.state}.`);
-    this.updateAllPanels();
-  },
-  toggleShift(staffId) {
-    const p = this.staff[staffId];
-    if (p.state === 'off') {
-      p.state = 'idle';
-      p.energy = 100;
-    } else if (p.state === 'idle' || p.state === 'break') {
-      p.state = 'off';
-      p.activeTask = null;
-      const eq = this.equipment.find((e) => e.assignedTo === p.id);
-      if (eq) {
-        eq.inUse = false;
-        eq.assignedTo = null;
-      }
-    }
-    const actionMessage = `${p.name} has ${p.state === 'off' ? 'ended' : 'started'} their shift`;
-    this.showNotification(actionMessage, 'info');
-    this.logSandboxAction(actionMessage);
-    this.updateAllPanels();
-  },
-  repairEquipment(eqId) {
-    const eq = this.equipment[eqId];
-    const cost = this.scenario.tuning.repairCost;
-    if (this.state.money >= cost) {
-      this.state.money -= cost;
-      eq.condition = Math.min(100, eq.condition + this.scenario.tuning.repairAmount);
-      const actionMessage = `${eq.name} repaired for $${cost}.`;
-      this.showNotification(actionMessage, 'success');
-      this.logSandboxAction(actionMessage);
-      this.updateAllPanels();
-    } else {
-      this.showNotification('Insufficient funds!', 'error');
-    }
-  },
-  calibrateEquipment(eqId) {
-    const eq = this.equipment[eqId];
-    const cost = this.scenario.tuning.calibrateCost;
-    if (this.state.money >= cost) {
-      this.state.money -= cost;
-      eq.condition = Math.min(100, eq.condition + this.scenario.tuning.calibrateAmount);
-      const actionMessage = `${eq.name} calibrated for $${cost}.`;
-      this.showNotification(actionMessage, 'success');
-      this.logSandboxAction(actionMessage);
-      this.updateAllPanels();
-    } else {
-      this.showNotification('Insufficient funds!', 'error');
-    }
   },
   resetCamera() {
     // Previously duplicated the initial camera literals, so the two could
@@ -1040,22 +751,6 @@ const Lab = {
     } else {
       i.style.transform = 'rotate(0deg)';
     }
-  },
-  formatTime(totalSeconds, showSeconds = false) {
-    if (totalSeconds < 0) totalSeconds = 0;
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = Math.floor(totalSeconds % 60);
-    if (showSeconds) {
-      return `${m}m ${s.toString().padStart(2, '0')}s`;
-    }
-    if (h > 0) {
-      return `${h}h ${m}m`;
-    }
-    if (m > 0) {
-      return `${m}m ${s}s`;
-    }
-    return `${s}s`;
   },
   showNotification(message, type) {
     const n = document.createElement('div');
@@ -1075,54 +770,9 @@ const Lab = {
     listEl.innerHTML = this.equipmentCatalog
       .map(
         (item) =>
-          ` <div class="equipment-catalog-item"> <span style="font-size: 24px;">${item.icon}</span> <div class="info"> <strong>${item.name}</strong> <div style="font-size: 0.8rem; color: var(--text-light)">Requires Skill: ${item.skill}</div> </div> <div class="cost">$${item.cost}</div> <button class="btn btn-primary" onclick="Lab.buyEquipment('${item.id}')" ${this.state.money < item.cost ? 'disabled' : ''}>Buy</button> </div> `,
+          ` <div class="equipment-catalog-item"> <span style="font-size: 24px;">${item.icon}</span> <div class="info"> <strong>${item.name}</strong> <div style="font-size: 0.8rem; color: var(--text-light)">Requires Skill: ${item.skill}</div> </div> <div class="cost">$${item.cost}</div> <button class="btn btn-primary" onclick="Lab.buyEquipment('${item.id}')" ${this.world.money < item.cost ? 'disabled' : ''}>Buy</button> </div> `,
       )
       .join('');
-  },
-  buyEquipment(catalogId) {
-    const item = this.equipmentCatalog.find((i) => i.id === catalogId);
-    if (!item) return;
-    if (this.state.money < item.cost) {
-      this.showNotification('Not enough money to buy this equipment!', 'error');
-      return;
-    }
-    const f = this.labFloor;
-    let foundSpot = false;
-    let newX = 0,
-      newY = 0;
-    for (let y = f.y + 1; y < f.y + f.h - 1 && !foundSpot; y++) {
-      for (let x = f.x + 1; x < f.x + f.w - 1 && !foundSpot; x++) {
-        const isOccupied = this.equipment.some(
-          (eq) => Math.round(eq.x) === x && Math.round(eq.y) === y,
-        );
-        if (!isOccupied) {
-          newX = x;
-          newY = y;
-          foundSpot = true;
-        }
-      }
-    }
-    if (foundSpot) {
-      this.state.money -= item.cost;
-      const newEquipment = {
-        ...item,
-        id: this.equipment.length,
-        x: newX,
-        y: newY,
-        condition: 100,
-        inUse: false,
-        assignedTo: null,
-        totalWorkTime: 0,
-      };
-      this.equipment.push(newEquipment);
-      const actionMessage = `${item.name} purchased for $${item.cost} and placed in the lab.`;
-      this.showNotification(actionMessage, 'success');
-      this.logSandboxAction(actionMessage);
-      this.updateAllPanels();
-      this.closeAllModals();
-    } else {
-      this.showNotification('No available space in the lab to place new equipment!', 'error');
-    }
   },
 };
 
