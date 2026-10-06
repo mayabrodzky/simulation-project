@@ -9,24 +9,29 @@
  */
 import '../styles/base.css';
 import '../styles/lab.css';
+import { chemistryLab, scenarioFromBusinessProfile } from '../scenarios';
 
 const Lab = {
+  scenario: chemistryLab,
   canvas: null,
   ctx: null,
   width: 0,
   height: 0,
   timeOverlay: null,
-  camera: { x: 20, y: 100, zoom: 0.85 },
-  state: { money: 25000, materials: 200, samples: 120, time: 480, speed: 1 },
+  // Camera, starting economy and all geometry are filled from the scenario by
+  // applyScenarioSettings() during init. Declared here only so the shape of the
+  // object is still visible at a glance.
+  camera: { x: 0, y: 0, zoom: 1 },
+  state: { money: 0, materials: 0, samples: 0, time: 0, speed: 1 },
   isSandboxMode: false,
   liveStateBackup: null,
-  gridWidth: 24,
-  gridHeight: 18,
-  labFloor: { x: 3, y: 3, w: 14, h: 8 },
-  office1: { x: 17, y: 3, w: 5, h: 8 },
-  office2: { x: 3, y: 11, w: 14, h: 5 },
-  tileSize: 50,
-  tileHeight: 10,
+  gridWidth: 0,
+  gridHeight: 0,
+  labFloor: { x: 0, y: 0, w: 0, h: 0 },
+  office1: { x: 0, y: 0, w: 0, h: 0 },
+  office2: { x: 0, y: 0, w: 0, h: 0 },
+  tileSize: 0,
+  tileHeight: 0,
   staff: [],
   equipment: [],
   props: [],
@@ -45,6 +50,10 @@ const Lab = {
 
   init() {
     console.log('Initializing Upgraded Lab Simulation V14.8...');
+    this.scenario = this.businessProfile
+      ? scenarioFromBusinessProfile(this.businessProfile)
+      : chemistryLab;
+    this.applyScenarioSettings();
     const now = new Date();
     this.state.time = now.getHours() * 60 + now.getMinutes();
     this.canvas = document.getElementById('gameCanvas');
@@ -64,6 +73,26 @@ const Lab = {
     this.gameLoop();
     this.updateAllPanels();
     this.updateSessionHistoryPanel();
+  },
+  /**
+   * Copies the scenario's layout and starting values onto the fields the rest
+   * of this file already reads, so every existing `this.labFloor` reference
+   * keeps working while the literals themselves live in one place.
+   */
+  applyScenarioSettings() {
+    const { layout, tuning } = this.scenario;
+    this.gridWidth = layout.gridWidth;
+    this.gridHeight = layout.gridHeight;
+    this.tileSize = layout.tileSize;
+    this.tileHeight = layout.tileHeight;
+    this.labFloor = layout.labFloor;
+    this.office1 = layout.office1;
+    this.office2 = layout.office2;
+    this.camera = { ...layout.initialCamera };
+    this.state.money = tuning.startingMoney;
+    this.state.materials = tuning.startingMaterials;
+    this.state.samples = tuning.startingSamples;
+    this.state.time = tuning.startMinutes;
   },
   updateAllPanels() {
     this.updateStaffPanel();
@@ -160,45 +189,9 @@ const Lab = {
     this.updateStaffPanel();
   },
   createStaff() {
-    const staffData =
-      this.businessProfile && this.businessProfile.employees.length > 0
-        ? this.businessProfile.employees.map((e) => ({
-            name: e.name,
-            role: e.role,
-            skills: [e.role],
-          }))
-        : [
-            {
-              name: 'Dr. Amit Katz',
-              role: 'Senior Researcher',
-              skills: ['Microscopy', 'PCR Operation', 'Mass Spectrometry', 'Biosafety Protocols'],
-            },
-            {
-              name: 'Dr. Michal Levi',
-              role: 'Lab Director',
-              skills: ['Management', 'Spectrophotometry', 'Incubator Handling'],
-            },
-            { name: 'Dana Cohen', role: 'Research Assistant', skills: ['Centrifuge Usage'] },
-            {
-              name: 'Hadas Ben Hamo',
-              role: 'Lab Technician',
-              skills: ['Centrifuge Usage', 'Microscopy'],
-            },
-            {
-              name: 'Dr. Lihi Dayan',
-              role: 'Data Analyst',
-              skills: ['Mass Spectrometry', 'Spectrophotometry'],
-            },
-            { name: 'Amir Barzilay', role: 'Junior Researcher', skills: [] },
-            {
-              name: 'Nina Zur',
-              role: 'Quality Control',
-              skills: ['Biosafety Protocols', 'Microscopy'],
-            },
-            { name: 'Alex Tom', role: 'Lab Assistant', skills: [] },
-          ];
     const f = this.labFloor;
-    staffData.forEach((data, i) => {
+    const t = this.scenario.tuning;
+    this.scenario.staff.forEach((data, i) => {
       this.staff.push({
         id: i,
         ...data,
@@ -206,9 +199,9 @@ const Lab = {
         y: f.y + 2 + Math.floor(i / 4) * 2,
         targetX: null,
         targetY: null,
-        state: i < 6 ? 'idle' : 'off',
-        energy: 80 + Math.random() * 20,
-        speed: 0.02,
+        state: i < t.staffOnShiftCount ? 'idle' : 'off',
+        energy: t.initialEnergyMin + Math.random() * t.initialEnergyRange,
+        speed: t.staffWalkSpeed,
         color: `hsl(${i * 45}, 70%, 50%)`,
         activeTask: null,
         taskStep: 0,
@@ -217,50 +210,12 @@ const Lab = {
     });
   },
   createEquipment() {
-    const f = this.labFloor;
-    const equipmentData =
-      this.businessProfile && this.businessProfile.tasks.length > 0
-        ? this.businessProfile.tasks.map((t, i) => ({
-            name: 'Workstation',
-            icon: '💼',
-            x: f.x + 3 + (i % 5) * 2.5,
-            y: f.y + 2 + Math.floor(i / 5) * 4,
-            skill: null,
-          }))
-        : [
-            { name: 'Microscope A', icon: '🔬', x: f.x + 5, y: f.y + 2, skill: 'Microscopy' },
-            { name: 'Centrifuge', icon: '🌀', x: f.x + 7, y: f.y + 2, skill: 'Centrifuge Usage' },
-            { name: 'PCR Machine', icon: '🧬', x: f.x + 9, y: f.y + 2, skill: 'PCR Operation' },
-            { name: 'Incubator', icon: '🌡️', x: f.x + 11, y: f.y + 2, skill: 'Incubator Handling' },
-            {
-              name: 'Spectrophotometer',
-              icon: '📊',
-              x: f.x + 5,
-              y: f.y + 6,
-              skill: 'Spectrophotometry',
-            },
-            {
-              name: 'Mass Spectrometer',
-              icon: '⚗️',
-              x: f.x + 7,
-              y: f.y + 6,
-              skill: 'Mass Spectrometry',
-            },
-            { name: 'Flow Cytometer', icon: '💠', x: f.x + 9, y: f.y + 6, skill: 'Flow Cytometry' },
-            { name: 'Freezer -80°C', icon: '❄️', x: f.x + 1, y: f.y + 1.5, skill: 'Cryo Storage' },
-            {
-              name: 'Biosafety Cabinet',
-              icon: '🛡️',
-              x: f.x + 1,
-              y: f.y + 3.5,
-              skill: 'Biosafety Protocols',
-            },
-          ];
-    equipmentData.forEach((data, i) => {
+    const t = this.scenario.tuning;
+    this.scenario.equipment.forEach((data) => {
       this.equipment.push({
         id: this.equipment.length,
         ...data,
-        condition: 70 + Math.random() * 30,
+        condition: t.initialConditionMin + Math.random() * t.initialConditionRange,
         inUse: false,
         assignedTo: null,
         totalWorkTime: 0,
@@ -268,119 +223,26 @@ const Lab = {
     });
   },
   createProps() {
-    const f = this.labFloor;
-    const o1 = this.office1;
-    const o2 = this.office2;
-    this.props = [
-      { type: 'desk', x: f.x + 1.5, y: f.y + 6.5, w: 2, h: 1, icon: '💻' },
-      { type: 'shelf', x: f.x + 12.5, y: f.y + 1.5, w: 1, h: 2, icon: '🗄️' },
-      { type: 'plant', x: f.x + 0.5, y: f.y + 0.5, icon: '🌿' },
-      { type: 'coffee', x: f.x + 12.5, y: f.y + 6.5, w: 1, h: 1, icon: '☕' },
-      { type: 'desk', x: o1.x + 1, y: o1.y + 1.5, w: 1, h: 2, icon: '💻' },
-      { type: 'desk', x: o1.x + 3, y: o1.y + 1.5, w: 1, h: 2, icon: '💻' },
-      { type: 'desk', x: o1.x + 1, y: o1.y + 5.5, w: 1, h: 2, icon: '💻' },
-      { type: 'desk', x: o1.x + 3, y: o1.y + 5.5, w: 1, h: 2, icon: '💻' },
-      { type: 'plant', x: o1.x + 4.5, y: o1.y + 0.5, icon: '🌿' },
-      { type: 'desk', x: o2.x + 2, y: o2.y + 1, w: 2, h: 1, icon: '💻' },
-      { type: 'desk', x: o2.x + 6, y: o2.y + 1, w: 2, h: 1, icon: '💻' },
-      { type: 'desk', x: o2.x + 10, y: o2.y + 1, w: 2, h: 1, icon: '💻' },
-      { type: 'desk', x: o2.x + 4, y: o2.y + 3, w: 2, h: 1, icon: '💻' },
-      { type: 'desk', x: o2.x + 8, y: o2.y + 3, w: 2, h: 1, icon: '💻' },
-    ];
+    // Props and walls are scenario geometry; the door used to be appended here
+    // by createArchitecture and is now declared with the other props.
+    this.props = this.scenario.props.map((prop) => ({ ...prop }));
   },
   createBuildingOccupants() {
     this.staticPersonnel = [];
   },
   createArchitecture() {
-    const f = this.labFloor;
-    const o1 = this.office1;
-    const o2 = this.office2;
-    const h = 25;
-    this.walls = [
-      { x1: f.x, y1: f.y, x2: f.x + f.w / 2 - 1, y2: f.y, height: h },
-      { x1: f.x + f.w / 2 + 1, y1: f.y, x2: f.x + f.w, y2: f.y, height: h },
-      { x1: f.x, y1: f.y, x2: f.x, y2: f.y + f.h, height: h },
-      { x1: o1.x, y1: o1.y, x2: o1.x + o1.w, y2: o1.y, height: h },
-      { x1: o1.x + o1.w, y1: o1.y, x2: o1.x + o1.w, y2: o1.y + o1.h, height: h },
-      { x1: o2.x, y1: o2.y + o2.h, x2: o2.x + o2.w, y2: o2.y + o2.h, height: h },
-      { x1: o2.x + o2.w, y1: o1.y + o1.h, x2: o2.x + o2.w, y2: o2.y + o2.h, height: h },
-      { x1: o2.x, y1: f.y + f.h, x2: o2.x, y2: o2.y + o2.h, height: h },
-      { x1: f.x + f.w, y1: f.y, x2: f.x + f.w, y2: f.y + f.h / 2 - 1, height: h },
-      { x1: f.x + f.w, y1: f.y + f.h / 2 + 1, x2: f.x + f.w, y2: o1.y + o1.h, height: h },
-      { x1: f.x, y1: f.y + f.h, x2: f.x + f.w / 2 - 2, y2: f.y + f.h, height: h },
-      { x1: f.x + f.w / 2, y1: f.y + f.h, x2: o2.x + o2.w, y2: o2.y, height: h },
-    ];
-    this.props.push({ type: 'door', x: f.x + f.w / 2, y: f.y - 0.5, w: 2, h: 1, icon: '🚪' });
+    this.walls = this.scenario.walls.map((wall) => ({ ...wall }));
   },
   defineTasks() {
-    if (this.businessProfile && this.businessProfile.tasks.length > 0) {
-      this.businessProfile.tasks.forEach((t, i) => {
-        this.tasks.push({
-          id: 'TSK' + String(i + 1).padStart(3, '0'),
-          name: t.name,
-          reward: t.reward || 500,
-          timeLimit: (t.duration || 30) * 12,
-          penalty: Math.round((t.reward || 500) * 0.3),
-          equipmentSequence: [
-            { name: 'Workstation', duration: t.duration || 30, skillRequired: null },
-          ],
-        });
-      });
-    } else {
+    this.scenario.tasks.forEach((task) => {
       this.tasks.push({
-        id: 'TSK001',
-        name: 'Blood Sample Analysis',
-        reward: 500,
-        timeLimit: 300,
-        penalty: 250,
-        equipmentSequence: [
-          { name: 'Centrifuge', duration: 20, skillRequired: 'Centrifuge Usage' },
-          { name: 'Microscope A', duration: 40, skillRequired: 'Microscopy' },
-        ],
+        ...task,
+        equipmentSequence: task.equipmentSequence.map((step) => ({ ...step })),
       });
-      this.tasks.push({
-        id: 'TSK002',
-        name: 'DNA Sequencing',
-        reward: 1200,
-        timeLimit: 600,
-        penalty: 500,
-        equipmentSequence: [
-          { name: 'PCR Machine', duration: 60, skillRequired: 'PCR Operation' },
-          { name: 'Spectrophotometer', duration: 30, skillRequired: 'Spectrophotometry' },
-        ],
-      });
-      this.tasks.push({
-        id: 'TSK003',
-        name: 'Cell Culture Test',
-        reward: 850,
-        timeLimit: 480,
-        penalty: 400,
-        equipmentSequence: [
-          { name: 'Incubator', duration: 15, skillRequired: 'Incubator Handling' },
-          { name: 'Biosafety Cabinet', duration: 45, skillRequired: 'Biosafety Protocols' },
-          { name: 'Microscope A', duration: 30, skillRequired: 'Microscopy' },
-        ],
-      });
-    }
+    });
   },
   createEquipmentCatalog() {
-    this.equipmentCatalog = this.businessProfile
-      ? [
-          { id: 'cat001', name: 'Workstation', icon: '💼', cost: 1000, skill: null },
-          { id: 'cat002', name: 'Meeting Room', icon: '🪑', cost: 2000, skill: null },
-          { id: 'cat003', name: 'Storage Unit', icon: '🗄️', cost: 500, skill: null },
-        ]
-      : [
-          { id: 'cat001', name: 'Microscope B', icon: '🔬', cost: 1500, skill: 'Microscopy' },
-          { id: 'cat002', name: 'PCR Machine II', icon: '🧬', cost: 3000, skill: 'PCR Operation' },
-          {
-            id: 'cat003',
-            name: 'Auto-Sampler',
-            icon: '🤖',
-            cost: 5000,
-            skill: 'Spectrophotometry',
-          },
-        ];
+    this.equipmentCatalog = this.scenario.catalog.map((item) => ({ ...item }));
   },
 
   enterSandboxMode() {
@@ -565,10 +427,10 @@ const Lab = {
     const gameDt = dt * this.state.speed;
 
     if (!this.isSandboxMode) {
-      this.state.time += gameDt * 0.5;
+      this.state.time += gameDt * this.scenario.tuning.minutesPerSecond;
       if (this.state.time >= 1440) this.state.time -= 1440;
 
-      if (Math.random() < 0.0005 * this.state.speed) {
+      if (Math.random() < this.scenario.tuning.emergencyChancePerFrame * this.state.speed) {
         if (this.emergencyQueue.filter((t) => t.status === 'pending').length === 0) {
           this.triggerEmergency();
         }
@@ -580,10 +442,13 @@ const Lab = {
 
     this.staff.forEach((person) => {
       if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
-      if (person.state === 'working') person.energy -= gameDt * 0.2;
-      if (person.state === 'break') person.energy += gameDt * 1;
-      if (person.energy < 20 && person.state !== 'break') person.state = 'break';
-      if (person.energy > 95 && person.state === 'break') person.state = 'idle';
+      const tune = this.scenario.tuning;
+      if (person.state === 'working') person.energy -= gameDt * tune.energyDrainPerSecond;
+      if (person.state === 'break') person.energy += gameDt * tune.energyRecoverPerSecond;
+      if (person.energy < tune.energyBreakThreshold && person.state !== 'break')
+        person.state = 'break';
+      if (person.energy > tune.energyRecoveredThreshold && person.state === 'break')
+        person.state = 'idle';
 
       if (person.activeTask) {
         const task = person.activeTask;
@@ -706,7 +571,11 @@ const Lab = {
           person.x = person.targetX;
           person.y = person.targetY;
         }
-      } else if (person.state === 'idle' && !person.activeTask && Math.random() < 0.005) {
+      } else if (
+        person.state === 'idle' &&
+        !person.activeTask &&
+        Math.random() < this.scenario.tuning.wanderChancePerFrame
+      ) {
         const f = this.labFloor;
         person.targetX = f.x + 1 + Math.random() * (f.w - 2);
         person.targetY = f.y + 1 + Math.random() * (f.h - 2);
@@ -717,7 +586,7 @@ const Lab = {
     });
     this.equipment.forEach((eq) => {
       if (eq.inUse) {
-        eq.condition -= gameDt * 0.05;
+        eq.condition -= gameDt * this.scenario.tuning.conditionWearPerSecond;
         eq.totalWorkTime += gameDt;
       }
     });
@@ -1325,8 +1194,8 @@ const Lab = {
   },
   assignTraining(skillToLearn, equipmentId) {
     if (!this.selectedStaff) return;
-    const cost = 300;
-    const trainingDuration = 60;
+    const cost = this.scenario.tuning.trainingCost;
+    const trainingDuration = this.scenario.tuning.trainingDuration;
     const equipment = this.equipment.find((eq) => eq.id === equipmentId);
     if (this.state.money < cost) {
       this.showNotification(
@@ -1399,16 +1268,12 @@ const Lab = {
     this.assignNewTask(null, true, this.activeEmergencyTask.id);
   },
   triggerEmergency() {
+    const template = this.scenario.emergencies[0];
+    if (!template) return;
     const t = {
       id: 'EMG' + Date.now(),
-      name: 'Critical Sample Analysis',
-      reward: 2500,
-      penalty: 4000,
-      timeLimit: 120,
-      equipmentSequence: [
-        { name: 'Mass Spectrometer', duration: 30, skillRequired: 'Mass Spectrometry' },
-        { name: 'Biosafety Cabinet', duration: 30, skillRequired: 'Biosafety Protocols' },
-      ],
+      ...template,
+      equipmentSequence: template.equipmentSequence.map((step) => ({ ...step })),
       status: 'pending',
     };
     this.emergencyQueue.push(t);
@@ -1496,10 +1361,10 @@ const Lab = {
   },
   repairEquipment(eqId) {
     const eq = this.equipment[eqId];
-    const cost = 200;
+    const cost = this.scenario.tuning.repairCost;
     if (this.state.money >= cost) {
       this.state.money -= cost;
-      eq.condition = Math.min(100, eq.condition + 50);
+      eq.condition = Math.min(100, eq.condition + this.scenario.tuning.repairAmount);
       const actionMessage = `${eq.name} repaired for $${cost}.`;
       this.showNotification(actionMessage, 'success');
       this.logSandboxAction(actionMessage);
@@ -1510,10 +1375,10 @@ const Lab = {
   },
   calibrateEquipment(eqId) {
     const eq = this.equipment[eqId];
-    const cost = 100;
+    const cost = this.scenario.tuning.calibrateCost;
     if (this.state.money >= cost) {
       this.state.money -= cost;
-      eq.condition = Math.min(100, eq.condition + 25);
+      eq.condition = Math.min(100, eq.condition + this.scenario.tuning.calibrateAmount);
       const actionMessage = `${eq.name} calibrated for $${cost}.`;
       this.showNotification(actionMessage, 'success');
       this.logSandboxAction(actionMessage);
@@ -1523,9 +1388,9 @@ const Lab = {
     }
   },
   resetCamera() {
-    this.camera.x = 20;
-    this.camera.y = 100;
-    this.camera.zoom = 0.85;
+    // Previously duplicated the initial camera literals, so the two could
+    // drift apart. Both now come from the scenario layout.
+    Object.assign(this.camera, this.scenario.layout.initialCamera);
     this.showNotification('View reset', 'info');
   },
   togglePanel(headerEl) {
