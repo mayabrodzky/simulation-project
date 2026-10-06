@@ -1412,7 +1412,21 @@ const Lab = {
       status: 'pending',
     };
     this.emergencyQueue.push(t);
+    this.flashEmergencyPanel();
     this.openEmergencyModal(t);
+  },
+  flashEmergencyPanel() {
+    const header = document.getElementById('emergencyPanelHeader');
+    if (!header) return;
+    // Removing the class and reading offsetWidth forces a reflow, so the
+    // animation restarts if a second emergency arrives while the first flash
+    // is still playing. Without it the browser sees no change and does nothing.
+    header.classList.remove('emergency-alert');
+    void header.offsetWidth;
+    header.classList.add('emergency-alert');
+    header.addEventListener('animationend', () => header.classList.remove('emergency-alert'), {
+      once: true,
+    });
   },
   updateEmergencies(gameDt) {
     this.emergencyQueue.forEach((t) => {
