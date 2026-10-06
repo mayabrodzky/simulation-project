@@ -7,3 +7,6 @@ data/
 dist/
 .vite/
 .vercel/
+
+# Local editor/agent tooling state, not project configuration
+.claude/
