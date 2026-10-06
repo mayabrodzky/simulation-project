@@ -316,14 +316,16 @@ body.sandbox-mode {
   justify-content: space-between;
 }
 .energy-bar,
-.progress-bar {
+.progress-bar,
+.condition-bar {
   height: 6px;
   background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
 }
 .energy-fill,
-.progress-fill {
+.progress-fill,
+.condition-fill {
   height: 100%;
   transition: width 0.3s;
 }
@@ -613,4 +615,39 @@ body.sandbox-mode {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Classes the JavaScript has always generated but which were never defined.
+   Unknown classes are silently ignored by the browser, so equipment cards
+   rendered unstyled and the condition bar had no height, making its coloured
+   fill invisible. Each is matched to the existing equivalent rather than
+   given a new look: .equipment-grid mirrors .staff-list, .equipment-card
+   mirrors .staff-card, and .condition-bar / .condition-fill join the
+   .energy-bar / .progress-bar rules above.
+   --------------------------------------------------------------------------- */
+
+.equipment-grid,
+.task-definition-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.equipment-card {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.equipment-info {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin-top: 0.15rem;
+}
+
+.btn-small {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
 }
