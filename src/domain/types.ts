@@ -156,6 +156,20 @@ export interface Tuning {
   staffOnShiftCount: number;
 }
 
+/**
+ * Running totals the engine keeps as it ticks. Deliberately small for now:
+ * Phase 2 replaces the invented energy percentage with real measures — hours
+ * worked, overtime, backlog, delays — and this is where they attach.
+ */
+export interface Metrics {
+  tasksCompleted: number;
+  tasksFailed: number;
+  revenue: number;
+  penalties: number;
+  trainingSpend: number;
+  equipmentSpend: number;
+}
+
 export interface Scenario {
   id: string;
   name: string;
@@ -231,4 +245,6 @@ export interface Equipment extends EquipmentTemplate {
 export interface Emergency extends EmergencyTemplate {
   id: string;
   status: EmergencyStatus;
+  /** Set when someone takes it on, so an expiry can fail their task. */
+  assignedTo?: StaffId | null;
 }
