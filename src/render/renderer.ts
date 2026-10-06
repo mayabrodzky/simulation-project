@@ -1,22 +1,17 @@
-// @ts-nocheck
 /**
  * Canvas renderer for the isometric lab.
- *
- * The drawing code is moved here byte for byte from the simulation object; not
- * one colour or coordinate is changed in this commit, because this is the
- * highest visual-risk step of the refactor and a verbatim move is the only
- * version that can be checked by comparing screenshots. The colours are pulled
- * out into a palette in the commit that follows this one.
  *
  * The renderer is a pure consumer of state. It reads a RenderView and draws it;
  * it never changes the world, never decides anything, and never touches a
  * panel. That is what makes Phase 4's two-labs-side-by-side cheap — two views,
  * one draw function, called twice.
  *
- * It carries @ts-nocheck for the same reason the legacy file does: typing 350
- * lines of untouched drawing code in the same commit that moves it would make
- * the move impossible to review. It is typed when it is split up and the
- * entity types are settled.
+ * The drawing code was moved here verbatim and left untyped for two commits, so
+ * that the move and the palette extraction could each be checked by comparing
+ * screenshots. Both of the bugs that cost time during those commits — a missing
+ * lastTime that produced NaN coordinates, and a local palette array shadowed by
+ * the imported one — are compile errors now rather than things that silently
+ * draw nothing.
  */
 import type { Camera, Equipment, Layout, Prop, Staff, StaffId, Wall } from '../domain/types';
 import { palette } from './palette';
@@ -29,7 +24,8 @@ export interface RenderView {
   equipment: Equipment[];
   props: Prop[];
   walls: Wall[];
-  staticPersonnel: unknown[];
+  /** Always empty today: a stub for building occupants that was never built. */
+  staticPersonnel: { x: number; y: number }[];
   /** Simulation clock, minutes past midnight. Read by the HUD. */
   state: { time: number };
   /**
@@ -53,82 +49,117 @@ export interface Renderer {
   readonly height: number;
 }
 
+/**
+ * One drawable thing, tagged so the scene can dispatch on it after z-sorting.
+ *
+ * Note the prop case. The scene builds its list with `{ ...prop, type: 'prop' }`,
+ * which overwrites the prop's own kind — a Prop is already tagged 'desk',
+ * 'shelf', 'plant', 'coffee' or 'door'. So by the time drawProp sees it, that
+ * information is gone, and its shelf and icon-only branches are unreachable:
+ * every prop is drawn as a desk with its icon on top. Typing this is what
+ * surfaced it; `Prop & { type: 'prop' }` collapses to never.
+ *
+ * Preserved deliberately, because Phase 1 changes no behaviour. Fixing it is a
+ * one-line change that alters what is on screen, so it belongs with the visual
+ * work in Phase 2.5.
+ */
+type SceneEntity =
+  | (Equipment & { type: 'equipment'; zIndex: number })
+  | (Staff & { type: 'staff'; zIndex: number })
+  | (Omit<Prop, 'type'> & { type: 'prop'; zIndex: number })
+  | (Wall & { type: 'wall'; zIndex: number })
+  | { type: 'static_person'; zIndex: number; x: number; y: number };
+
+/** What drawProp actually receives: a prop whose own kind has been overwritten. */
+type DrawableProp = Omit<Prop, 'type'> & { type: string };
+
 export function createRenderer(canvas: HTMLCanvasElement): Renderer {
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('renderer: 2d canvas context is unavailable');
+
+  let current: RenderView | null = null;
+
   /**
-   * The moved methods still read this.ctx, this.camera, this.labFloor and so
-   * on. Rather than edit 350 lines of drawing code — which would have made a
-   * verbatim move unverifiable — those names are kept as getters that read
-   * through to the current view. The view holds live references, so there is
-   * no per-frame copying and no chance of the renderer drawing stale state.
+   * Fails loudly rather than reading undefined off a missing view.
+   *
+   * The moved drawing code still refers to this.camera, this.labFloor and so
+   * on. Keeping those as getters is what let 350 lines move without being
+   * edited, and the view holds live references rather than copies, so the hover
+   * hit-test still sees the camera as it is now rather than as it was last
+   * frame.
    */
+  const v = (): RenderView => {
+    if (!current) throw new Error('renderer: render(view) must be called before drawing');
+    return current;
+  };
+
   const R = {
     canvas,
-    ctx: canvas.getContext('2d'),
+    ctx: context,
     width: 0,
     height: 0,
-    view: null,
 
     get camera() {
-      return this.view.camera;
+      return v().camera;
     },
     get state() {
-      return this.view.state;
+      return v().state;
     },
     /** drawStaff's idle bob reads this; it used to live on the Lab object. */
     get lastTime() {
-      return this.view.nowMs;
+      return v().nowMs;
     },
     get staff() {
-      return this.view.staff;
+      return v().staff;
     },
     get equipment() {
-      return this.view.equipment;
+      return v().equipment;
     },
     get props() {
-      return this.view.props;
+      return v().props;
     },
     get walls() {
-      return this.view.walls;
+      return v().walls;
     },
     get staticPersonnel() {
-      return this.view.staticPersonnel;
+      return v().staticPersonnel;
     },
     get hoveredEntity() {
-      return this.view.hoveredEntity;
+      return v().hoveredEntity;
     },
     get highlightedStaffIds() {
-      return this.view.highlightedStaffIds;
+      return v().highlightedStaffIds;
     },
     get gridWidth() {
-      return this.view.layout.gridWidth;
+      return v().layout.gridWidth;
     },
     get gridHeight() {
-      return this.view.layout.gridHeight;
+      return v().layout.gridHeight;
     },
     get tileSize() {
-      return this.view.layout.tileSize;
+      return v().layout.tileSize;
     },
     get tileHeight() {
-      return this.view.layout.tileHeight;
+      return v().layout.tileHeight;
     },
     get labFloor() {
-      return this.view.layout.labFloor;
+      return v().layout.labFloor;
     },
     get office1() {
-      return this.view.layout.office1;
+      return v().layout.office1;
     },
     get office2() {
-      return this.view.layout.office2;
+      return v().layout.office2;
     },
 
-    toIso(x, y) {
+    toIso(x: number, y: number) {
       const isoX = ((x - y) * this.tileSize) / 2;
       const isoY = ((x + y) * this.tileSize) / 4;
       return { x: isoX, y: isoY };
     },
 
-    getScreenCoords(gridX, gridY) {
-      let iso = this.toIso(gridX, gridY);
+    getScreenCoords(gridX: number, gridY: number) {
+      const iso = this.toIso(gridX, gridY);
       const screenX =
         iso.x * this.camera.zoom +
         this.width / 2 +
@@ -144,14 +175,14 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     },
 
     drawIsoBox(
-      x,
-      y,
-      w,
-      h,
-      z,
-      topColor,
-      sideColor1 = palette.isoBoxDefault.side1,
-      sideColor2 = palette.isoBoxDefault.side2,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      z: number,
+      topColor: string,
+      sideColor1: string = palette.isoBoxDefault.side1,
+      sideColor2: string = palette.isoBoxDefault.side2,
     ) {
       const zc = z;
       const p1 = this.toIso(x, y);
@@ -184,7 +215,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       this.ctx.fill();
     },
 
-    drawIsoWall(x1, y1, x2, y2, z, color) {
+    drawIsoWall(x1: number, y1: number, x2: number, y2: number, z: number, color: string) {
       const zc = z;
       const p1 = this.toIso(x1, y1);
       const p2 = this.toIso(x2, y2);
@@ -296,7 +327,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
           zIndex: Math.min(w.x1 + w.y1, w.x2 + w.y2) - 0.1,
         })),
         ...this.staticPersonnel.map((p) => ({ ...p, type: 'static_person', zIndex: p.x + p.y })),
-      ].sort((a, b) => a.zIndex - b.zIndex);
+      ].sort((a, b) => a.zIndex - b.zIndex) as SceneEntity[];
       entities.forEach((entity) => {
         if (entity.type === 'equipment') this.drawEquipment(entity);
         else if (
@@ -320,7 +351,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
     drawExterior() {},
 
-    drawEquipment(eq) {
+    drawEquipment(eq: Equipment) {
       const eqHeight = 16;
       const bodies = palette.equipment.bodies;
       const colors = eq.inUse
@@ -366,11 +397,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       }
     },
 
-    drawProp(prop) {
-      let propHeight = 12,
-        topColor = palette.prop.desk.top,
-        side1 = palette.prop.desk.side1,
-        side2 = palette.prop.desk.side2;
+    drawProp(prop: DrawableProp) {
+      let propHeight = 12;
+      let topColor: string = palette.prop.desk.top;
+      let side1: string = palette.prop.desk.side1;
+      let side2: string = palette.prop.desk.side2;
       if (prop.type === 'shelf') {
         propHeight = 25;
         topColor = palette.prop.shelf.top;
@@ -384,10 +415,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         return;
       }
       this.drawIsoBox(
-        prop.x - prop.w / 2 + 0.5,
-        prop.y - prop.h / 2 + 0.5,
-        prop.w,
-        prop.h,
+        prop.x - (prop.w ?? 1) / 2 + 0.5,
+        prop.y - (prop.h ?? 1) / 2 + 0.5,
+        prop.w ?? 1,
+        prop.h ?? 1,
         propHeight,
         topColor,
         side1,
@@ -401,7 +432,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       }
     },
 
-    drawStaff(person) {
+    drawStaff(person: Staff) {
       const iso = this.toIso(person.x, person.y);
       const size = 14;
       const bob =
@@ -409,7 +440,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
           ? Math.sin(this.lastTime / 200 + person.id) * 2
           : 0;
       const y = iso.y - bob;
-      const stateColor = { ...palette.staff.state, idle: person.color };
+      const stateColor: Record<string, string> = {
+        ...palette.staff.state,
+        idle: person.color,
+      };
       const hairColors = palette.staff.hair;
       this.ctx.fillStyle = palette.staff.groundShadow;
       this.ctx.beginPath();
@@ -431,7 +465,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       this.ctx.beginPath();
       this.ctx.arc(iso.x, y - size * 1.58, size * 0.52, 0, Math.PI * 2);
       this.ctx.fill();
-      this.ctx.fillStyle = hairColors[person.id % hairColors.length];
+      this.ctx.fillStyle = hairColors[person.id % hairColors.length] ?? palette.staff.outline;
       this.ctx.beginPath();
       this.ctx.arc(iso.x, y - size * 1.78, size * 0.42, Math.PI, 0);
       this.ctx.fill();
@@ -441,13 +475,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       this.ctx.arc(iso.x + size * 0.18, y - size * 1.58, size * 0.09, 0, Math.PI * 2);
       this.ctx.fill();
       if (person.activeTask && person.state === 'working') {
-        const isT = person.activeTask.type === 'training';
-        const dur = isT
-          ? person.activeTask.duration
-          : person.activeTask.equipmentSequence &&
-              person.activeTask.equipmentSequence[person.taskStep]
-            ? person.activeTask.equipmentSequence[person.taskStep].duration
-            : 0;
+        const task = person.activeTask;
+        const dur =
+          task.type === 'training'
+            ? task.duration
+            : (task.equipmentSequence[person.taskStep]?.duration ?? 0);
         const progress = dur > 0 ? Math.max(0, Math.min(1, 1 - person.taskTimer / dur)) : 0;
         this.ctx.fillStyle = palette.staff.progress.track;
         this.ctx.fillRect(iso.x - size, y - size * 2.5, size * 2, 4);
@@ -462,7 +494,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         this.ctx.stroke();
       }
       if (this.camera.zoom > 0.8) {
-        const firstName = person.name.split(' ')[0];
+        const firstName = person.name.split(' ')[0] ?? person.name;
         this.ctx.font = 'bold 9px Inter';
         const nameW = this.ctx.measureText(firstName).width + 10;
         this.ctx.fillStyle = palette.staff.namePlate;
@@ -479,9 +511,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       }
     },
 
-    drawStaticPerson(person) {},
+    drawStaticPerson(_person: { x: number; y: number }) {},
 
-    drawHoverLabel(entity) {
+    drawHoverLabel(entity: Staff | Equipment) {
       const iso = this.toIso(entity.x, entity.y);
       const text = entity.name;
       this.ctx.font = `bold 12px Inter`;
@@ -530,12 +562,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       R.width = rect.width;
       R.height = rect.height;
     },
-    render(view) {
-      R.view = view;
+    render(view: RenderView) {
+      current = view;
       R.render();
     },
-    getScreenCoords(gridX, gridY) {
-      if (!R.view) return { x: 0, y: 0 };
+    getScreenCoords(gridX: number, gridY: number) {
+      if (!current) return { x: 0, y: 0 };
       return R.getScreenCoords(gridX, gridY);
     },
     get width() {

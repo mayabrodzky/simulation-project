@@ -172,16 +172,36 @@ export interface Scenario {
 
 /* --- Runtime entities ----------------------------------------------------- */
 
-export interface ActiveTask {
-  id?: TaskId;
+/**
+ * What a person is currently doing. A discriminated union, because the two
+ * cases genuinely have different shapes: a job carries a sequence of equipment
+ * steps and a deadline, while a training has a single duration and no steps.
+ * Treating them as one loose shape is what lets failTask reach for
+ * `task.equipmentSequence[...]` on a training and crash.
+ */
+export type ActiveTask = ActiveJob | ActiveTraining;
+
+/** A copy of a task definition or an emergency, taken when it was assigned. */
+export interface ActiveJob {
+  type?: undefined;
+  id: TaskId;
   name: string;
-  reward?: number;
-  penalty?: number;
+  reward: number;
+  penalty: number;
+  /** Counts down; absent on tasks with no deadline. */
   timeLimit?: number;
-  equipmentSequence?: TaskStep[];
+  equipmentSequence: TaskStep[];
   isEmergency?: boolean;
-  isTraining?: boolean;
-  skillToLearn?: Skill;
+  status?: EmergencyStatus;
+  assignedTo?: StaffId | null;
+}
+
+export interface ActiveTraining {
+  type: 'training';
+  name: string;
+  skillToLearn: Skill;
+  equipmentId: EquipmentId;
+  duration: number;
 }
 
 export interface Staff extends StaffTemplate {
