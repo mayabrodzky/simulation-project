@@ -127,6 +127,7 @@ const Lab = {
       walls: this.walls,
       staticPersonnel: this.staticPersonnel,
       state: this.state,
+      nowMs: this.lastTime,
       hoveredEntity: this.hoveredEntity,
       highlightedStaffIds: this.highlightedStaffIds,
     };

@@ -31,6 +31,13 @@ export interface RenderView {
   staticPersonnel: unknown[];
   /** Simulation clock, minutes past midnight. Read by the HUD. */
   state: { time: number };
+  /**
+   * Animation clock in milliseconds, used only for cosmetic motion such as the
+   * idle bob. Passed in rather than read from performance.now() so that drawing
+   * stays a pure function of the view — which is what lets Phase 4 render a
+   * paused or replayed world without it animating on its own.
+   */
+  nowMs: number;
   hoveredEntity: Staff | Equipment | null;
   highlightedStaffIds: StaffId[];
 }
@@ -65,6 +72,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     },
     get state() {
       return this.view.state;
+    },
+    /** drawStaff's idle bob reads this; it used to live on the Lab object. */
+    get lastTime() {
+      return this.view.nowMs;
     },
     get staff() {
       return this.view.staff;
