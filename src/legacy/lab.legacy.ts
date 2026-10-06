@@ -436,7 +436,9 @@ const Lab = {
       this.state.time += gameDt * this.scenario.tuning.minutesPerSecond;
       if (this.state.time >= 1440) this.state.time -= 1440;
 
-      if (this.rng.next() < this.scenario.tuning.emergencyChancePerFrame * this.state.speed) {
+      // A rate per simulated second, not a probability per frame. gameDt
+      // already carries the speed multiplier.
+      if (this.rng.chance(this.scenario.tuning.emergencyRatePerSecond, gameDt)) {
         if (this.emergencyQueue.filter((t) => t.status === 'pending').length === 0) {
           this.triggerEmergency();
         }
@@ -580,7 +582,7 @@ const Lab = {
       } else if (
         person.state === 'idle' &&
         !person.activeTask &&
-        this.rng.next() < this.scenario.tuning.wanderChancePerFrame
+        this.rng.chance(this.scenario.tuning.wanderRatePerSecond, gameDt)
       ) {
         const f = this.labFloor;
         person.targetX = f.x + 1 + this.rng.next() * (f.w - 2);

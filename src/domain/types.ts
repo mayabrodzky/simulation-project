@@ -140,13 +140,12 @@ export interface Tuning {
   conditionWearPerSecond: number;
 
   /**
-   * Both of these are currently rolled once per animation frame rather than per
-   * unit of time, which makes the simulation run faster on a high-refresh
-   * monitor. Step 5 converts them to per-second rates; the values are kept
-   * as-is here so this step changes nothing.
+   * Average occurrences per simulated second. Previously these were
+   * probabilities rolled once per animation frame, which made the whole
+   * simulation run faster on a high-refresh-rate monitor.
    */
-  emergencyChancePerFrame: number;
-  wanderChancePerFrame: number;
+  emergencyRatePerSecond: number;
+  wanderRatePerSecond: number;
 
   staffWalkSpeed: number;
   initialEnergyMin: number;

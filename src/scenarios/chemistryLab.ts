@@ -48,8 +48,11 @@ const tuning: Tuning = {
   energyRecoveredThreshold: 95,
   conditionWearPerSecond: 0.05,
 
-  emergencyChancePerFrame: 0.0005,
-  wanderChancePerFrame: 0.005,
+  // Calibrated to match the old per-frame probabilities at 60fps, which is
+  // what these were implicitly tuned against: 0.0005 and 0.005 per frame,
+  // times 60 frames per second.
+  emergencyRatePerSecond: 0.03,
+  wanderRatePerSecond: 0.3,
 
   staffWalkSpeed: 0.02,
   initialEnergyMin: 80,
