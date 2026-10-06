@@ -10,9 +10,13 @@
 import '../styles/base.css';
 import '../styles/lab.css';
 import { chemistryLab, scenarioFromBusinessProfile } from '../scenarios';
+import { createRng } from '../engine/rng';
+import { isQualified } from '../engine/rules';
 
 const Lab = {
   scenario: chemistryLab,
+  rng: createRng(1),
+  seed: 1,
   canvas: null,
   ctx: null,
   width: 0,
@@ -50,6 +54,14 @@ const Lab = {
 
   init() {
     console.log('Initializing Upgraded Lab Simulation V14.8...');
+    // Seeded so a run can be reproduced: ?seed=123 replays it exactly.
+    // Without the parameter the seed is taken from the clock, which keeps
+    // today's behaviour of a different lab on every load.
+    const seedParam = new URLSearchParams(window.location.search).get('seed');
+    this.seed = seedParam !== null && seedParam !== '' ? Number(seedParam) : Date.now();
+    if (!Number.isFinite(this.seed)) this.seed = Date.now();
+    this.rng = createRng(this.seed);
+    console.log('Simulation seed:', this.seed);
     this.scenario = this.businessProfile
       ? scenarioFromBusinessProfile(this.businessProfile)
       : chemistryLab;
@@ -175,13 +187,7 @@ const Lab = {
   highlightQualifiedStaff(taskId) {
     const task = this.tasks.find((t) => t.id === taskId);
     if (!task) return;
-    this.highlightedStaffIds = this.staff
-      .filter((p) =>
-        task.equipmentSequence.every(
-          (step) => !step.skillRequired || p.skills.includes(step.skillRequired),
-        ),
-      )
-      .map((p) => p.id);
+    this.highlightedStaffIds = this.staff.filter((p) => isQualified(p, task)).map((p) => p.id);
     this.updateStaffPanel();
   },
   clearStaffHighlights() {
@@ -200,7 +206,7 @@ const Lab = {
         targetX: null,
         targetY: null,
         state: i < t.staffOnShiftCount ? 'idle' : 'off',
-        energy: t.initialEnergyMin + Math.random() * t.initialEnergyRange,
+        energy: t.initialEnergyMin + this.rng.next() * t.initialEnergyRange,
         speed: t.staffWalkSpeed,
         color: `hsl(${i * 45}, 70%, 50%)`,
         activeTask: null,
@@ -215,7 +221,7 @@ const Lab = {
       this.equipment.push({
         id: this.equipment.length,
         ...data,
-        condition: t.initialConditionMin + Math.random() * t.initialConditionRange,
+        condition: t.initialConditionMin + this.rng.next() * t.initialConditionRange,
         inUse: false,
         assignedTo: null,
         totalWorkTime: 0,
@@ -430,7 +436,7 @@ const Lab = {
       this.state.time += gameDt * this.scenario.tuning.minutesPerSecond;
       if (this.state.time >= 1440) this.state.time -= 1440;
 
-      if (Math.random() < this.scenario.tuning.emergencyChancePerFrame * this.state.speed) {
+      if (this.rng.next() < this.scenario.tuning.emergencyChancePerFrame * this.state.speed) {
         if (this.emergencyQueue.filter((t) => t.status === 'pending').length === 0) {
           this.triggerEmergency();
         }
@@ -574,11 +580,11 @@ const Lab = {
       } else if (
         person.state === 'idle' &&
         !person.activeTask &&
-        Math.random() < this.scenario.tuning.wanderChancePerFrame
+        this.rng.next() < this.scenario.tuning.wanderChancePerFrame
       ) {
         const f = this.labFloor;
-        person.targetX = f.x + 1 + Math.random() * (f.w - 2);
-        person.targetY = f.y + 1 + Math.random() * (f.h - 2);
+        person.targetX = f.x + 1 + this.rng.next() * (f.w - 2);
+        person.targetY = f.y + 1 + this.rng.next() * (f.h - 2);
       }
       const f = this.labFloor;
       person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));
@@ -1061,13 +1067,7 @@ const Lab = {
         const skills = task.equipmentSequence.map((s) => s.skillRequired).join(', ');
         const qualifiedStaff =
           this.staff
-            .filter(
-              (p) =>
-                p.state === 'idle' &&
-                task.equipmentSequence.every(
-                  (step) => !step.skillRequired || p.skills.includes(step.skillRequired),
-                ),
-            )
+            .filter((p) => p.state === 'idle' && isQualified(p, task))
             .map((p) => p.name)
             .join(', ') || 'None available';
         return ` <div class="task-def-card" onmouseenter="Lab.highlightQualifiedStaff('${task.id}')" onmouseleave="Lab.clearStaffHighlights()"> <strong>${task.name}</strong> <div class="details"> <span>Time: ${this.formatTime(totalTime)} | Reward: $${task.reward}</span><br> <strong>Required Skills:</strong> ${skills}<br><strong>Qualified Staff:</strong> ${qualifiedStaff}</div> </div>`;
@@ -1118,14 +1118,12 @@ const Lab = {
     const o = document.getElementById('taskOptions');
     let h = '';
     this.tasks.forEach((t, i) => {
-      const q = t.equipmentSequence.every(
-        (s) => !s.skillRequired || this.selectedStaff.skills.includes(s.skillRequired),
-      );
+      const q = isQualified(this.selectedStaff, t);
       h += `<div class="task-option" ${!q ? 'disabled' : ''} onclick="${q ? `Lab.assignNewTask(${i})` : ''}"><strong>${t.name}</strong><div style="font-size:0.875rem;color:#64748b;">Reward: $${t.reward} | Time: ${this.formatTime(t.timeLimit, true)} | ${q ? '✅ Qualified' : '❌ Not Qualified'}</div></div>`;
     });
     this.equipment.forEach((eq) => {
       if (!this.selectedStaff.skills.includes(eq.skill)) {
-        h += `<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})"><strong>🎓 Train: ${eq.name}</strong><div style="font-size:0.875rem;color:#64748b;">Cost: $300 | Duration: 60 min</div></div>`;
+        h += `<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})"><strong>🎓 Train: ${eq.name}</strong><div style="font-size:0.875rem;color:#64748b;">Cost: $${this.scenario.tuning.trainingCost} | Duration: ${this.scenario.tuning.trainingDuration} min</div></div>`;
       }
     });
     o.innerHTML = h;
@@ -1153,10 +1151,8 @@ const Lab = {
       );
       return;
     }
-    const isQualified = taskSource.equipmentSequence.every(
-      (s) => !s.skillRequired || this.selectedStaff.skills.includes(s.skillRequired),
-    );
-    if (!isQualified) {
+    const qualified = isQualified(this.selectedStaff, taskSource);
+    if (!qualified) {
       this.showNotification(
         `Assignment failed: ${this.selectedStaff.name} is not qualified for this task.`,
         'error',
@@ -1246,12 +1242,7 @@ const Lab = {
     const staffListEl = document.getElementById('emergencyStaffList');
     staffListEl.innerHTML = '';
     const availableStaff = this.staff.filter(
-      (p) =>
-        p.state === 'idle' &&
-        !p.activeTask &&
-        task.equipmentSequence.every(
-          (step) => !step.skillRequired || p.skills.includes(step.skillRequired),
-        ),
+      (p) => p.state === 'idle' && !p.activeTask && isQualified(p, task),
     );
     if (availableStaff.length > 0) {
       availableStaff.forEach((p) => {
