@@ -1,6 +1,3 @@
-// Named .mjs rather than .js because package.json is still the old backend
-// manifest and has no "type": "module". It is renamed to eslint.config.js
-// later in Phase 1, once package.json becomes the frontend manifest.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
@@ -17,7 +14,7 @@ export default tseslint.config(
       'server.js',
       // The pre-refactor view layer. It carries @ts-nocheck, so the type-aware
       // rules here cannot say anything useful about it. It is NOT unchecked,
-      // though: eslint.legacy.mjs lints it for undefined references, which
+      // though: eslint.legacy.js lints it for undefined references, which
       // `npm run lint` also runs. See that file for why that matters.
       'src/legacy/',
     ],
