@@ -179,6 +179,13 @@ function setStatus(
   const person = findStaff(world, staffId);
   if (!person) return;
 
+  // Someone off shift cannot be marked sick. Without this, clearing sick
+  // afterwards would set them to idle and quietly put them back on shift.
+  if (person.state === 'off') {
+    reject(events, 'off-shift', person.name);
+    return;
+  }
+
   // Cancelling mid-task used to crash when the task was a training: failTask
   // charged task.penalty (undefined, so the budget became NaN) and indexed
   // task.equipmentSequence (absent, so it threw). failTask now handles both.

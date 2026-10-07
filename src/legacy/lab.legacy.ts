@@ -541,6 +541,8 @@ const Lab = {
         return `Insufficient funds (cost: $${e.detail}, budget: $${this.world.money.toFixed(0)}).`;
       case 'already-known':
         return `Already certified for ${e.detail}.`;
+      case 'off-shift':
+        return `${e.detail} is off shift — start their shift first.`;
       case 'no-space':
         return 'No free space in the lab for new equipment.';
       default:

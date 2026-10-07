@@ -22,7 +22,8 @@ export type RejectionReason =
   | 'equipment-in-use'
   | 'equipment-missing'
   | 'no-space'
-  | 'already-known';
+  | 'already-known'
+  | 'off-shift';
 
 export type EngineEvent =
   | { type: 'task-assigned'; staffId: StaffId; staffName: string; taskName: string }
