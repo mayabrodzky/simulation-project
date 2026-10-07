@@ -20,6 +20,7 @@ import {
   tick,
 } from '../engine';
 import { createRenderer } from '../render/renderer';
+import { appendHtml, html, setHtml } from '../ui/dom';
 
 const Lab = {
   scenario: chemistryLab,
@@ -248,40 +249,63 @@ const Lab = {
     const listEl = document.getElementById('sandboxLogList');
     if (!listEl) return;
     if (this.currentSandboxSession.actions.length === 0) {
-      listEl.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No actions logged yet.</div>`;
+      setHtml(
+        listEl,
+        html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
+          No actions logged yet.
+        </div>`,
+      );
       return;
     }
-    listEl.innerHTML = this.currentSandboxSession.actions
-      .map(
+    setHtml(
+      listEl,
+      html`${this.currentSandboxSession.actions.map(
         (entry) =>
-          `<div style="font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid #f1f5f9;">${entry}</div>`,
-      )
-      .join('');
+          html`<div
+            style="font-size: 0.8rem; padding: 0.25rem 0; border-bottom: 1px solid #f1f5f9;"
+          >
+            ${entry}
+          </div>`,
+      )}`,
+    );
   },
 
   updateSessionHistoryPanel() {
     const listEl = document.getElementById('sandboxHistoryList');
     if (!listEl) return;
     if (this.sandboxSessionHistory.length === 0) {
-      listEl.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No sandbox sessions recorded.</div>`;
+      setHtml(
+        listEl,
+        html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
+          No sandbox sessions recorded.
+        </div>`,
+      );
       return;
     }
-    listEl.innerHTML = this.sandboxSessionHistory
-      .map((session) => {
+    setHtml(
+      listEl,
+      html`${this.sandboxSessionHistory.map((session) => {
         const date = session.startTime.toLocaleDateString();
         const time = session.startTime.toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
         });
         const savedBadge = session.savedToServer
-          ? `<span style="color:#10b981;font-size:0.75rem;margin-left:0.5rem;" title="Saved to server">☁️ Saved</span>`
+          ? html`<span
+              style="color:#10b981;font-size:0.75rem;margin-left:0.5rem;"
+              title="Saved to server"
+              >☁️ Saved</span
+            >`
           : '';
-        return `<div class="session-history-item" onclick="Lab.showSessionDetails('${session.id}')">
-                <strong>Session from ${date}</strong>${savedBadge}<br>
-                <small>${time} — ${session.actions.length} actions recorded</small>
-            </div>`;
-      })
-      .join('');
+        return html`<div
+          class="session-history-item"
+          onclick="Lab.showSessionDetails('${session.id}')"
+        >
+          <strong>Session from ${date}</strong>${savedBadge}<br />
+          <small>${time} — ${session.actions.length} actions recorded</small>
+        </div>`;
+      })}`,
+    );
   },
 
   showSessionDetails(sessionId) {
@@ -294,13 +318,15 @@ const Lab = {
     headerEl.textContent = `Log for Session: ${time}`;
 
     if (session.actions.length === 0) {
-      contentEl.innerHTML = 'No actions were recorded in this session.';
+      contentEl.textContent = 'No actions were recorded in this session.';
     } else {
-      contentEl.innerHTML = session.actions
-        .slice()
-        .reverse()
-        .map((action) => `<div>${action}</div>`)
-        .join('');
+      setHtml(
+        contentEl,
+        html`${session.actions
+          .slice()
+          .reverse()
+          .map((action) => html`<div>${action}</div>`)}`,
+      );
     }
 
     document.getElementById('modalOverlay').className = 'modal-overlay active';
@@ -581,47 +607,118 @@ const Lab = {
   },
   updateStaffPanel() {
     const listEl = document.getElementById('staffList');
-    listEl.innerHTML = this.staff
-      .map((p) => {
+    setHtml(
+      listEl,
+      html`${this.staff.map((p) => {
         const energy = Math.floor(p.energy);
         const energyColor = energy > 60 ? '#10b981' : energy > 30 ? '#f59e0b' : '#ef4444';
-        const skillsHTML = p.skills
-          .map((skill) => `<span class="skill-tag">${skill}</span>`)
-          .join('');
+        // An array of fragments rather than a joined string: html`` flattens
+        // arrays and leaves nested results unescaped, whereas a pre-joined
+        // string of markup would be escaped and shown as literal tags.
+        const skillTags = p.skills.map((skill) => html`<span class="skill-tag">${skill}</span>`);
         const isHighlighted = this.highlightedStaffIds.includes(p.id);
-        return ` <div class="staff-card ${isHighlighted ? 'qualified-highlight' : ''}"> <div class="staff-header"> <span class="staff-name">${p.name}</span> <span class="staff-badge badge-${p.state}">${p.state}</span> </div> <div class="energy-bar-container"> <div class="energy-bar-label"><span>Energy</span><span>${energy}%</span></div> <div class="energy-bar"><div class="energy-fill" style="width: ${energy}%; background: ${energyColor};"></div></div> </div> <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.25rem;">Task: ${p.activeTask ? p.activeTask.name : 'None'}</div> <div class="skills-container">${skillsHTML || '<span style="font-size: 0.75rem; color: var(--text-light);">No special skills.</span>'}</div> <div class="staff-actions"> <button class="btn btn-primary btn-full" onclick="Lab.openTaskModal(${p.id})" ${p.state !== 'idle' ? 'disabled' : ''}>Assign Task</button> <button class="btn btn-secondary" onclick="Lab.toggleShift(${p.id})">${p.state === 'off' ? 'Start Shift' : 'End Shift'}</button> <button class="btn btn-secondary" onclick="Lab.setStaffStatus(${p.id}, 'sick')">${p.state === 'sick' ? 'Clear Sick' : 'Set Sick'}</button> </div> </div>`;
-      })
-      .join('');
+        return html` <div class="staff-card ${isHighlighted ? 'qualified-highlight' : ''}">
+          <div class="staff-header">
+            <span class="staff-name">${p.name}</span>
+            <span class="staff-badge badge-${p.state}">${p.state}</span>
+          </div>
+          <div class="energy-bar-container">
+            <div class="energy-bar-label"><span>Energy</span><span>${energy}%</span></div>
+            <div class="energy-bar">
+              <div class="energy-fill" style="width: ${energy}%; background: ${energyColor};"></div>
+            </div>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.25rem;">
+            Task: ${p.activeTask ? p.activeTask.name : 'None'}
+          </div>
+          <div class="skills-container">
+            ${skillTags.length ? skillTags : html`<span style="font-size: 0.75rem; color: var(--text-light);">No special skills.</span>`}
+          </div>
+          <div class="staff-actions">
+            <button
+              class="btn btn-primary btn-full"
+              onclick="Lab.openTaskModal(${p.id})"
+              ${p.state !== 'idle' ? 'disabled' : ''}
+            >
+              Assign Task
+            </button>
+            <button class="btn btn-secondary" onclick="Lab.toggleShift(${p.id})">
+              ${p.state === 'off' ? 'Start Shift' : 'End Shift'}
+            </button>
+            <button class="btn btn-secondary" onclick="Lab.setStaffStatus(${p.id}, 'sick')">
+              ${p.state === 'sick' ? 'Clear Sick' : 'Set Sick'}
+            </button>
+          </div>
+        </div>`;
+      })}`,
+    );
   },
   updateEquipmentPanel() {
-    document.getElementById('equipmentList').innerHTML = this.equipment
-      .map(
+    setHtml(
+      document.getElementById('equipmentList'),
+      html`${this.equipment.map(
         (eq) =>
-          `<div class="equipment-card"><div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;"><span style="font-size: 24px;">${eq.icon}</span><div style="flex: 1;"><strong>${eq.name}</strong><div class="equipment-info">${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use: ${formatDuration(eq.totalWorkTime)}</div></div></div><div class="condition-bar"><div class="condition-fill" style="width: ${eq.condition}%; background: ${eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444'};"></div></div><div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;"><button class="btn" onclick="Lab.repairEquipment(${eq.id})">Repair ($${this.world.tuning.repairCost})</button><button class="btn" onclick="Lab.calibrateEquipment(${eq.id})">Calibrate ($${this.world.tuning.calibrateCost})</button></div></div>`,
-      )
-      .join('');
+          html`<div class="equipment-card">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+              <span style="font-size: 24px;">${eq.icon}</span>
+              <div style="flex: 1;">
+                <strong>${eq.name}</strong>
+                <div class="equipment-info">
+                  ${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use:
+                  ${formatDuration(eq.totalWorkTime)}
+                </div>
+              </div>
+            </div>
+            <div class="condition-bar">
+              <div
+                class="condition-fill"
+                style="width: ${eq.condition}%; background: ${eq.condition > 70 ? '#10b981' : eq.condition > 40 ? '#f59e0b' : '#ef4444'};"
+              ></div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <button class="btn" onclick="Lab.repairEquipment(${eq.id})">
+                Repair ($${this.world.tuning.repairCost})</button
+              ><button class="btn" onclick="Lab.calibrateEquipment(${eq.id})">
+                Calibrate ($${this.world.tuning.calibrateCost})
+              </button>
+            </div>
+          </div>`,
+      )}`,
+    );
   },
   updateEmergencyListPanel() {
     const p = document.getElementById('emergencyListPanel');
     if (!p) return;
-    p.innerHTML = '';
+    p.replaceChildren();
     const a = this.emergencyQueue.filter(
       (t) => t.status === 'pending' || t.status === 'in-progress',
     );
     if (a.length === 0) {
-      p.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No active emergencies.</div>`;
+      setHtml(
+        p,
+        html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
+          No active emergencies.
+        </div>`,
+      );
       return;
     }
     a.forEach((t) => {
       const s = t.status === 'pending' ? 'Waiting' : 'In Progress';
-      p.innerHTML += `<div class="emergency-card" onclick="Lab.openEmergencyModalById('${t.id}')"><strong>${t.name}</strong><div><span>${s}</span><span>Time Left: ${formatDuration(t.timeLimit, true)}</span></div></div>`;
+      appendHtml(
+        p,
+        html`<div class="emergency-card" onclick="Lab.openEmergencyModalById('${t.id}')">
+          <strong>${t.name}</strong>
+          <div><span>${s}</span><span>Time Left: ${formatDuration(t.timeLimit, true)}</span></div>
+        </div>`,
+      );
     });
   },
   updateTaskListPanel() {
     const panel = document.getElementById('taskListPanel');
     if (!panel) return;
-    panel.innerHTML = this.tasks
-      .map((task) => {
+    setHtml(
+      panel,
+      html`${this.tasks.map((task) => {
         const totalTime = task.equipmentSequence.reduce((acc, step) => acc + step.duration, 0);
         const skills = task.equipmentSequence.map((s) => s.skillRequired).join(', ');
         const qualifiedStaff =
@@ -629,20 +726,37 @@ const Lab = {
             .filter((p) => p.state === 'idle' && isQualified(p, task))
             .map((p) => p.name)
             .join(', ') || 'None available';
-        return ` <div class="task-def-card" onmouseenter="Lab.highlightQualifiedStaff('${task.id}')" onmouseleave="Lab.clearStaffHighlights()"> <strong>${task.name}</strong> <div class="details"> <span>Time: ${formatDuration(totalTime)} | Reward: $${task.reward}</span><br> <strong>Required Skills:</strong> ${skills}<br><strong>Qualified Staff:</strong> ${qualifiedStaff}</div> </div>`;
-      })
-      .join('');
+        return html` <div
+          class="task-def-card"
+          onmouseenter="Lab.highlightQualifiedStaff('${task.id}')"
+          onmouseleave="Lab.clearStaffHighlights()"
+        >
+          <strong>${task.name}</strong>
+          <div class="details">
+            <span>Time: ${formatDuration(totalTime)} | Reward: $${task.reward}</span><br />
+            <strong>Required Skills:</strong> ${skills}<br /><strong>Qualified Staff:</strong>
+            ${qualifiedStaff}
+          </div>
+        </div>`;
+      })}`,
+    );
   },
   updateOngoingTasksPanel() {
     const panel = document.getElementById('ongoingTasksPanel');
     if (!panel) return;
     const activeStaff = this.staff.filter((p) => p.activeTask);
     if (activeStaff.length === 0) {
-      panel.innerHTML = `<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">No tasks in progress.</div>`;
+      setHtml(
+        panel,
+        html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
+          No tasks in progress.
+        </div>`,
+      );
       return;
     }
-    panel.innerHTML = activeStaff
-      .map((p) => {
+    setHtml(
+      panel,
+      html`${activeStaff.map((p) => {
         const task = p.activeTask;
         let progress = 0;
         let statusText = 'Moving to equipment';
@@ -658,14 +772,30 @@ const Lab = {
             }
           }
         }
-        return `<div class="ongoing-task-card"><strong>${task.name}</strong><div class="info">Assigned to: ${p.name} (${statusText})</div><div class="progress-bar"><div class="progress-fill" style="width: ${progress}%; background: #a78bfa;"></div></div></div>`;
-      })
-      .join('');
+        return html`<div class="ongoing-task-card">
+          <strong>${task.name}</strong>
+          <div class="info">Assigned to: ${p.name} (${statusText})</div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${progress}%; background: #a78bfa;"></div>
+          </div>
+        </div>`;
+      })}`,
+    );
   },
   openTaskModal(staffId) {
     this.selectedStaff = this.staff.find((p) => p.id === staffId);
     if (!this.selectedStaff) return;
-    if (this.selectedStaff.state !== 'idle' || this.selectedStaff.activeTask) {
+    // Someone who has just been given a task is still 'idle' until they reach
+    // the machine, so reporting their state would say "is currently idle".
+    // Describe the task when there is one.
+    if (this.selectedStaff.activeTask) {
+      this.showNotification(
+        `Cannot assign task: ${this.selectedStaff.name} is already on "${this.selectedStaff.activeTask.name}".`,
+        'error',
+      );
+      return;
+    }
+    if (this.selectedStaff.state !== 'idle') {
       this.showNotification(
         `Cannot assign task: ${this.selectedStaff.name} is currently ${this.selectedStaff.state}.`,
         'error',
@@ -676,17 +806,37 @@ const Lab = {
     document.getElementById('modalOverlay').className = 'modal-overlay active';
     document.getElementById('taskModal').className = 'modal active';
     const o = document.getElementById('taskOptions');
-    let h = '';
+    const options = [];
     this.tasks.forEach((t, i) => {
       const q = isQualified(this.selectedStaff, t);
-      h += `<div class="task-option" ${!q ? 'disabled' : ''} onclick="${q ? `Lab.assignNewTask(${i})` : ''}"><strong>${t.name}</strong><div style="font-size:0.875rem;color:#64748b;">Reward: $${t.reward} | Time: ${formatDuration(t.timeLimit, true)} | ${q ? '✅ Qualified' : '❌ Not Qualified'}</div></div>`;
+      options.push(
+        html`<div
+          class="task-option"
+          ${!q ? 'disabled' : ''}
+          onclick="${q ? `Lab.assignNewTask(${i})` : ''}"
+        >
+          <strong>${t.name}</strong>
+          <div style="font-size:0.875rem;color:#64748b;">
+            Reward: $${t.reward} | Time: ${formatDuration(t.timeLimit, true)} |
+            ${q ? '✅ Qualified' : '❌ Not Qualified'}
+          </div>
+        </div>`,
+      );
     });
     this.equipment.forEach((eq) => {
       if (!this.selectedStaff.skills.includes(eq.skill)) {
-        h += `<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})"><strong>🎓 Train: ${eq.name}</strong><div style="font-size:0.875rem;color:#64748b;">Cost: $${this.scenario.tuning.trainingCost} | Duration: ${this.scenario.tuning.trainingDuration} min</div></div>`;
+        options.push(
+          html`<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})">
+            <strong>🎓 Train: ${eq.name}</strong>
+            <div style="font-size:0.875rem;color:#64748b;">
+              Cost: $${this.scenario.tuning.trainingCost} | Duration:
+              ${this.scenario.tuning.trainingDuration} min
+            </div>
+          </div>`,
+        );
       }
     });
-    o.innerHTML = h;
+    setHtml(o, html`${options}`);
   },
   closeAllModals() {
     document
@@ -701,24 +851,37 @@ const Lab = {
   },
   openEmergencyModal(task) {
     this.activeEmergencyTask = task;
-    document.getElementById('emergencyTaskName').innerHTML = `<strong>Task:</strong> ${task.name}`;
-    document.getElementById('emergencyTaskReward').innerHTML =
-      `<strong>Reward:</strong> $${task.reward}`;
-    document.getElementById('emergencyTaskPenalty').innerHTML =
-      `<strong>Penalty:</strong> $${task.penalty}`;
-    document.getElementById('emergencyTaskDeadline').innerHTML =
-      `<strong>Deadline:</strong> ${formatDuration(task.timeLimit, true)}`;
+    setHtml(
+      document.getElementById('emergencyTaskName'),
+      html`<strong>Task:</strong> ${task.name}`,
+    );
+    setHtmlById('emergencyTaskReward', html`<strong>Reward:</strong> $${task.reward}`);
+    setHtmlById('emergencyTaskPenalty', html`<strong>Penalty:</strong> $${task.penalty}`);
+    setHtmlById(
+      'emergencyTaskDeadline',
+      html`<strong>Deadline:</strong> ${formatDuration(task.timeLimit, true)}`,
+    );
     const staffListEl = document.getElementById('emergencyStaffList');
-    staffListEl.innerHTML = '';
+    staffListEl.replaceChildren();
     const availableStaff = this.staff.filter(
       (p) => p.state === 'idle' && !p.activeTask && isQualified(p, task),
     );
     if (availableStaff.length > 0) {
       availableStaff.forEach((p) => {
-        staffListEl.innerHTML += `<div class="staff-assign-option" onclick="Lab.assignEmergencyTask(${p.id})"><span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small></div>`;
+        appendHtml(
+          staffListEl,
+          html`<div class="staff-assign-option" onclick="Lab.assignEmergencyTask(${p.id})">
+            <span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small>
+          </div>`,
+        );
       });
     } else {
-      staffListEl.innerHTML = `<div style="color: #b91c1c; text-align: center; font-weight: 600;">No qualified and available staff found!</div>`;
+      setHtml(
+        staffListEl,
+        html`<div style="color: #b91c1c; text-align: center; font-weight: 600;">
+          No qualified and available staff found!
+        </div>`,
+      );
     }
     document.getElementById('modalOverlay').className = 'modal-overlay active';
     document.getElementById('emergencyModal').className = 'modal active';
@@ -756,7 +919,14 @@ const Lab = {
     const n = document.createElement('div');
     n.className = 'notification';
     n.style.borderLeft = `4px solid ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'}`;
-    n.innerHTML = `<div style="display:flex;align-items:center;gap:1rem;"><span style="font-size:20px;">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span><span>${message}</span></div>`;
+    setHtml(
+      n,
+      html`<div style="display:flex;align-items:center;gap:1rem;">
+        <span style="font-size:20px;"
+          >${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span
+        ><span>${message}</span>
+      </div>`,
+    );
     document.body.appendChild(n);
     setTimeout(() => {
       n.style.opacity = '0';
@@ -767,12 +937,30 @@ const Lab = {
     document.getElementById('modalOverlay').className = 'modal-overlay active';
     document.getElementById('buyEquipmentModal').className = 'modal active';
     const listEl = document.getElementById('equipmentCatalogList');
-    listEl.innerHTML = this.equipmentCatalog
-      .map(
-        (item) =>
-          ` <div class="equipment-catalog-item"> <span style="font-size: 24px;">${item.icon}</span> <div class="info"> <strong>${item.name}</strong> <div style="font-size: 0.8rem; color: var(--text-light)">Requires Skill: ${item.skill}</div> </div> <div class="cost">$${item.cost}</div> <button class="btn btn-primary" onclick="Lab.buyEquipment('${item.id}')" ${this.world.money < item.cost ? 'disabled' : ''}>Buy</button> </div> `,
-      )
-      .join('');
+    setHtml(
+      listEl,
+      html`${this.equipmentCatalog.map(
+        (item) => html`
+          <div class="equipment-catalog-item">
+            <span style="font-size: 24px;">${item.icon}</span>
+            <div class="info">
+              <strong>${item.name}</strong>
+              <div style="font-size: 0.8rem; color: var(--text-light)">
+                Requires Skill: ${item.skill}
+              </div>
+            </div>
+            <div class="cost">$${item.cost}</div>
+            <button
+              class="btn btn-primary"
+              onclick="Lab.buyEquipment('${item.id}')"
+              ${this.world.money < item.cost ? 'disabled' : ''}
+            >
+              Buy
+            </button>
+          </div>
+        `,
+      )}`,
+    );
   },
 };
 
@@ -795,13 +983,33 @@ const Auth = {
     const bar = document.getElementById('authBar');
     if (!bar) return;
     if (this.isLoggedIn()) {
-      bar.innerHTML = `
-            <span style="font-size:0.8rem;color:#475569;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.user.email}">👤 ${this.user.email}</span>
-            <button onclick="Auth.logout()" style="padding:0.35rem 0.75rem;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:0.8rem;font-weight:600;color:#64748b;">Log out</button>`;
+      setHtml(
+        bar,
+        html` <span
+            style="font-size:0.8rem;color:#475569;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+            title="${this.user.email}"
+            >👤 ${this.user.email}</span
+          >
+          <button
+            onclick="Auth.logout()"
+            style="padding:0.35rem 0.75rem;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:0.8rem;font-weight:600;color:#64748b;"
+          >
+            Log out
+          </button>`,
+      );
     } else {
-      bar.innerHTML = `
-            <span style="font-size:0.8rem;color:#64748b;background:#fef9c3;border:1px solid #fde047;padding:0.3rem 0.75rem;border-radius:20px;">Demo Mode</span>
-            <a href="login.html" style="padding:0.35rem 0.75rem;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:white;text-decoration:none;font-size:0.8rem;font-weight:600;">Sign In</a>`;
+      setHtml(
+        bar,
+        html` <span
+            style="font-size:0.8rem;color:#64748b;background:#fef9c3;border:1px solid #fde047;padding:0.3rem 0.75rem;border-radius:20px;"
+            >Demo Mode</span
+          >
+          <a
+            href="login.html"
+            style="padding:0.35rem 0.75rem;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:white;text-decoration:none;font-size:0.8rem;font-weight:600;"
+            >Sign In</a
+          >`,
+      );
     }
   },
 };

@@ -78,6 +78,11 @@ export function setHtml(target: Element | null, content: Raw): void {
   target.innerHTML = content[RAW];
 }
 
+/** setHtml for the common case of addressing an element by id. */
+export function setHtmlById(id: string, content: Raw): void {
+  setHtml(document.getElementById(id), content);
+}
+
 /** Appends, for the few places that build a list incrementally. */
 export function appendHtml(target: Element | null, content: Raw): void {
   if (!target) return;
