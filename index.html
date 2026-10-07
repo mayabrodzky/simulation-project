@@ -1203,8 +1203,25 @@
           }
         } catch (error) {
           console.error('Error:', error);
+          // TODO: set CONTACT_PLACEHOLDER to a real address before this is shared
+          // widely. Left as a placeholder deliberately: a mailto on a public page
+          // gets scraped, so the address is the owner's to choose.
+          // There is no signup endpoint on the static deployment, so this form
+          // would otherwise accept an address and silently drop it. Say that
+          // plainly and give a route that actually reaches a person.
           messageEl.className = 'form-message error';
-          messageEl.textContent = 'Something went wrong. Please try again or contact us directly.';
+          messageEl.replaceChildren(
+            document.createTextNode('The waitlist is not connected yet, so this was not saved. '),
+            Object.assign(document.createElement('a'), {
+              href:
+                'mailto:CONTACT_PLACEHOLDER?subject=Polaris%20early%20access' +
+                '&body=' +
+                encodeURIComponent('Please add me to the Polaris waitlist: ' + email),
+              textContent: 'Email me instead',
+              style: 'color: inherit; font-weight: 700; text-decoration: underline;',
+            }),
+            document.createTextNode(' and you will be added by hand.'),
+          );
 
           // Track error
           if (typeof mixpanel !== 'undefined') {

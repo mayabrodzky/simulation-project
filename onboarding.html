@@ -449,7 +449,38 @@
     <script>
       // Redirect if not logged in
       const token = localStorage.getItem('polaris_token');
-      if (!token) window.location.href = 'login.html';
+
+      /**
+       * Without an API there is nothing to save a business profile to, and
+       * bouncing to a sign-in page that also cannot work would just be a
+       * longer dead end. Say so, and offer the demo.
+       */
+      fetch('/api/business', { headers: { Authorization: 'Bearer ' + (token || '') } })
+        .then((res) => {
+          if (res.status === 404) throw new Error('no api');
+          if (!token) window.location.href = 'login.html';
+        })
+        .catch(() => {
+          document.body.innerHTML = '';
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.style.textAlign = 'center';
+          const h = document.createElement('h2');
+          h.textContent = 'Setup is coming in a later release';
+          const p = document.createElement('p');
+          p.className = 'subtitle';
+          p.textContent =
+            'Saving your own business profile needs an account, which is not available yet. ' +
+            'The chemistry lab demo is fully playable in the meantime.';
+          const a = document.createElement('a');
+          a.href = 'lab-simulation.html';
+          a.className = 'btn-next';
+          a.style.display = 'inline-block';
+          a.style.textDecoration = 'none';
+          a.textContent = 'Open the demo';
+          card.append(h, p, a);
+          document.body.append(card);
+        });
 
       let selectedType = '';
 

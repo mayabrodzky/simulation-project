@@ -166,6 +166,44 @@
       .link-back:hover {
         color: #3b82f6;
       }
+
+      /* Shown only when there is no API to talk to. */
+      .offline-notice {
+        display: none;
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        color: #0c4a6e;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-bottom: 1.5rem;
+      }
+      .offline-notice strong {
+        display: block;
+        margin-bottom: 0.25rem;
+        color: #075985;
+      }
+      .btn-demo {
+        display: block;
+        width: 100%;
+        text-align: center;
+        padding: 0.875rem;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: white;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      body.api-offline #authForms,
+      body.api-offline .tabs,
+      body.api-offline .divider {
+        display: none;
+      }
+      body.api-offline .offline-notice {
+        display: block;
+      }
     </style>
   </head>
   <body>
@@ -175,48 +213,78 @@
         <span>Polaris</span>
       </a>
 
+      <div class="offline-notice">
+        <strong>Accounts are coming in a later release.</strong>
+        Sign-in is not available yet, so nothing here would save. The simulation itself works fully
+        — go straight in and try it.
+      </div>
+
       <div class="tabs">
         <button class="tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
         <button class="tab" id="tabRegister" onclick="switchTab('register')">Create Account</button>
       </div>
 
-      <!-- Login form -->
-      <form id="loginForm">
-        <div class="form-group">
-          <label for="loginEmail">Email</label>
-          <input id="loginEmail" type="email" placeholder="you@company.com" required />
-        </div>
-        <div class="form-group">
-          <label for="loginPassword">Password</label>
-          <input id="loginPassword" type="password" placeholder="••••••••" required />
-        </div>
-        <button type="submit" class="btn-submit" id="loginBtn">Sign In</button>
-        <div class="message" id="loginMsg"></div>
-      </form>
+      <div id="authForms">
+        <!-- Login form -->
+        <form id="loginForm">
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input id="loginEmail" type="email" placeholder="you@company.com" required />
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" type="password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn-submit" id="loginBtn">Sign In</button>
+          <div class="message" id="loginMsg"></div>
+        </form>
 
-      <!-- Register form (hidden by default) -->
-      <form id="registerForm" style="display: none">
-        <div class="form-group">
-          <label for="regEmail">Email</label>
-          <input id="regEmail" type="email" placeholder="you@company.com" required />
-        </div>
-        <div class="form-group">
-          <label for="regPassword">Password</label>
-          <input id="regPassword" type="password" placeholder="Min. 6 characters" required />
-        </div>
-        <div class="form-group">
-          <label for="regConfirm">Confirm Password</label>
-          <input id="regConfirm" type="password" placeholder="Repeat password" required />
-        </div>
-        <button type="submit" class="btn-submit" id="registerBtn">Create Account</button>
-        <div class="message" id="registerMsg"></div>
-      </form>
+        <!-- Register form (hidden by default) -->
+        <form id="registerForm" style="display: none">
+          <div class="form-group">
+            <label for="regEmail">Email</label>
+            <input id="regEmail" type="email" placeholder="you@company.com" required />
+          </div>
+          <div class="form-group">
+            <label for="regPassword">Password</label>
+            <input id="regPassword" type="password" placeholder="Min. 6 characters" required />
+          </div>
+          <div class="form-group">
+            <label for="regConfirm">Confirm Password</label>
+            <input id="regConfirm" type="password" placeholder="Repeat password" required />
+          </div>
+          <button type="submit" class="btn-submit" id="registerBtn">Create Account</button>
+          <div class="message" id="registerMsg"></div>
+        </form>
+      </div>
 
       <div class="divider">or</div>
-      <a href="lab-simulation.html" class="link-back">Continue as guest (demo mode)</a>
+      <a href="lab-simulation.html" class="btn-demo">Open the demo</a>
     </div>
 
     <script>
+      /**
+       * Is there an API behind this page at all?
+       *
+       * Deployed as a static site there is not: every /api/* path returns 404.
+       * Rather than show a form that cannot work and then blame the server
+       * when it fails, the page asks once and presents the demo instead.
+       * A 401 means the API is there and simply does not know us, which is
+       * the good case.
+       */
+      async function apiIsAvailable() {
+        try {
+          const res = await fetch('/api/auth/me');
+          return res.status !== 404;
+        } catch {
+          return false;
+        }
+      }
+
+      apiIsAvailable().then((available) => {
+        if (!available) document.body.classList.add('api-offline');
+      });
+
       // Redirect if already logged in
       const existingToken = localStorage.getItem('polaris_token');
       if (existingToken) {
@@ -272,7 +340,7 @@
           showMsg('loginMsg', 'Welcome back! Redirecting…', 'success');
           setTimeout(() => (window.location.href = 'lab-simulation.html'), 800);
         } catch {
-          showMsg('loginMsg', 'Could not reach the server. Is it running?', 'error');
+          showMsg('loginMsg', 'Accounts are not available yet — use the demo below.', 'error');
           btn.disabled = false;
           btn.textContent = 'Sign In';
         }
@@ -314,7 +382,7 @@
           showMsg('registerMsg', 'Account created! Redirecting…', 'success');
           setTimeout(() => (window.location.href = 'lab-simulation.html'), 800);
         } catch {
-          showMsg('registerMsg', 'Could not reach the server. Is it running?', 'error');
+          showMsg('registerMsg', 'Accounts are not available yet — use the demo below.', 'error');
           btn.disabled = false;
           btn.textContent = 'Create Account';
         }
