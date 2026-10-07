@@ -1,11 +1,16 @@
 // @ts-nocheck
 /**
- * The original inline <script> from lab-simulation.html, moved here verbatim.
+ * The view layer: panels, modals, sandbox mode and the frame loop.
  *
- * Nothing in this file has been changed yet. It is shrunk piece by piece over
- * Phase 1 as logic moves into src/engine, src/render, src/scenarios and src/ui,
- * and it is deleted entirely once nothing is left. @ts-nocheck suppresses type
- * checking until then; the rest of src/ is strict from the first line.
+ * This began as the entire application, inline in lab-simulation.html. Over
+ * Phase 1 the simulation moved to src/engine, the drawing to src/render, the
+ * lab's data to src/scenarios and safe rendering to src/ui, leaving this as
+ * what is genuinely view code: it reads the world, renders it, and turns
+ * clicks into commands. It holds no rules.
+ *
+ * It still carries @ts-nocheck and lives under legacy/ because it has not been
+ * split into typed modules yet — that is the next piece of work, and it is
+ * deliberately not part of Phase 1.
  */
 import '../styles/base.css';
 import '../styles/lab.css';
@@ -20,12 +25,21 @@ import {
   tick,
 } from '../engine';
 import { createRenderer } from '../render/renderer';
-import { appendHtml, html, setHtml } from '../ui/dom';
+import { appendHtml, html, setHtml, setHtmlById } from '../ui/dom';
+
+/**
+ * How often the sidebar is rebuilt, in milliseconds. The canvas is redrawn
+ * every frame; the panels are not. Everything in them that changes
+ * continuously is a countdown or a progress bar, and four updates a second is
+ * indistinguishable from sixty.
+ */
+const PANEL_INTERVAL_MS = 250;
 
 const Lab = {
   scenario: chemistryLab,
   renderer: null,
   seed: 1,
+  lastPanelTick: 0,
   canvas: null,
   timeOverlay: null,
 
@@ -108,11 +122,6 @@ const Lab = {
     this.updateAllPanels();
     this.updateSessionHistoryPanel();
   },
-  /**
-   * Copies the scenario's layout and starting values onto the fields the rest
-   * of this file already reads, so every existing `this.labFloor` reference
-   * keeps working while the literals themselves live in one place.
-   */
   updateAllPanels() {
     this.updateStaffPanel();
     this.updateEquipmentPanel();
@@ -567,13 +576,37 @@ const Lab = {
         movementMultiplier: this.isSandboxMode ? 5 : 1,
       }),
     );
-    this.updateTimeOfDayOverlay();
-    this.updateUI();
-    this.updateStatusCounts();
-    this.updateEmergencyListPanel();
-    this.updateOngoingTasksPanel();
+    // Previously these four ran on every frame, rebuilding each panel's whole
+    // subtree with innerHTML about 240 times a second between them, and
+    // throwing away scroll position and hover state each time. Panels that
+    // react to a change are driven by the event stream instead; this interval
+    // only covers the things that tick down on their own.
+    if (now - this.lastPanelTick >= PANEL_INTERVAL_MS) {
+      this.lastPanelTick = now;
+      this.updateTimeOfDayOverlay();
+      this.updateUI();
+      this.updateStatusCounts();
+      this.updateEmergencyListPanel();
+      this.updateOngoingTasksPanel();
+      this.updateEmergencyModalDeadline();
+    }
+
     this.renderer.render(this.buildRenderView());
     requestAnimationFrame(() => this.gameLoop());
+  },
+  /**
+   * Keeps the open emergency modal's countdown moving. This used to live
+   * inside the emergency update loop, which now runs in the engine and cannot
+   * touch the DOM, so it moved here with the rest of the view work.
+   */
+  updateEmergencyModalDeadline() {
+    if (!this.activeEmergencyTask) return;
+    const live = this.emergencyQueue.find((t) => t.id === this.activeEmergencyTask.id);
+    if (!live) return;
+    setHtmlById(
+      'emergencyTaskDeadline',
+      html`<strong>Deadline:</strong> ${formatDuration(live.timeLimit, true)}`,
+    );
   },
   updateUI() {
     document.getElementById('money').textContent = this.world.money.toFixed(0);
