@@ -94,7 +94,7 @@
         <div class="game-header">
           <span style="font-size: 1.1rem; font-weight: 600">🏢 Office Floor - Isometric View</span>
           <div class="controls">
-            <button class="btn-control" onclick="Lab.resetCamera()" title="Reset View">🎯</button>
+            <button class="btn-control" data-action="reset-camera" title="Reset View">🎯</button>
           </div>
         </div>
         <div id="timeOverlay"></div>
@@ -102,7 +102,7 @@
       </div>
       <aside class="sidebar">
         <div class="panel">
-          <div class="panel-header" id="emergencyPanelHeader" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" id="emergencyPanelHeader" data-action="toggle-panel">
             <h3>🚨 Active Emergencies</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
@@ -110,7 +110,7 @@
         </div>
 
         <div class="panel">
-          <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" data-action="toggle-panel">
             <h3>⏳ Ongoing Tasks</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
@@ -118,7 +118,7 @@
         </div>
 
         <div class="panel">
-          <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" data-action="toggle-panel">
             <h3>👥 Staff Management</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
@@ -126,16 +126,13 @@
         </div>
 
         <div class="panel" id="sandboxLogPanel" style="display: none">
-          <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" data-action="toggle-panel">
             <h3>📝 Sandbox Action Log</h3>
             <div style="display: flex; align-items: center; gap: 0.5rem">
               <button
                 class="btn btn-secondary btn-small"
                 id="saveSessionBtn"
-                onclick="
-                  event.stopPropagation();
-                  Lab.saveSessionToServer(this);
-                "
+                data-action="save-session"
                 title="Save this session to the server"
               >
                 💾 Save
@@ -147,7 +144,7 @@
         </div>
 
         <div class="panel">
-          <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" data-action="toggle-panel">
             <h3>📖 Sandbox History</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
@@ -158,10 +155,10 @@
           ></div>
         </div>
         <div class="panel">
-          <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" data-action="toggle-panel">
             <h3>🔧 Equipment Status</h3>
             <div style="display: flex; align-items: center; gap: 0.5rem">
-              <button class="btn btn-secondary btn-small" onclick="Lab.openBuyModal()">
+              <button class="btn btn-secondary btn-small" data-action="open-buy-modal">
                 Buy New
               </button>
               <span class="panel-toggle-icon">▼</span>
@@ -170,7 +167,7 @@
           <div class="panel-content equipment-grid" id="equipmentList"></div>
         </div>
         <div class="panel">
-          <div class="panel-header" onclick="Lab.togglePanel(this)">
+          <div class="panel-header" data-action="toggle-panel">
             <h3>📋 Task Definitions</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
@@ -179,11 +176,11 @@
       </aside>
     </div>
 
-    <div class="modal-overlay" id="modalOverlay" onclick="Lab.closeAllModals()"></div>
+    <div class="modal-overlay" id="modalOverlay" data-action="close-modals"></div>
     <div class="modal" id="taskModal">
       <h3>Select Task for <span id="selectedStaffName"></span></h3>
       <div class="task-options" id="taskOptions"></div>
-      <button class="btn" onclick="Lab.closeAllModals()">Cancel</button>
+      <button class="btn" data-action="close-modals">Cancel</button>
     </div>
     <div class="modal" id="emergencyModal">
       <h3>🚨 EMERGENCY ALERT 🚨</h3>
@@ -195,12 +192,12 @@
       </div>
       <h4>Assign Available Qualified Staff:</h4>
       <div id="emergencyStaffList"></div>
-      <button class="btn" style="margin-top: 1rem" onclick="Lab.closeAllModals()">Dismiss</button>
+      <button class="btn" style="margin-top: 1rem" data-action="close-modals">Dismiss</button>
     </div>
     <div class="modal" id="buyEquipmentModal">
       <h3>Buy New Equipment</h3>
       <div id="equipmentCatalogList"></div>
-      <button class="btn" style="margin-top: 1rem" onclick="Lab.closeAllModals()">Close</button>
+      <button class="btn" style="margin-top: 1rem" data-action="close-modals">Close</button>
     </div>
 
     <div class="modal" id="sessionDetailsModal">
@@ -217,7 +214,7 @@
           border-radius: 8px;
         "
       ></div>
-      <button class="btn" style="margin-top: 1rem" onclick="Lab.closeAllModals()">Close</button>
+      <button class="btn" style="margin-top: 1rem" data-action="close-modals">Close</button>
     </div>
     <script type="module" src="/src/legacy/lab.legacy.ts"></script>
   </body>

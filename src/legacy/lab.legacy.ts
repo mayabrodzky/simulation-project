@@ -25,6 +25,7 @@ import {
   tick,
 } from '../engine';
 import { createRenderer } from '../render/renderer';
+import { installActions, installEscape, installHover } from '../ui/actions';
 import { appendHtml, html, setHtml, setHtmlById } from '../ui/dom';
 
 /**
@@ -177,6 +178,49 @@ const Lab = {
     });
     document.getElementById('sandboxBtn').addEventListener('click', () => this.enterSandboxMode());
     document.getElementById('liveBtn').addEventListener('click', () => this.exitSandboxMode());
+    this.installDelegatedHandlers();
+  },
+
+  /**
+   * Every click in the page goes through one listener here.
+   *
+   * The panels are rebuilt with innerHTML, which destroys their children, so a
+   * listener attached to a generated button would be silently dropped on the
+   * next rebuild. This also replaces the inline onclick attributes, which only
+   * worked because this object happened to be global.
+   */
+  installDelegatedHandlers() {
+    const staffId = (el) => Number(el.dataset.staffId);
+    const equipmentId = (el) => Number(el.dataset.equipmentId);
+
+    installActions(document, {
+      'reset-camera': () => this.resetCamera(),
+      'toggle-panel': (el) => this.togglePanel(el),
+      'open-buy-modal': () => this.openBuyModal(),
+      'close-modals': () => this.closeAllModals(),
+      'save-session': (el) => this.saveSessionToServer(el),
+      'show-session': (el) => this.showSessionDetails(el.dataset.sessionId),
+      'open-task-modal': (el) => this.openTaskModal(staffId(el)),
+      'toggle-shift': (el) => this.toggleShift(staffId(el)),
+      'toggle-sick': (el) => this.setStaffStatus(staffId(el), 'sick'),
+      'open-emergency': (el) => this.openEmergencyModalById(el.dataset.emergencyId),
+      'assign-task': (el) => this.assignTask(el.dataset.taskId),
+      'assign-emergency': (el) => this.assignEmergencyTask(staffId(el)),
+      'start-training': (el) => this.assignTraining(el.dataset.skill, equipmentId(el)),
+      repair: (el) => this.repairEquipment(equipmentId(el)),
+      calibrate: (el) => this.calibrateEquipment(equipmentId(el)),
+      'buy-equipment': (el) => this.buyEquipment(el.dataset.catalogId),
+      logout: () => Auth.logout(),
+    });
+
+    installHover(
+      document,
+      '[data-hover-task]',
+      (el) => this.highlightQualifiedStaff(el.dataset.hoverTask),
+      () => this.clearStaffHighlights(),
+    );
+
+    installEscape(() => this.closeAllModals());
   },
   handleMouseMove(e) {
     const rect = this.canvas.getBoundingClientRect();
@@ -308,7 +352,8 @@ const Lab = {
           : '';
         return html`<div
           class="session-history-item"
-          onclick="Lab.showSessionDetails('${session.id}')"
+          data-action="show-session"
+          data-session-id="${session.id}"
         >
           <strong>Session from ${date}</strong>${savedBadge}<br />
           <small>${time} — ${session.actions.length} actions recorded</small>
@@ -508,16 +553,9 @@ const Lab = {
     this.handleEvents(applyCommand(this.world, command));
   },
 
-  assignNewTask(taskIndex, isEmergency = false, emergencyId = null) {
+  assignTask(taskId) {
     if (!this.selectedStaff) return;
-    const staffId = this.selectedStaff.id;
-    if (isEmergency) {
-      this.dispatch({ type: 'ASSIGN_EMERGENCY', staffId, emergencyId });
-    } else {
-      const task = this.tasks[taskIndex];
-      if (!task) return;
-      this.dispatch({ type: 'ASSIGN_TASK', staffId, taskId: task.id });
-    }
+    this.dispatch({ type: 'ASSIGN_TASK', staffId: this.selectedStaff.id, taskId });
     this.closeAllModals();
   },
 
@@ -536,7 +574,12 @@ const Lab = {
     const person = this.staff.find((p) => p.id === staffId);
     if (!person || !this.activeEmergencyTask) return;
     this.selectedStaff = person;
-    this.assignNewTask(null, true, this.activeEmergencyTask.id);
+    this.dispatch({
+      type: 'ASSIGN_EMERGENCY',
+      staffId,
+      emergencyId: this.activeEmergencyTask.id,
+    });
+    this.closeAllModals();
   },
 
   setStaffStatus(staffId, newStatus) {
@@ -670,15 +713,16 @@ const Lab = {
           <div class="staff-actions">
             <button
               class="btn btn-primary btn-full"
-              onclick="Lab.openTaskModal(${p.id})"
+              data-action="open-task-modal"
+              data-staff-id="${p.id}"
               ${p.state !== 'idle' ? 'disabled' : ''}
             >
               Assign Task
             </button>
-            <button class="btn btn-secondary" onclick="Lab.toggleShift(${p.id})">
+            <button class="btn btn-secondary" data-action="toggle-shift" data-staff-id="${p.id}">
               ${p.state === 'off' ? 'Start Shift' : 'End Shift'}
             </button>
-            <button class="btn btn-secondary" onclick="Lab.setStaffStatus(${p.id}, 'sick')">
+            <button class="btn btn-secondary" data-action="toggle-sick" data-staff-id="${p.id}">
               ${p.state === 'sick' ? 'Clear Sick' : 'Set Sick'}
             </button>
           </div>
@@ -709,9 +753,9 @@ const Lab = {
               ></div>
             </div>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-              <button class="btn" onclick="Lab.repairEquipment(${eq.id})">
+              <button class="btn" data-action="repair" data-equipment-id="${eq.id}">
                 Repair ($${this.world.tuning.repairCost})</button
-              ><button class="btn" onclick="Lab.calibrateEquipment(${eq.id})">
+              ><button class="btn" data-action="calibrate" data-equipment-id="${eq.id}">
                 Calibrate ($${this.world.tuning.calibrateCost})
               </button>
             </div>
@@ -739,7 +783,7 @@ const Lab = {
       const s = t.status === 'pending' ? 'Waiting' : 'In Progress';
       appendHtml(
         p,
-        html`<div class="emergency-card" onclick="Lab.openEmergencyModalById('${t.id}')">
+        html`<div class="emergency-card" data-action="open-emergency" data-emergency-id="${t.id}">
           <strong>${t.name}</strong>
           <div><span>${s}</span><span>Time Left: ${formatDuration(t.timeLimit, true)}</span></div>
         </div>`,
@@ -759,11 +803,7 @@ const Lab = {
             .filter((p) => p.state === 'idle' && isQualified(p, task))
             .map((p) => p.name)
             .join(', ') || 'None available';
-        return html` <div
-          class="task-def-card"
-          onmouseenter="Lab.highlightQualifiedStaff('${task.id}')"
-          onmouseleave="Lab.clearStaffHighlights()"
-        >
+        return html` <div class="task-def-card" data-hover-task="${task.id}">
           <strong>${task.name}</strong>
           <div class="details">
             <span>Time: ${formatDuration(totalTime)} | Reward: $${task.reward}</span><br />
@@ -846,7 +886,7 @@ const Lab = {
         html`<div
           class="task-option"
           ${!q ? 'disabled' : ''}
-          onclick="${q ? `Lab.assignNewTask(${i})` : ''}"
+          ${q ? html`data-action="assign-task" data-task-id="${t.id}"` : ''}
         >
           <strong>${t.name}</strong>
           <div style="font-size:0.875rem;color:#64748b;">
@@ -859,7 +899,12 @@ const Lab = {
     this.equipment.forEach((eq) => {
       if (!this.selectedStaff.skills.includes(eq.skill)) {
         options.push(
-          html`<div class="task-option" onclick="Lab.assignTraining('${eq.skill}', ${eq.id})">
+          html`<div
+            class="task-option"
+            data-action="start-training"
+            data-skill="${eq.skill}"
+            data-equipment-id="${eq.id}"
+          >
             <strong>🎓 Train: ${eq.name}</strong>
             <div style="font-size:0.875rem;color:#64748b;">
               Cost: $${this.scenario.tuning.trainingCost} | Duration:
@@ -903,7 +948,11 @@ const Lab = {
       availableStaff.forEach((p) => {
         appendHtml(
           staffListEl,
-          html`<div class="staff-assign-option" onclick="Lab.assignEmergencyTask(${p.id})">
+          html`<div
+            class="staff-assign-option"
+            data-action="assign-emergency"
+            data-staff-id="${p.id}"
+          >
             <span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small>
           </div>`,
         );
@@ -985,7 +1034,8 @@ const Lab = {
             <div class="cost">$${item.cost}</div>
             <button
               class="btn btn-primary"
-              onclick="Lab.buyEquipment('${item.id}')"
+              data-action="buy-equipment"
+              data-catalog-id="${item.id}"
               ${this.world.money < item.cost ? 'disabled' : ''}
             >
               Buy
@@ -1024,7 +1074,7 @@ const Auth = {
             >👤 ${this.user.email}</span
           >
           <button
-            onclick="Auth.logout()"
+            data-action="logout"
             style="padding:0.35rem 0.75rem;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:0.8rem;font-weight:600;color:#64748b;"
           >
             Log out
@@ -1072,12 +1122,3 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   Lab.init();
 });
-
-// --- Temporary bridge to the global scope --------------------------------
-// This file is now an ES module, so top-level `const Lab` and `const Auth` are
-// module-scoped and invisible to the inline onclick="Lab.…" handlers still in
-// the markup. Without these two lines every one of those 25 handlers would
-// silently stop working. They are deleted once the handlers become delegated
-// data-action events, and that deletion is what proves the migration is done.
-window.Lab = Lab;
-window.Auth = Auth;
