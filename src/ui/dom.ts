@@ -72,6 +72,17 @@ export function html(parts: TemplateStringsArray, ...values: unknown[]): Raw {
   return raw(out);
 }
 
+/**
+ * Reads the markup out of a Raw.
+ *
+ * The brand is a symbol precisely so it cannot be reached by accident, which
+ * also means tests cannot read it by accident. This is the deliberate way in,
+ * and it is what lets the escaping be asserted without a DOM at all.
+ */
+export function toHtmlString(content: Raw): string {
+  return content[RAW];
+}
+
 /** The only sanctioned way to write markup into the document. */
 export function setHtml(target: Element | null, content: Raw): void {
   if (!target) return;
