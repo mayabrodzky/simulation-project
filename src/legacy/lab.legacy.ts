@@ -91,7 +91,6 @@ const Lab = {
   },
 
   init() {
-    console.log('Initializing Upgraded Lab Simulation V14.8...');
     // Seeded so a run can be reproduced: ?seed=123 replays it exactly.
     // Without the parameter the seed is taken from the clock, which keeps
     // today's behaviour of a different lab on every load.
