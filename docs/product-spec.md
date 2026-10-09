@@ -149,3 +149,24 @@ Keep the engine domain-agnostic (resources, capabilities, work types, events); e
 4. Which of the four decisions has she actually considered in the last year?
 5. Would she trust a verdict more with a range ("₪18k–31k") or a single number?
 6. What would make her stop trusting the tool?
+
+### Added while building the model (Phase 2)
+
+Three modelling assumptions that this spec does not settle, where a reading had to be chosen to
+write the code. Each is a `Tuning` value or a scenario field, so a different answer is a data change
+rather than a rewrite.
+
+7. **The cell culture assay.** "3 h spread over 3 days + 48 h incubation" does not map onto a step
+   sequence. It is modelled as three steps — biosafety cabinet 120 min attended, incubator 15 min
+   attended then 48 h unattended, microscope 45 min attended. That keeps the three hours of hands-on
+   time and the 48-hour wait, but turns "spread over 3 days" into "whenever the incubation
+   finishes". Is the spread load-bearing — does someone have to come back on specific days — or is
+   it just describing how it feels?
+8. **When does a client give up?** The spec has partial credit for lateness but no point at which a
+   job stops being worth doing. Modelled as abandonment **3 working days past the deadline**, with
+   the work written off. Does that happen at all, and if so after how long?
+9. **How are the hands-on minutes split across the steps of a job?** The spec gives a total per work
+   type, not a per-step breakdown — but the split decides which instrument is the bottleneck. The
+   numbers chosen reproduce this spec's own claim that mass spec binds first; a different split makes
+   the microscope bind instead. This is the single assumption most worth checking, because it
+   silently determines the answer to the question the whole tool exists to ask.

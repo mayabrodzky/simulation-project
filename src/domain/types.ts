@@ -21,6 +21,44 @@ export type StaffState = 'idle' | 'working' | 'break' | 'off' | 'sick' | 'vacati
 
 export type EmergencyStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 
+/* --- Time ------------------------------------------------------------------
+ *
+ * Simulated time is one monotonic count of minutes since the start of the run,
+ * where minute 0 is Sunday 00:00. Nothing wraps. A wrapping clock cannot say
+ * what day it is, which is why deadlines, overtime and shifts are all
+ * impossible to express against one.
+ */
+
+/** 0 = Sunday. The lab works Sunday to Thursday. */
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** When a group of people are at work. Minutes are measured from midnight. */
+export interface Shift {
+  days: DayOfWeek[];
+  startMinute: number; // 08:00 → 480
+  endMinute: number; // 16:00 → 960
+}
+
+export interface Calendar {
+  /** The default shift. Individuals may override it — an evening shift is a decision. */
+  shift: Shift;
+  /**
+   * Whether "two working days" counts the day the job arrived.
+   *
+   * false (the default) means a job arriving Sunday is due at close on
+   * Tuesday. This is a genuine open question for the lab manager rather than a
+   * fact, which is why it is data — see docs/product-spec.md §7.
+   */
+  deadlineCountsArrivalDay: boolean;
+  /**
+   * Rush deadlines are quoted in wall-clock hours, not working hours: "24
+   * hours" means tomorrow, including overnight. That is what makes a rush
+   * order hard, and it is also why one arriving on Thursday afternoon may be
+   * impossible to meet.
+   */
+  rushDeadlineMode: 'calendar' | 'working';
+}
+
 export interface Rect {
   x: number;
   y: number;
