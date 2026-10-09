@@ -503,3 +503,76 @@ Recorded rather than fixed, with the reasoning for each.
   rules: it reads the world, renders it, and turns clicks into commands. Splitting
   it is the next structural piece of work and was deliberately left out of this
   phase.
+
+---
+
+## 14. Phase 1 retrospective
+
+Merged to `main` and deployed on 9 October 2026.
+
+### What it set out to do, and whether it did it
+
+The goal was not features. It was to make three things possible that were not:
+running the simulation without a browser, reproducing a run, and rendering
+untrusted text safely. All three hold now, and each is enforced by tooling
+rather than by intention — a lint rule for the first, a seeded generator and a
+test for the second, a branded type for the third.
+
+| | Before | After |
+|---|---|---|
+| Entry file | 768 lines, 75 kB | 221 lines, 8.5 kB |
+| Simulation | inline, required a browser | `src/engine`, headless |
+| Tests | 0 | 26 |
+| Inline event handlers | 26 | 0 |
+| Unescaped `innerHTML` sites | 26 | 0 |
+| Production dependency vulnerabilities | 3 | 0 |
+| Sidebar rebuild rate | ~240 subtree reparses/second | 4/second, plus on events |
+
+40 commits. The deployment was also four commits stale at the start, serving a
+build from September, and two of the five pages had never been live at all.
+
+### The pattern in the defects found
+
+Nine bugs surfaced. Almost none were logic errors; they were failures of
+*visibility*:
+
+- A frame-rate dependency, because an undeclared input (the monitor's refresh
+  rate) influenced the result.
+- A `NaN` that stopped anything being drawn, because canvas discards non-finite
+  geometry without complaint.
+- Seven CSS classes with no definition, because browsers ignore unknown classes.
+- An animation that had never played, because nothing ever added its class.
+- An undefined reference that reached production, because the file it was in was
+  excluded from both the type checker and the linter.
+- Equipment matched by name, so purchased machines can never be used.
+
+The common shape is a system that fails by doing nothing rather than by
+reporting. Every fix that stuck was therefore a tooling change — a lint rule, a
+type, a test — rather than a correction in place. The three corrections made
+without one (the renderer's missing clock, the shadowed palette array, the
+dropped off-shift guard) were each caught by hand afterwards, which is the point.
+
+### What was rejected, and held up
+
+Several decisions traded short-term convenience for reviewability, and all were
+worth it:
+
+- Moving code verbatim before improving it, so that each move could be verified
+  by comparing output rather than by reading a diff.
+- Keeping formatting changes in commits of their own.
+- Suppressing type checking on the file being migrated, scoped and time-boxed —
+  though the scope was drawn too wide, and that cost a production bug (entry 10).
+- Deferring renames, unit corrections and one visual fix rather than bundling
+  them into moves.
+
+### What Phase 1 did not do
+
+The view layer is still one 1,125-line file. It holds no simulation rules — it
+reads the world, renders it, and turns clicks into commands — but it is not yet
+split into typed modules. Three secondary pages keep their inline scripts, with
+only enough work done that nothing live is a dead end.
+
+The limitations carried forward are listed in entry 13. The two that most
+constrain what comes next are that work items are fields on a person rather than
+entities in their own right, and that equipment capacity is modelled as a name
+rather than a count.
