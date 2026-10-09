@@ -199,10 +199,11 @@ Known limitations, stated rather than hidden:
 
 ---
 
-## Notes on the work
+## Engineering log
 
-[`docs/interview-notes.md`](docs/interview-notes.md) records each step of the
-refactor: what changed, why, and what went wrong. Among other things it covers a
-bug where the simulation ran 2.4× faster on a 144 Hz monitor, a `NaN` that
-silently stopped drawing anything, and a stored-XSS hole that is now pinned shut
-by a test.
+[`docs/engineering-log.md`](docs/engineering-log.md) records the decisions behind
+the restructure — context, what was chosen, what was rejected, and how each
+conclusion was checked. It also documents the problems found on the way, among
+them a simulation that ran 2.4× faster on a 144 Hz monitor, a `NaN` that silently
+stopped anything being drawn, and the stored-XSS hole that is now held shut by a
+test.

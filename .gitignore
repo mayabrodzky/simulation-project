@@ -10,3 +10,6 @@ dist/
 
 # Local editor/agent tooling state, not project configuration
 .claude/
+
+# Interview preparation — personal notes, never committed
+docs/private/
