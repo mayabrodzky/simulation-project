@@ -1,0 +1,16 @@
+dist
+node_modules
+package-lock.json
+# Leading slash anchors this to the repository root. Without it, the pattern
+# would also match src/legacy — gitignore syntax matches a slashless pattern at
+# every directory level.
+/legacy/
+docs/baseline
+*.png
+*.md
+
+# Dead code on its way out of the repository: check.html is an abandoned,
+# unlinked fork of the simulation, and server.js is the superseded Express
+# backend. Both are removed later in Phase 1; formatting them is waste.
+/check.html
+/server.js

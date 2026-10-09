@@ -1,0 +1,31 @@
+/* Shared foundations: the webfont, the design tokens every page reads,
+   the reset, and the base body style. Moved verbatim from the inline
+   <style> of lab-simulation.html. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --primary-color: #4f46e5;
+  --highlight-color: #10b981;
+  --danger-color: #ef4444;
+  --panel-bg: white;
+  --body-bg: linear-gradient(135deg, #4b6cb7, #182848);
+  --text-dark: #1e293b;
+  --text-light: #64748b;
+  --border-color: #e5e7eb;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family:
+    'Inter',
+    -apple-system,
+    sans-serif;
+  background: var(--body-bg);
+  min-height: 100vh;
+  transition: box-shadow 0.4s ease-in-out;
+}

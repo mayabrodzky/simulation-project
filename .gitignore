@@ -2,3 +2,14 @@ node_modules/
 data/
 .env
 *.log
+
+# Build output and tool caches
+dist/
+.vite/
+.vercel/
+
+# Local editor/agent tooling state, not project configuration
+.claude/
+
+# Interview preparation — personal notes, never committed
+docs/private/
