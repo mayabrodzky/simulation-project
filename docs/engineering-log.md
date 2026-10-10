@@ -690,3 +690,69 @@ that are about to change, so it now advances until the work actually starts. The
 progress above zero immediately after a step began, when the correct value at that instant is exactly
 zero. Both were wrong tests rather than wrong code, which is its own useful signal: an assertion
 written from an assumption about timing rather than from the model.
+
+---
+
+## 18. Minutes, and an event-driven loop
+
+**Context.** The loop advanced everything by whatever slice of time it was handed. A large step
+therefore stepped over things: a task finishing partway through lost the remainder, a walker jumped
+past their destination, and two random events were dice rolled once per call rather than scheduled.
+Stepping a day at a time gave different answers from stepping a sixtieth of a second at a time.
+
+**Why that matters more than it sounds.** The live view steps finely; the batch runner must step
+coarsely to finish hundreds of simulated months in seconds. If the two disagree, the numbers on a
+verdict card describe a simulation nobody ever watched — and the disagreement is silent, because
+each run looks entirely reasonable on its own.
+
+**Decision.** Clamp each slice to the next thing that actually happens: a step completing, someone
+reaching a machine, a deadline falling due, a scheduled event. One iteration per event, so nothing
+is ever stepped over. Separately, make simulated minutes the engine's unit, which also resolves the
+inconsistency carried over from Phase 1 where a step authored as `duration: 20` was counted in
+seconds while every label said "min".
+
+**The dice become schedules.** Asking "did this happen during the last slice?" has an answer that
+depends on how often it is asked. Drawing the wait until the next occurrence once, from the
+exponential distribution, does not. This is the same mechanism job arrivals will use.
+
+### What the invariance test found
+
+Four ordering and threshold errors, each of which made an outcome depend on step size, and none of
+which would have been visible by inspection:
+
+- A newly raised deadline was charged the whole slice it was born in. Existing work is now ticked
+  before anything new appears.
+- Machines were charged for a slice after people acted in it, so a machine switched on at the last
+  instant was billed for the whole slice.
+- Work started when rounded coordinates matched — true within half a tile, rather than on arrival.
+  Arrival is an instant the loop lands on exactly; a rounded position is not.
+- Arrival was *detected* one slice after it happened, and that slice's length varies. Movement now
+  runs before the work logic, so work begins at the instant of arrival.
+
+Two further bugs were floating-point dust: a timer at 1e-17 was not worth clamping to and so
+received a whole extra step, and landing exactly on the arrival radius leaves a distance a hair
+outside it. Both are fixed by one tolerant definition of arrival used by the movement, the arrival
+test and the event clamp alike.
+
+### Correcting the claim that was made for this work
+
+The plan said this step would make coarse and fine stepping **bit-identical**. That was wrong, and
+the test proved it: divergence appears in the first simulated minute, where the two clocks read 481
+and 480.9999999999991. Sixty additions of one sixtieth do not equal one addition of one in binary
+floating point, and no amount of clamping changes that.
+
+The guarantee the loop does provide is sharper and more useful: **no event is ever stepped over**, so
+divergence is bounded by floating-point accumulation rather than by logic. The test therefore asserts
+two different things. Everything discrete — who is doing what, which machines are busy, how many
+events fired, and the exact position of the random number generator — must match *exactly*, because
+the reported metrics are built from those. Everything continuous must match to a tolerance far
+tighter than any decision would turn on.
+
+That distinction is worth more than the original claim. "Identical" would have been unachievable and
+quietly abandoned; "no event is stepped over, and here is the arithmetic bound on what remains" is
+both true and testable.
+
+**Verification.** Eight tests across step sizes from a sixtieth of a second to a whole day.
+Confirmed load-bearing: removing the clamping fails six of them. One pre-existing test had to be
+updated, because work now begins the instant someone arrives and continues through the rest of the
+slice rather than discarding the remainder — the test had been asserting the wasteful behaviour.
