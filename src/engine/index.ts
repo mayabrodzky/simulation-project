@@ -18,3 +18,33 @@ export { isQualified, missingSkills } from './rules';
 export { createRng, type Rng } from './rng';
 export { isPanelAffecting, type EngineEvent, type RejectionReason } from './events';
 export { formatDuration } from './time';
+export {
+  dayOfWeek,
+  isWithinShift,
+  minuteOfDay,
+  nextOpen,
+  addWorkingDays,
+  addWorkingMinutes,
+  workingMinutesBetween,
+} from './calendar';
+/**
+ * The seam the interface asks questions through, rather than reading the
+ * simulation's shapes. Keeps panels and the canvas independent of how work is
+ * represented, which is what lets that representation change.
+ */
+export {
+  countTraining,
+  describeAssignment,
+  clockView,
+  isUnoccupied,
+  listActiveWork,
+  listUrgentWork,
+  progressByStaff,
+  staffLoadPercent,
+  unoccupiedStaffIds,
+  urgentTimeLeft,
+  type ActiveWorkView,
+  type AssignmentView,
+  type ClockView,
+  type UrgentWorkView,
+} from './queries';

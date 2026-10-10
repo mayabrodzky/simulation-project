@@ -18,11 +18,20 @@ import { chemistryLab, scenarioFromBusinessProfile } from '../scenarios';
 import {
   applyCommand,
   cloneWorld,
+  countTraining,
   createWorld,
+  describeAssignment,
   formatDuration,
   isPanelAffecting,
   isQualified,
+  isUnoccupied,
+  listActiveWork,
+  listUrgentWork,
+  progressByStaff,
+  staffLoadPercent,
   tick,
+  unoccupiedStaffIds,
+  urgentTimeLeft,
 } from '../engine';
 import { createRenderer } from '../render/renderer';
 import { installActions, installEscape, installHover } from '../ui/actions';
@@ -141,6 +150,8 @@ const Lab = {
       walls: this.world.walls,
       staticPersonnel: [],
       state: { time: this.world.minutes },
+      progressByStaff: progressByStaff(this.world),
+      unoccupiedStaffIds: unoccupiedStaffIds(this.world),
       nowMs: this.lastTime,
       hoveredEntity: this.hoveredEntity,
       highlightedStaffIds: this.highlightedStaffIds,
@@ -671,10 +682,8 @@ const Lab = {
       } else if (p.state === 'vacation') {
         c.vacation++;
       }
-      if (p.activeTask && p.activeTask.type === 'training') {
-        c.training++;
-      }
     });
+    c.training = countTraining(this.world);
     document.getElementById('workingCount').textContent = c.working;
     document.getElementById('breakCount').textContent = c.break;
     document.getElementById('offCount').textContent = c.off;
@@ -706,7 +715,7 @@ const Lab = {
             </div>
           </div>
           <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.25rem;">
-            Task: ${p.activeTask ? p.activeTask.name : 'None'}
+            Task: ${describeAssignment(this.world, p)?.label ?? 'None'}
           </div>
           <div class="skills-container">
             ${skillTags.length ? skillTags : html`<span style="font-size: 0.75rem; color: var(--text-light);">No special skills.</span>`}
@@ -818,8 +827,8 @@ const Lab = {
   updateOngoingTasksPanel() {
     const panel = document.getElementById('ongoingTasksPanel');
     if (!panel) return;
-    const activeStaff = this.staff.filter((p) => p.activeTask);
-    if (activeStaff.length === 0) {
+    const active = listActiveWork(this.world);
+    if (active.length === 0) {
       setHtml(
         panel,
         html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
@@ -830,30 +839,19 @@ const Lab = {
     }
     setHtml(
       panel,
-      html`${activeStaff.map((p) => {
-        const task = p.activeTask;
-        let progress = 0;
-        let statusText = 'Moving to equipment';
-        if (p.state === 'working') {
-          if (task.type === 'training') {
-            statusText = 'Training in progress';
-            progress = Math.max(0, 100 * (1 - p.taskTimer / task.duration));
-          } else {
-            statusText = 'Processing';
-            const currentStep = task.equipmentSequence[p.taskStep];
-            if (currentStep) {
-              progress = Math.max(0, 100 * (1 - p.taskTimer / currentStep.duration));
-            }
-          }
-        }
-        return html`<div class="ongoing-task-card">
-          <strong>${task.name}</strong>
-          <div class="info">Assigned to: ${p.name} (${statusText})</div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progress}%; background: #a78bfa;"></div>
-          </div>
-        </div>`;
-      })}`,
+      html`${active.map(
+        (item) =>
+          html`<div class="ongoing-task-card">
+            <strong>${item.name}</strong>
+            <div class="info">Assigned to: ${item.assignee} (${item.statusText})</div>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                style="width: ${item.progress * 100}%; background: #a78bfa;"
+              ></div>
+            </div>
+          </div>`,
+      )}`,
     );
   },
   openTaskModal(staffId) {
@@ -862,9 +860,10 @@ const Lab = {
     // Someone who has just been given a task is still 'idle' until they reach
     // the machine, so reporting their state would say "is currently idle".
     // Describe the task when there is one.
-    if (this.selectedStaff.activeTask) {
+    const current = describeAssignment(this.world, this.selectedStaff);
+    if (current) {
       this.showNotification(
-        `Cannot assign task: ${this.selectedStaff.name} is already on "${this.selectedStaff.activeTask.name}".`,
+        `Cannot assign task: ${this.selectedStaff.name} is already on "${current.label}".`,
         'error',
       );
       return;
@@ -943,7 +942,7 @@ const Lab = {
     const staffListEl = document.getElementById('emergencyStaffList');
     staffListEl.replaceChildren();
     const availableStaff = this.staff.filter(
-      (p) => p.state === 'idle' && !p.activeTask && isQualified(p, task),
+      (p) => isUnoccupied(this.world, p) && isQualified(p, task),
     );
     if (availableStaff.length > 0) {
       availableStaff.forEach((p) => {
