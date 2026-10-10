@@ -12,6 +12,8 @@
  */
 import type {
   Calendar,
+  Job,
+  WorkType,
   CatalogItem,
   Emergency,
   EmergencyTemplate,
@@ -25,11 +27,18 @@ import type {
   Tuning,
   Wall,
 } from '../domain/types';
-import { minuteOfDay } from './calendar';
+import { generateWeekArrivals } from './arrivals';
+import { minuteOfDay, weekIndex } from './calendar';
 import { createRng, deriveSeed, type Rng } from './rng';
 
 export interface WorldState {
   scenarioId: string;
+  /**
+   * The master seed. Kept on the world because derived streams are needed
+   * during a run, not only at creation — the next week of demand is derived
+   * from it when the clock reaches that week.
+   */
+  seed: number;
   /** Simulated seconds elapsed. */
   elapsedSeconds: number;
   /**
@@ -56,7 +65,30 @@ export interface WorldState {
 
   staff: Staff[];
   equipment: Equipment[];
+  /**
+   * Work that has arrived: waiting, in progress, finished or abandoned.
+   *
+   * Finished jobs are kept rather than discarded. "How late were we last week?"
+   * cannot be answered from a queue that throws away everything it completes,
+   * and the batch runner reports exactly that.
+   */
+  jobs: Job[];
+  /**
+   * Work that will arrive, soonest first. Generated ahead of the clock so the
+   * slice loop can land exactly on each arrival.
+   */
+  arrivalQueue: Job[];
+  /**
+   * How many weeks of demand have been generated. Weeks are keyed
+   * independently, so this is bookkeeping rather than state the result depends
+   * on — see arrivals.ts.
+   */
+  weeksGenerated: number;
+  /** Source of job ids, so they read in arrival order. */
+  nextJobNumber: number;
   emergencies: Emergency[];
+  /** What the lab sells. Scenario data; the simulation never changes it. */
+  workTypes: WorkType[];
   /** Templates new emergencies are raised from. */
   emergencyTemplates: EmergencyTemplate[];
   tasks: TaskDefinition[];
@@ -126,8 +158,9 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     totalWorkTime: 0,
   }));
 
-  return {
+  const world: WorldState = {
     scenarioId: scenario.id,
+    seed,
     elapsedSeconds: 0,
     simMinutes: start,
     minutes: minuteOfDay(start),
@@ -140,7 +173,15 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
 
     staff,
     equipment,
+    jobs: [],
+    arrivalQueue: [],
+    weeksGenerated: 0,
+    nextJobNumber: 1,
     emergencies: [],
+    workTypes: scenario.workTypes.map((w) => ({
+      ...w,
+      steps: w.steps.map((step) => ({ ...step })),
+    })),
     emergencyTemplates: scenario.emergencies.map((e) => ({
       ...e,
       equipmentSequence: e.equipmentSequence.map((step) => ({ ...step })),
@@ -169,6 +210,65 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
       equipmentSpend: 0,
     },
   };
+
+  // Demand for the opening week has to exist before the first slice, so the
+  // loop can clamp to the first arrival rather than stepping over it.
+  ensureArrivalsThrough(world, start);
+  return world;
+}
+
+/**
+ * Generates demand up to and including the week after `throughMinute`.
+ *
+ * Called with the end of the span about to be simulated, which is what makes it
+ * independent of step size: advancing a fortnight in one call and in twenty
+ * thousand calls both finish having generated through the same week, because
+ * the last call's end is the same instant either way.
+ *
+ * The one-week lookahead is so the queue is never empty merely because the
+ * clock is near a week boundary — the view asks what arrives next.
+ */
+export function ensureArrivalsThrough(world: WorldState, throughMinute: number): void {
+  const wanted = weekIndex(throughMinute) + 2;
+  // Called once per slice, which at a sixtieth-of-a-second step is nearly a
+  // million times for four simulated hours, so the common case of "nothing to
+  // generate" has to cost one comparison and no allocation.
+  if (world.weeksGenerated >= wanted) return;
+
+  while (world.weeksGenerated < wanted) {
+    const week = world.weeksGenerated;
+    const arrivals = generateWeekArrivals(
+      world.workTypes,
+      world.calendar,
+      world.seed,
+      week,
+      world.nextJobNumber,
+    );
+    world.nextJobNumber += arrivals.length;
+    world.weeksGenerated = week + 1;
+
+    // A world may start mid-week, and anything already in the past at that
+    // point never arrives. Dropping it here rather than admitting it late
+    // keeps "arrived" meaning "the clock reached this instant".
+    for (const job of arrivals) {
+      if (job.arrivedAtMinute >= world.simMinutes) world.arrivalQueue.push(job);
+    }
+  }
+  world.arrivalQueue.sort((a, b) => a.arrivedAtMinute - b.arrivedAtMinute);
+}
+
+/** Moves everything that has now arrived out of the queue. Returns what moved. */
+export function admitArrivals(world: WorldState): Job[] {
+  const admitted: Job[] = [];
+  while (
+    world.arrivalQueue.length > 0 &&
+    world.arrivalQueue[0]!.arrivedAtMinute <= world.simMinutes
+  ) {
+    const job = world.arrivalQueue.shift()!;
+    world.jobs.push(job);
+    admitted.push(job);
+  }
+  return admitted;
 }
 
 /**

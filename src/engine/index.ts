@@ -33,6 +33,7 @@ export {
  * represented, which is what lets that representation change.
  */
 export {
+  backlogView,
   countTraining,
   describeAssignment,
   clockView,
@@ -40,11 +41,14 @@ export {
   listActiveWork,
   listUrgentWork,
   progressByStaff,
+  queueByWorkType,
   staffLoadPercent,
   unoccupiedStaffIds,
   urgentTimeLeft,
   type ActiveWorkView,
+  type BacklogView,
   type AssignmentView,
   type ClockView,
+  type QueueLineView,
   type UrgentWorkView,
 } from './queries';

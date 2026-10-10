@@ -12,7 +12,14 @@ import type { ActiveJob, Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
-import { findEquipmentByName, rngFor, rngForStaff, type WorldState } from './world';
+import {
+  admitArrivals,
+  ensureArrivalsThrough,
+  findEquipmentByName,
+  rngFor,
+  rngForStaff,
+  type WorldState,
+} from './world';
 
 export interface TickOptions {
   /**
@@ -72,6 +79,12 @@ export function advance(
   const events: EngineEvent[] = [];
   const rng = rngFor(world);
 
+  // Demand for the whole span, before the first slice. Asking for the end of
+  // the span rather than for each slice is what keeps this step-size
+  // independent: one call for a fortnight and twenty thousand one-minute calls
+  // both finish having generated through the same week.
+  ensureArrivalsThrough(world, world.simMinutes + dtMinutes);
+
   let remaining = dtMinutes;
   let guard = 0;
 
@@ -113,6 +126,18 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
   };
 
   if (!options.freezeClock) {
+    // A sample turning up.
+    //
+    // Not yet load-bearing, and deliberately kept: nothing acts on a job the
+    // instant it arrives, so admitting one at the end of the slice it fell
+    // inside would currently give the same answer. That stops being true in
+    // the next step, where a free person can pick a job up the moment it lands
+    // — and then the difference between "started at 09:40" and "started at
+    // midnight, because the batch runner steps a day at a time" is a whole
+    // working day of throughput. Confirmed by mutation testing: removing this
+    // line breaks no test today.
+    const nextArrival = world.arrivalQueue[0];
+    if (nextArrival) at(nextArrival.arrivedAtMinute);
     at(world.nextEmergencyAtMinute);
     for (const e of world.emergencies) {
       if (e.status === 'pending' || e.status === 'in-progress') inMinutes(e.timeLimit);
@@ -209,6 +234,19 @@ function applySlice(
         raiseEmergency(world, events);
       }
       world.nextEmergencyAtMinute = world.simMinutes + rng.nextInterval(t.emergencyRatePerMinute);
+    }
+
+    // New work appears after existing work has been charged for the slice, for
+    // the same reason the emergency is raised here rather than at the top: a
+    // job that arrives at the end of a slice must not be treated as having
+    // been present during it.
+    for (const job of admitArrivals(world)) {
+      events.push({
+        type: 'job-arrived',
+        jobId: job.id,
+        name: job.name,
+        dueAtMinute: job.dueAtMinute,
+      });
     }
   }
 

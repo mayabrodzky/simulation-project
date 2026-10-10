@@ -13,6 +13,9 @@
 export type StaffId = number;
 export type EquipmentId = number;
 export type TaskId = string;
+export type JobId = string;
+/** Identifies a kind of work the lab sells. Scenario-defined. */
+export type WorkTypeId = string;
 
 /** Scenario-defined. Phase 2 generalises this to a capability on any resource. */
 export type Skill = string;
@@ -102,6 +105,110 @@ export interface TaskDefinition {
   timeLimit: number;
   penalty: number;
   equipmentSequence: TaskStep[];
+}
+
+/* --- Work ------------------------------------------------------------------
+ *
+ * A `WorkType` is what the lab sells — a recipe, scenario data, never changed
+ * by the simulation. A `Job` is one instance of it: a real sample that arrived
+ * at a real minute, is due at a real minute, and is either waiting, being
+ * worked on, finished or abandoned.
+ *
+ * The distinction is the whole point of this step. Before it, work did not
+ * exist until a person was told to do it, so there was no queue, no backlog and
+ * no such thing as late. "Are we falling behind?" — the question the product
+ * exists to answer — was not expressible.
+ */
+
+/** One stage of a recipe: which machine, how long, what skill. */
+export interface WorkStepTemplate {
+  /** Matches EquipmentTemplate.name. A5 replaces this with a capability. */
+  name: string;
+  /** Minutes of hands-on work. A4 splits this into attended and unattended. */
+  duration: number;
+  skillRequired: Skill | null;
+}
+
+export interface WorkType {
+  id: WorkTypeId;
+  name: string;
+  /** Mean jobs arriving per week. */
+  perWeek: number;
+  /**
+   * Spread around `perWeek`, as a fraction. 0.2 means the weekly count is drawn
+   * uniformly from 80%–120% of the mean. Real demand is lumpy, and a lab that
+   * only ever receives exactly the average never shows a queue.
+   */
+  variation: number;
+  /** Price in ₪ before any lateness adjustment. A6 adds partial credit. */
+  basePrice: number;
+  /** Working days allowed, counted as close of business on the n-th. */
+  dueWorkingDays: number;
+  steps: WorkStepTemplate[];
+}
+
+export type JobStatus =
+  | 'waiting'
+  | 'in-progress'
+  /** Advisory, recomputed every pass, never absorbing. Set in A3c. */
+  | 'blocked'
+  | 'done-on-time'
+  | 'done-late'
+  /** The client gave up and cancelled. */
+  | 'expired';
+
+/**
+ * Why a job is not moving.
+ *
+ * Counted by reason over a run, this is the "what is holding the lab back"
+ * sentence, obtained for free rather than inferred from utilisation numbers.
+ */
+export type BlockReason =
+  | 'no-qualified-operator'
+  | 'everyone-busy'
+  | 'resource-busy'
+  | 'outside-working-hours'
+  | 'no-such-resource';
+
+/** A step of a live job. Counts *remaining*, which is what makes pausing free. */
+export interface JobStep {
+  name: string;
+  skillRequired: Skill | null;
+  /** Minutes of work still to do. Pausing is simply not decrementing it. */
+  remaining: number;
+  /** What it started as, so progress can be shown without a second source. */
+  total: number;
+}
+
+export interface Job {
+  id: JobId;
+  workTypeId: WorkTypeId;
+  /** Copied from the work type so a display never has to resolve the recipe. */
+  name: string;
+  status: JobStatus;
+  /** Absolute minute. */
+  arrivedAtMinute: number;
+  /**
+   * Absolute minute, computed once at arrival rather than counted down.
+   *
+   * A countdown has to be decremented by someone, which is why lateness used to
+   * be binary and why a paused job used to keep losing time. An instant is
+   * simply compared against the clock.
+   */
+  dueAtMinute: number;
+  basePrice: number;
+  steps: JobStep[];
+  stepIndex: number;
+  /** Who is on it, when anyone is. */
+  operatorId: StaffId | null;
+  /** Which machine it holds, when it holds one. */
+  equipmentId: EquipmentId | null;
+  /** Set by manual assignment. The dispatcher never reassigns a pinned job. */
+  pinnedStaffId: StaffId | null;
+  completedAtMinute: number | null;
+  /** What was actually paid. A6 makes this differ from basePrice. */
+  settledRevenue: number;
+  blockReason: BlockReason | null;
 }
 
 export interface EmergencyTemplate {
@@ -196,6 +303,17 @@ export interface Tuning {
   initialConditionRange: number;
   /** Staff beyond this index start off-shift. */
   staffOnShiftCount: number;
+
+  /**
+   * Working days past its deadline before a client cancels and the job becomes
+   * `expired`.
+   *
+   * An assumption, not a fact — recorded in docs/product-spec.md §7 as a
+   * question for the lab manager. It is here rather than inline because it
+   * decides how much revenue a badly overloaded lab loses outright, and that
+   * number should be arguable with rather than buried.
+   */
+  abandonAfterWorkingDays: number;
 }
 
 /**
@@ -221,6 +339,12 @@ export interface Scenario {
   calendar: Calendar;
   staff: StaffTemplate[];
   equipment: EquipmentTemplate[];
+  /**
+   * What the lab sells, and how much of it arrives. Replaces `tasks` as the
+   * source of work; `tasks` survives one more step so the existing assign flow
+   * keeps working while jobs are introduced alongside it.
+   */
+  workTypes: WorkType[];
   tasks: TaskDefinition[];
   catalog: CatalogItem[];
   props: Prop[];

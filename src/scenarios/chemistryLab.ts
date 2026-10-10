@@ -8,7 +8,7 @@
  * live here. That split is what lets the same engine model something else
  * later, and it is what Phase 4's editable assumptions panel reads.
  */
-import type { Calendar, Layout, Scenario, Tuning } from '../domain/types';
+import type { Calendar, Layout, Scenario, Tuning, WorkType } from '../domain/types';
 
 const layout: Layout = {
   gridWidth: 24,
@@ -77,7 +77,85 @@ const tuning: Tuning = {
   initialConditionMin: 70,
   initialConditionRange: 30,
   staffOnShiftCount: 6,
+
+  // Three working days past the deadline before the client cancels. An
+  // assumption to put to the lab manager, not a fact — see
+  // docs/product-spec.md section 7.
+  abandonAfterWorkingDays: 3,
 };
+
+/**
+ * What the lab sells, and how much of it arrives.
+ *
+ * Volumes and prices come from docs/product-spec.md, which records what the lab
+ * manager described. The step durations are hands-on minutes only; the step
+ * after this one splits each into attended and unattended time, which is what
+ * lets an instrument run while its operator does something else.
+ *
+ * Two things here are modelling choices rather than reported facts, and both
+ * decide which machine becomes the bottleneck:
+ *
+ * - **How hands-on minutes split across the steps of a job.** A different split
+ *   makes the microscope bind before the mass spectrometer, and the whole
+ *   story the scenario is built around changes. Stated explicitly so it can be
+ *   argued with; A7 adds a check that the binding constraint is the expected
+ *   one.
+ * - **A uniform band around the weekly mean** rather than a Poisson count. See
+ *   arrivals.ts.
+ *
+ * Mass spectrometry is new work. Until now no task asked for the Mass
+ * Spectrometer, so the machine existed, could be bought a second time, and
+ * could never relieve anything — the Phase 1 finding that bought equipment
+ * cannot affect capacity. This is what retires it.
+ */
+export const workTypes: WorkType[] = [
+  {
+    id: 'blood-panel',
+    name: 'Blood panel',
+    perWeek: 80,
+    variation: 0.2,
+    basePrice: 180,
+    dueWorkingDays: 2,
+    steps: [
+      { name: 'Centrifuge', duration: 25, skillRequired: 'Centrifuge Usage' },
+      { name: 'Microscope A', duration: 20, skillRequired: 'Microscopy' },
+    ],
+  },
+  {
+    id: 'dna-pcr',
+    name: 'DNA / PCR',
+    perWeek: 40,
+    variation: 0.2,
+    basePrice: 650,
+    dueWorkingDays: 5,
+    steps: [
+      { name: 'PCR Machine', duration: 45, skillRequired: 'PCR Operation' },
+      { name: 'Spectrophotometer', duration: 45, skillRequired: 'Spectrophotometry' },
+    ],
+  },
+  {
+    id: 'cell-culture',
+    name: 'Cell culture',
+    perWeek: 12,
+    variation: 0.25,
+    basePrice: 1400,
+    dueWorkingDays: 7,
+    steps: [
+      { name: 'Biosafety Cabinet', duration: 120, skillRequired: 'Biosafety Protocols' },
+      { name: 'Incubator', duration: 15, skillRequired: 'Incubator Handling' },
+      { name: 'Microscope A', duration: 45, skillRequired: 'Microscopy' },
+    ],
+  },
+  {
+    id: 'mass-spec',
+    name: 'Mass spectrometry',
+    perWeek: 30,
+    variation: 0.2,
+    basePrice: 900,
+    dueWorkingDays: 5,
+    steps: [{ name: 'Mass Spectrometer', duration: 60, skillRequired: 'Mass Spectrometry' }],
+  },
+];
 
 export const chemistryLab: Scenario = {
   id: 'chemistry-lab',
@@ -85,6 +163,7 @@ export const chemistryLab: Scenario = {
   layout,
   tuning,
   calendar,
+  workTypes,
 
   staff: [
     {

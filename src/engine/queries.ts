@@ -17,7 +17,7 @@
  * into the world, so a caller cannot accidentally mutate the simulation by
  * holding on to one.
  */
-import type { Staff, StaffId } from '../domain/types';
+import type { Job, Staff, StaffId } from '../domain/types';
 import { clockLabel as formatClock, dayLabel, minuteOfDay } from './calendar';
 import type { WorldState } from './world';
 
@@ -51,6 +51,75 @@ export interface UrgentWorkView {
   /** Seconds remaining, as the countdown is currently measured. */
   timeLeft: number;
   urgent: boolean;
+}
+
+/** One kind of work, with how much of it is waiting. */
+export interface QueueLineView {
+  workTypeId: string;
+  name: string;
+  /** How many have arrived and not yet been started. */
+  waiting: number;
+  /** Of those, how many are already past their deadline. */
+  overdue: number;
+  /** Working time until the soonest deadline among them, or null if none wait. */
+  soonestDueInMinutes: number | null;
+  /** Hands-on minutes one job of this kind takes, start to finish. */
+  minutesEach: number;
+  priceEach: number;
+}
+
+/** Headline numbers about the backlog, for one line at the top of a panel. */
+export interface BacklogView {
+  waiting: number;
+  overdue: number;
+  /** Total hands-on minutes sitting in the queue — the backlog in real terms. */
+  minutesOfWorkWaiting: number;
+}
+
+/**
+ * The queue, one line per kind of work.
+ *
+ * Grouped rather than listed job by job: eighty blood panels is a number a
+ * manager can act on, and eighty rows is not. Phase 2.5 decides how this is
+ * drawn; this only decides what can be asked.
+ */
+export function queueByWorkType(world: WorldState): QueueLineView[] {
+  return world.workTypes.map((workType) => {
+    const waiting = world.jobs.filter(
+      (job) => job.workTypeId === workType.id && isWaiting(job.status),
+    );
+    const soonest = waiting.reduce<number | null>(
+      (best, job) => (best === null || job.dueAtMinute < best ? job.dueAtMinute : best),
+      null,
+    );
+    return {
+      workTypeId: workType.id,
+      name: workType.name,
+      waiting: waiting.length,
+      overdue: waiting.filter((job) => job.dueAtMinute < world.simMinutes).length,
+      soonestDueInMinutes: soonest === null ? null : soonest - world.simMinutes,
+      minutesEach: workType.steps.reduce((total, step) => total + step.duration, 0),
+      priceEach: workType.basePrice,
+    };
+  });
+}
+
+export function backlogView(world: WorldState): BacklogView {
+  let waiting = 0;
+  let overdue = 0;
+  let minutes = 0;
+  for (const job of world.jobs) {
+    if (!isWaiting(job.status)) continue;
+    waiting += 1;
+    if (job.dueAtMinute < world.simMinutes) overdue += 1;
+    for (let i = job.stepIndex; i < job.steps.length; i++) minutes += job.steps[i]!.remaining;
+  }
+  return { waiting, overdue, minutesOfWorkWaiting: minutes };
+}
+
+/** Work that has arrived and nobody has finished. */
+function isWaiting(status: Job['status']): boolean {
+  return status === 'waiting' || status === 'blocked';
 }
 
 /** The HUD clock, so the renderer needs no opinion about how time is stored. */

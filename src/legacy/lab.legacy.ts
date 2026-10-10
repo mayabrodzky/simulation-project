@@ -17,6 +17,7 @@ import '../styles/lab.css';
 import { chemistryLab, scenarioFromBusinessProfile } from '../scenarios';
 import {
   applyCommand,
+  backlogView,
   cloneWorld,
   countTraining,
   createWorld,
@@ -28,6 +29,7 @@ import {
   listActiveWork,
   listUrgentWork,
   progressByStaff,
+  queueByWorkType,
   staffLoadPercent,
   tick,
   unoccupiedStaffIds,
@@ -800,28 +802,62 @@ const Lab = {
       );
     });
   },
+  /**
+   * The work queue: what has arrived and is waiting, by kind.
+   *
+   * This panel used to list the three recipes the lab can perform, which never
+   * changed and so told the manager nothing. Work now arrives on its own, so
+   * the useful question is what is piling up — read through the query seam, so
+   * this panel does not know how a job is represented.
+   */
   updateTaskListPanel() {
     const panel = document.getElementById('taskListPanel');
     if (!panel) return;
+    const summary = backlogView(this.world);
+    const lines = queueByWorkType(this.world);
+
     setHtml(
       panel,
-      html`${this.tasks.map((task) => {
-        const totalTime = task.equipmentSequence.reduce((acc, step) => acc + step.duration, 0);
-        const skills = task.equipmentSequence.map((s) => s.skillRequired).join(', ');
-        const qualifiedStaff =
-          this.staff
-            .filter((p) => p.state === 'idle' && isQualified(p, task))
-            .map((p) => p.name)
-            .join(', ') || 'None available';
-        return html` <div class="task-def-card" data-hover-task="${task.id}">
-          <strong>${task.name}</strong>
-          <div class="details">
-            <span>Time: ${formatMinutes(totalTime)} | Reward: $${task.reward}</span><br />
-            <strong>Required Skills:</strong> ${skills}<br /><strong>Qualified Staff:</strong>
-            ${qualifiedStaff}
-          </div>
-        </div>`;
-      })}`,
+      html`<div class="queue-summary">
+          ${
+            summary.waiting === 0
+              ? 'Nothing waiting.'
+              : html`<strong>${summary.waiting}</strong> waiting ·
+                  <strong>${formatMinutes(summary.minutesOfWorkWaiting)}</strong> of
+                  work${
+                    summary.overdue > 0
+                      ? html` · <span class="queue-overdue">${summary.overdue} overdue</span>`
+                      : ''
+                  }`
+          }
+        </div>
+        ${lines.map(
+          (line) =>
+            html`<div class="task-def-card" data-hover-task="${line.workTypeId}">
+              <strong>${line.name}</strong>
+              <div class="details">
+                <span
+                  >Waiting: <strong>${line.waiting}</strong> | ${formatMinutes(line.minutesEach)}
+                  each | ₪${line.priceEach}</span
+                ><br />
+                ${
+                  line.soonestDueInMinutes === null
+                    ? 'None in the queue.'
+                    : line.soonestDueInMinutes < 0
+                      ? html`<span class="queue-overdue"
+                          >Soonest deadline passed ${formatMinutes(-line.soonestDueInMinutes)}
+                          ago</span
+                        >`
+                      : html`Soonest due in ${formatMinutes(line.soonestDueInMinutes)}`
+                }
+                ${
+                  line.overdue > 0
+                    ? html`<br /><span class="queue-overdue">${line.overdue} overdue</span>`
+                    : ''
+                }
+              </div>
+            </div>`,
+        )}`,
     );
   },
   updateOngoingTasksPanel() {
