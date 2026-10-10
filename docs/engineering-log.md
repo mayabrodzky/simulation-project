@@ -576,3 +576,77 @@ The limitations carried forward are listed in entry 13. The two that most
 constrain what comes next are that work items are fields on a person rather than
 entities in their own right, and that equipment capacity is modelled as a name
 rather than a count.
+
+---
+
+# Phase 2 — the simulation model
+
+## 15. A working-time calendar
+
+**Context.** The clock counted minutes past midnight and wrapped, so the engine could not tell
+Monday from Thursday. Everything Phase 2 needs is unanswerable against that: a deadline of "two
+working days", overtime "after 45 hours in a week", a shift that runs 08:00–16:00 Sunday to
+Thursday, a four-week horizon with the first week discarded.
+
+**Decision.** Build the calendar first and alone, as pure arithmetic over one monotonic minute
+count where minute 0 is Sunday 00:00 — no world, no state, no randomness. Then, separately, replace
+the world's wrapping clock with an absolute one, deriving the old minutes-past-midnight value from
+it so the HUD and time-of-day overlay need no change.
+
+**Alternatives.** Keeping the wrapped clock and carrying a separate day counter alongside it was
+rejected: two representations of the same quantity invite them to disagree, and every consumer would
+have to know which one to ask. Deriving the wrapped value from the absolute one keeps a single source
+of truth.
+
+**Three judgements it encodes**, each recorded as data rather than buried in a function, because each
+is a question for the lab manager rather than a fact:
+
+- "Two working days" means close of business on the second working day, not 960 minutes of labour.
+  That is what a client means, and it makes the deadline independent of whether a job arrived at
+  09:00 or 15:55 — otherwise an afternoon arrival is quietly penalised.
+- A job arriving outside working hours starts its clock at the next opening, so arriving at 22:00 on
+  a Thursday does not consume the weekend.
+- Rush deadlines are wall-clock hours, nights included. That is what makes them hard, and it means
+  one arriving on a Thursday afternoon can be impossible to meet. That is a property of the lab
+  worth reporting rather than smoothing away.
+
+Closing time is exclusive, so the lab is shut at exactly 16:00. This makes closing a single
+unambiguous instant rather than a minute that is both open and closed, which is what will let the
+slice loop in the next entry stop exactly on it.
+
+**Verification.** 48 tests on the calendar, 3 on the clock change. Four mutations were introduced to
+check the tests were load-bearing rather than decorative:
+
+| Mutation | Tests failed |
+|---|---|
+| Closing time made inclusive | 10 |
+| The arrival-day counting rule ignored | 1 |
+| `nextOpen` loses its wait-until-morning case | 2 |
+| A negative overlap left unclamped | **0** |
+
+The fourth exposed a real gap: no test covered a span falling entirely between two shifts — 17:00
+Monday to 07:00 Tuesday touches two working days but contains no working minutes, and both days
+contribute a negative overlap that must not be summed. Two tests were added and the mutation now
+fails. The lesson is the one that keeps recurring in this project: a test suite that has never been
+attacked tells you nothing about what it would catch.
+
+---
+
+## 16. Line endings
+
+**Context.** After a branch checkout, `format:check` reported every file in the repository as
+incorrectly formatted while `git diff` showed no changes, and every commit printed a warning about
+line endings being replaced.
+
+**Cause.** Git stores text as LF, but `core.autocrlf=true` on Windows converts it to CRLF on
+checkout, and no `.gitattributes` overrode that. The formatter's default is LF. The condition had
+existed all along and only surfaced when the working tree was re-materialised.
+
+**Decision.** `* text=auto eol=lf` in `.gitattributes`, fixing it in the repository rather than in
+one machine's git configuration, so a fresh clone is correct without anyone being told. Binary types
+are marked explicitly so they are never translated.
+
+**Why it mattered enough to stop for.** Continuous integration is about to run `format:check` as a
+gate. Left alone it would have failed on every platform-dependent checkout, and the obvious reading
+of that failure — "someone forgot to format" — would have been wrong, which is the kind of false
+signal that teaches people to ignore a gate.
