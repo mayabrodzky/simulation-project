@@ -756,3 +756,97 @@ both true and testable.
 Confirmed load-bearing: removing the clamping fails six of them. One pre-existing test had to be
 updated, because work now begins the instant someone arrives and continues through the rest of the
 slice rather than discarding the remainder — the test had been asserting the wasteful behaviour.
+
+---
+
+## A2 follow-up — one random sequence per entity
+
+**Context.** Verifying A2 on the preview surfaced a change nobody had asked for: with `?seed=42` the
+eight starting energies had become `92, 97, 83, 85, 97, 84, 94, 83` where they had been
+`92, 88, 97, 93, 83, 90, 85, 92`. The new values were the old ones taken every other position, which
+pointed at the cause — creating a person now draws twice from the generator rather than once, because
+A2 schedules each person's next idle movement in advance instead of rolling for it every tick.
+
+That part was expected and harmless. Looking into it, though, exposed something that was not.
+
+A single generator fed every random value in the project: starting energies, starting machine
+conditions, the schedule of incidents. One sequence, consumed in creation order. So the *number* of
+draws any one thing makes shifts every draw after it. A throwaway test created the lab twice, once
+with an extra technician appended, and compared:
+
+```
+machine condition, no hire : 90.60  88.32  70.12  84.12  95.12  71.54  87.77  70.95  78.01
+machine condition, one hire: 70.12  84.12  95.12  71.54  87.77  70.95  78.01  71.85  75.57
+first incident due, no hire : minute 482.126
+first incident due, one hire: minute 531.013
+```
+
+Every machine starts in a different condition, and the first incident moves by forty-nine minutes.
+Hiring one person had changed the weather.
+
+This matters because of what the product is for. Phase 4 answers "should I hire a technician?" by
+running the lab with and without the hire and reporting the difference between them. If the two runs
+are two different labs, that difference is luck, and the tool reports it as the effect of hiring —
+confidently, with a plausible-looking range around it. The failure is invisible from the output. A
+verdict card built on this would be fiction, and there would be nothing in it to suggest so.
+
+**Decision.** Every entity and every concern draws from its own named sequence, derived from the one
+seed: `deriveSeed(seed, 'operations')`, `deriveSeed(seed, 'staff:3')`, `deriveSeed(seed,
+'equipment:5')`. FNV-1a over the label, mixed with the seed — not a strong hash, and it does not need
+to be, because all it has to do is spread similar labels apart. Each person then carries their own
+generator position on the world (`Staff.rngState`), so movement during the run draws from the person
+rather than from the lab.
+
+A run is still reproducible from a single seed. What changes is that the seed now names a family of
+independent sequences instead of one shared queue.
+
+**Alternatives considered.**
+
+- *Leave it, and fix it in B4 where fair comparison is actually required.* Rejected: A3 adds job
+  arrivals, which is the largest consumer of randomness in the design. Fixing this afterwards means
+  re-deriving every seeded value in the project a second time, and in the interim every test written
+  against arrivals would be anchored to numbers that are about to move.
+- *One generator per concern (demand, operations) but not per entity.* This is what the plan called
+  for, and it is not sufficient. Staffing is a decision variable, so staff must not share a sequence
+  with anything a comparison holds fixed — including each other, since two options may differ in how
+  many people exist.
+- *Draw lazily, on first use, instead of at creation.* Does not help. The order of first use depends
+  on the simulation's own behaviour, which is exactly what the comparison is trying to measure.
+
+**Verification.** A new `fairness.test.ts`, nine tests, in two halves. One half asserts that adding a
+person leaves every machine's condition, the incident schedule and the other people byte-for-byte
+unchanged — including after a simulated fortnight, by which point an unisolated sequence has drifted
+thousands of draws apart — and that leasing an instrument leaves the people unchanged. The other half
+asserts that the sequences are still sequences: every person starts with a different energy, every
+machine with a different condition, and a different seed still produces a different lab. Without that
+second half the first would pass just as happily if every stream had collapsed onto one value.
+
+Confirmed load-bearing by putting the shared sequence back: creation-time sharing fails four of the
+nine, and sharing only the movement draws fails the fortnight test specifically.
+
+Two things about that mutation test are worth recording, because both were initially wrong and both
+would have left a test that could not fail.
+
+- The first two attempts to reintroduce the bug did not reintroduce it. Reading the lab's generator
+  position and writing the result back to the person is not sharing, and writing back to the lab is
+  not either, because `advance` overwrites that position from its own local generator when it
+  returns. Only threading the generator *object* down through the call chain — which is what the code
+  did before the fix — actually restores the defect. A mutation that the tests survive is not
+  evidence the tests are weak; it can just as easily mean the mutation missed.
+- The scenario rosters only the first six of eight people, so a ninth appended hire is off duty, and
+  an off-duty person draws nothing. The fortnight test could not see the movement sequence at all
+  until the baseline was changed to roster everyone, so that the hire is genuinely the only person
+  added to the floor.
+
+**One pre-existing test had to be rewritten.** It raised the incident rate to fifty an hour after
+creating the lab and then stepped twenty minutes, expecting one. Since A2 the schedule is drawn once
+at creation, so raising the rate afterwards cannot move an event already on the books; it had been
+passing only because that one seed happened to schedule an incident two minutes in. It now brings the
+due instant forward, which is the thing the code actually waits for. Worth noting as a class: when
+timing moves from "rolled every tick" to "scheduled once", any test that manipulates a rate has
+quietly stopped testing what it claims.
+
+**Seeded outputs have changed and will not match earlier screenshots.** This is expected, once from
+scheduling movement in advance and again from the per-entity sequences. The seed-to-lab mapping is
+not a stable interface and nothing is pinned to it; reproducibility means the same seed gives the same
+run, not that it gives the same run as last week's build.

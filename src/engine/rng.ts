@@ -51,6 +51,31 @@ export interface Rng {
   setState(state: number): void;
 }
 
+/**
+ * An independent stream derived from a master seed and a name.
+ *
+ * Without this, everything random shares one sequence, so the *number* of
+ * draws one thing makes shifts every draw after it. Adding a ninth staff
+ * member then changes every machine's starting condition and moves the first
+ * emergency by fifty minutes — so comparing "hire a technician" against "do
+ * nothing" would compare two different labs and report the difference as the
+ * effect of hiring.
+ *
+ * Naming the streams instead means each concern draws from its own sequence,
+ * and a decision that adds people cannot disturb the weather.
+ *
+ * FNV-1a over the label, mixed with the seed. Not a strong hash, and does not
+ * need to be: it only has to spread similar labels apart.
+ */
+export function deriveSeed(seed: number, label: string): number {
+  let h = (2166136261 ^ (seed >>> 0)) >>> 0;
+  for (let i = 0; i < label.length; i++) {
+    h = (h ^ label.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0 || 1;
+}
+
 export function createRng(seed: number): Rng {
   // Mix the seed so that small, similar seeds (1, 2, 3…) still produce
   // unrelated sequences.

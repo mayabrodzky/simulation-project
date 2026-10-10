@@ -12,7 +12,7 @@ import type { ActiveJob, Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
-import { findEquipmentByName, rngFor, type WorldState } from './world';
+import { findEquipmentByName, rngFor, rngForStaff, type WorldState } from './world';
 
 export interface TickOptions {
   /**
@@ -225,7 +225,7 @@ function applySlice(
   }
 
   for (const person of world.staff) {
-    tickStaff(world, person, dt, options, rng, events);
+    tickStaff(world, person, dt, options, events);
   }
 }
 
@@ -342,7 +342,6 @@ function tickStaff(
   person: Staff,
   dt: number,
   options: TickOptions,
-  rng: Rng,
   events: EngineEvent[],
 ): void {
   if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
@@ -357,7 +356,7 @@ function tickStaff(
   // exactly, so looking at the work *after* moving means it starts at that
   // instant rather than at the start of whatever slice comes next — which
   // would make the start time depend on how finely the simulation is stepped.
-  moveStaff(world, person, dt, options, rng);
+  moveStaff(world, person, dt, options);
 
   if (person.activeTask) {
     const task = person.activeTask;
@@ -490,13 +489,7 @@ function tickJob(
   }
 }
 
-function moveStaff(
-  world: WorldState,
-  person: Staff,
-  dt: number,
-  options: TickOptions,
-  rng: Rng,
-): void {
+function moveStaff(world: WorldState, person: Staff, dt: number, options: TickOptions): void {
   const f = world.layout.labFloor;
 
   if (person.targetX !== null && person.targetY !== null) {
@@ -516,10 +509,16 @@ function moveStaff(
     !person.activeTask &&
     world.simMinutes >= person.nextWanderAtMinute
   ) {
-    person.targetX = f.x + 1 + rng.next() * (f.w - 2);
-    person.targetY = f.y + 1 + rng.next() * (f.h - 2);
+    // Drawn from this person's own stream, not the lab's. Wandering is
+    // cosmetic, but if it drew from the shared stream then how many people
+    // there are would shift when emergencies happen — and a decision that
+    // hires someone would change the weather along with the staffing.
+    const own = rngForStaff(person);
+    person.targetX = f.x + 1 + own.next() * (f.w - 2);
+    person.targetY = f.y + 1 + own.next() * (f.h - 2);
     person.nextWanderAtMinute =
-      world.simMinutes + rng.nextInterval(world.tuning.wanderRatePerMinute);
+      world.simMinutes + own.nextInterval(world.tuning.wanderRatePerMinute);
+    person.rngState = own.getState();
   }
 
   person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));

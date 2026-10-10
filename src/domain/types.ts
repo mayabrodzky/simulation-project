@@ -278,6 +278,12 @@ export interface Staff extends StaffTemplate {
   taskTimer: number;
   /** When this person next wanders, if idle. An absolute minute. */
   nextWanderAtMinute: number;
+  /**
+   * This person's own generator position. Idle wandering draws from it rather
+   * than from the lab's stream, so how many people there are cannot shift when
+   * events happen.
+   */
+  rngState: number;
 }
 
 export interface Equipment extends EquipmentTemplate {
