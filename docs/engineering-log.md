@@ -759,7 +759,36 @@ slice rather than discarding the remainder — the test had been asserting the w
 
 ---
 
-## A2 follow-up — one random sequence per entity
+## 19. Incident — a shared random sequence biased every comparison
+
+The first entry in this log recorded as an incident rather than a decision, because it is the first
+defect found here that would have produced *confidently wrong output* rather than a visible failure.
+Nothing was deployed with it reaching a user, since the comparison feature it invalidates does not
+exist yet — but it was latent in `main`, and the shape of the failure is worth recording in full.
+
+| | |
+|---|---|
+| **Severity** | Would have invalidated every number Phase 4 produces |
+| **Introduced** | Phase 1, step 6 (seeded randomness), present on `main` |
+| **Detected** | Phase 2, verifying A2 — as a side effect of investigating an unrelated change |
+| **Detected by** | A reviewer noticing that eight numbers on screen had changed |
+| **Time to detect** | Roughly three weeks, across two phases |
+| **Impact** | None realised; the affected feature was not yet built |
+| **Root cause** | One generator shared by every random value, consumed in creation order |
+| **Resolution** | One named, independently derived sequence per entity and per concern |
+| **Class of failure** | Silently biased output. No crash, no exception, no wrong-looking number |
+
+**Why this one is worth an incident record.** Every other defect in this log announced itself — a
+crash, a `NaN`, a blank canvas, a `ReferenceError`. This one produces plausible numbers with a
+plausible range around them, and the range is *narrower* than the truth, so the output looks more
+trustworthy as it becomes more wrong. There is no assertion that would have caught it after the fact
+and no amount of staring at a verdict card that would have revealed it. The only defences are the
+structural one (separate streams) and the test that checks the structure holds.
+
+**It was found by a human reading output, not by a test.** The eight starting energies on screen had
+changed, and the question "is that intended?" was what opened the thread. No automated check in the
+project was looking at seeded values at all. That is the honest detection story and the reason the
+test now exists.
 
 **Context.** Verifying A2 on the preview surfaced a change nobody had asked for: with `?seed=42` the
 eight starting energies had become `92, 97, 83, 85, 97, 84, 94, 83` where they had been
@@ -850,3 +879,64 @@ quietly stopped testing what it claims.
 scheduling movement in advance and again from the per-entity sequences. The seed-to-lab mapping is
 not a stable interface and nothing is pinned to it; reproducibility means the same seed gives the same
 run, not that it gives the same run as last week's build.
+
+### Follow-up — whether adjacent seeds produce correlated streams
+
+Review raised a specific doubt on the fix: under both seed 42 and seed 43, the first person's energy
+rounded to 95 on screen. The underlying values are `95.71796610` and `95.70652576` — agreement to
+three decimal places, not a display coincidence. Since a batch run numbers its seeds consecutively,
+a systematic correlation between adjacent seeds would mean three hundred runs were three hundred
+near-copies, and the reported P10–P90 range would be far too narrow. Narrow and confident, which is
+the same failure mode as the incident above.
+
+The doubt is well founded in principle. `deriveSeed` is FNV-1a, which is a fast hash and not a strong
+one, and integer multiplication propagates carries only upward — so the low bits of an FNV hash are
+its worst-mixed part, and seeds differing only in the low bits are exactly what a batch run produces.
+
+Measured over seeds 1–1000, taking the first draw of the `staff:0` stream:
+
+| Statistic | Measured | Expected | 3σ band |
+|---|---|---|---|
+| Lag-1 correlation | −0.0286 | 0 | ±0.095 |
+| Lag-2 correlation | −0.0453 | 0 | ±0.095 |
+| `staff:0` vs `staff:1` | +0.0406 | 0 | ±0.095 |
+| `staff:0` vs `equipment:0` | −0.0379 | 0 | ±0.095 |
+| Mean | 0.5169 | 0.5 | — |
+| Decile counts | 82 95 92 113 95 105 102 106 97 113 | 100 each | ±28 |
+| Distinct derived seeds | 1000 of 1000 | 1000 | — |
+| Adjacent pairs within 0.0005 | 2 of 999 | ~1 | — |
+
+Everything sits inside noise. Two independent uniform draws land within 0.0005 of each other about
+once per thousand pairs; two such pairs were observed, and 42/43 is one of them. So the observation
+is a coincidence — but it was not possible to say so until it was measured, and the measurement is
+now a test rather than a one-off.
+
+Five tests added, bounds set at roughly three standard errors rather than fitted to the observed
+values. They are deterministic despite looking statistical, because nothing in them draws from the
+clock.
+
+**What the mutation testing showed, including where it was unflattering.** Four deliberate breakages:
+
+| Mutation | Tests failed |
+|---|---|
+| A. `deriveSeed` ignores the label | 3 — distinctness ×2, cross-stream correlation |
+| B. `deriveSeed` becomes `seed * 31 + label.length` | 3 — the same three |
+| C. mulberry32's avalanche stripped, output is its counter | 1 — cross-stream correlation |
+| D. B and C together | 6 — all of the above plus lag-1, deciles, adjacent pairs |
+
+The useful finding is in the gap between C and D. The lag-1, decile and adjacent-pair tests survive
+a weak derivation *and* survive a weak generator, and only fail when both are weak at once — because
+each layer's mixing covers for the other's absence. FNV-1a spreads consecutive seeds far apart, so
+even a generator that returns its own counter produces uncorrelated first draws; and mulberry32's
+avalanche is strong enough that even consecutive derived seeds produce uncorrelated draws.
+
+So those three tests are a backstop, not a guard: they are load-bearing only against simultaneous
+degradation of both layers. That is worth less than it first appeared, and recording it is more
+useful than letting a green suite imply a stronger guarantee than it gives. The genuinely
+load-bearing checks are the cross-stream correlation and the per-entity distinctness tests, which
+fail under every one of the four mutations between them.
+
+Mutation B also exposed something the measurement alone would not have: `staff:0` and `staff:1` are
+the same length, so any derivation keyed on label *length* rather than content collapses them onto
+one sequence. The cross-stream test catches that; a test that only compared `staff:0` against
+`equipment:0` would not have.

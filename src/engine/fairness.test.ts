@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { chemistryLab } from '../scenarios';
 import type { Scenario } from '../domain/types';
 import { advance } from './tick';
+import { createRng, deriveSeed } from './rng';
 import { createWorld } from './world';
 
 const SEED = 42;
@@ -144,5 +145,96 @@ describe('the streams are still streams', () => {
     expect(b.staff.map((p) => p.energy)).not.toEqual(a.staff.map((p) => p.energy));
     expect(b.equipment.map((e) => e.condition)).not.toEqual(a.equipment.map((e) => e.condition));
     expect(b.nextEmergencyAtMinute).not.toBe(a.nextEmergencyAtMinute);
+  });
+});
+
+/**
+ * How well the labels are mixed.
+ *
+ * "Different" is a weak property. `deriveSeed` is FNV-1a, which is a fast hash
+ * and not a strong one, and multiplication only propagates carries upward — so
+ * the low bits of the hash are the worst-mixed part of it, and two seeds that
+ * differ only in the low bits are exactly the case a batch run produces. If
+ * seeds 1…300 turned out to be correlated, three hundred runs would be three
+ * hundred near-copies and the reported P10–P90 range would be far too narrow.
+ * Narrow and confident, which is the worst way for this to fail.
+ *
+ * These bounds are statistical, so they are set at roughly three standard
+ * errors rather than fitted to the values that happen to come out. Nothing here
+ * draws from the clock, so they are deterministic despite looking like
+ * sampling.
+ */
+describe('the seed is mixed well enough for a batch run', () => {
+  const SAMPLE = 1000;
+  const seeds = Array.from({ length: SAMPLE }, (_, i) => i + 1);
+  /** The 3σ band on a correlation of zero at this sample size is ±0.095. */
+  const NOISE = 0.1;
+
+  const firstDraw = (seed: number, label: string) => createRng(deriveSeed(seed, label)).next();
+
+  function correlation(a: number[], b: number[]): number {
+    const mean = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
+    const [ma, mb] = [mean(a), mean(b)];
+    let covariance = 0;
+    let varA = 0;
+    let varB = 0;
+    for (let i = 0; i < a.length; i++) {
+      const [da, db] = [a[i]! - ma, b[i]! - mb];
+      covariance += da * db;
+      varA += da * da;
+      varB += db * db;
+    }
+    return covariance / Math.sqrt(varA * varB);
+  }
+
+  it('gives every seed its own derived stream, with no collisions', () => {
+    const derived = new Set(seeds.map((s) => deriveSeed(s, 'staff:0')));
+    expect(derived.size).toBe(SAMPLE);
+  });
+
+  it('does not correlate one seed with the next', () => {
+    const draws = seeds.map((s) => firstDraw(s, 'staff:0'));
+
+    // Lag 1 and lag 2: consecutive seeds, which is how a batch run numbers its
+    // runs, and every-other-seed, which would catch a low-bit parity effect.
+    expect(Math.abs(correlation(draws.slice(0, -1), draws.slice(1)))).toBeLessThan(NOISE);
+    expect(Math.abs(correlation(draws.slice(0, -2), draws.slice(2)))).toBeLessThan(NOISE);
+  });
+
+  it('does not correlate one stream with another at the same seed', () => {
+    const a = seeds.map((s) => firstDraw(s, 'staff:0'));
+    const b = seeds.map((s) => firstDraw(s, 'staff:1'));
+    const c = seeds.map((s) => firstDraw(s, 'equipment:0'));
+
+    // Adjacent labels differ by one character in the worst-mixed position, so
+    // this is the weakest case for the hash, not a representative one.
+    expect(Math.abs(correlation(a, b))).toBeLessThan(NOISE);
+    expect(Math.abs(correlation(a, c))).toBeLessThan(NOISE);
+  });
+
+  it('spreads a thousand seeds evenly across the range', () => {
+    const buckets = new Array<number>(10).fill(0);
+    for (const u of seeds.map((s) => firstDraw(s, 'staff:0'))) buckets[Math.floor(u * 10)]!++;
+
+    // 100 expected per decile; 3σ on a binomial(1000, 0.1) is ±28.
+    for (const count of buckets) {
+      expect(count).toBeGreaterThan(70);
+      expect(count).toBeLessThan(130);
+    }
+  });
+
+  it('rarely puts two adjacent seeds close together', () => {
+    const draws = seeds.map((s) => firstDraw(s, 'staff:0'));
+    let close = 0;
+    for (let i = 0; i + 1 < SAMPLE; i++) {
+      if (Math.abs(draws[i + 1]! - draws[i]!) < 0.0005) close++;
+    }
+
+    // Two independent uniforms land within 0.0005 of each other about once per
+    // thousand pairs. Seeds 42 and 43 are one such pair — their first draws
+    // agree to three decimals, which looks alarming and is coincidence. This
+    // test is what distinguishes the two readings: a systematic correlation
+    // would produce dozens, not a handful.
+    expect(close).toBeLessThan(8);
   });
 });
