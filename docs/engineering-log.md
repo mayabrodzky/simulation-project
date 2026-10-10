@@ -650,3 +650,43 @@ are marked explicitly so they are never translated.
 gate. Left alone it would have failed on every platform-dependent checkout, and the obvious reading
 of that failure — "someone forgot to format" — would have been wrong, which is the kind of false
 signal that teaches people to ignore a gate.
+
+---
+
+## 17. A query seam between the model and the interface
+
+**Context.** The view and the renderer read the simulation's internal shapes directly. The canvas
+progress bar computed itself from `person.activeTask.equipmentSequence[person.taskStep].duration`.
+Work is about to stop being a field on a person and become an entity of its own, which would break
+every one of those reads — scattered through 1,125 untyped lines, with nothing to report one that
+had been missed.
+
+**Decision.** Insert a thin layer the interface asks *questions* through: what is this person doing,
+what work is in progress, who is free, what time is it. The answers live in one typed module and
+return plain display data — strings, numbers, booleans — holding no reference into the world.
+
+**Alternatives.** Changing the model first and then repairing the view was rejected: the repair would
+have been a search for every affected read with no mechanical way to know when it was complete, and
+any miss would surface as a panel quietly showing nothing rather than as an error. Typing the view
+first was also rejected, as the visual redesign replaces it regardless.
+
+**Why the returned data is detached.** Handing back live references would be cheaper, but a panel
+holding one can mutate the simulation by accident — and the direction of the dependency is the whole
+point of the seam. A test asserts that writing to a returned object changes nothing in the world.
+
+**A detail worth recording.** Two functions take a `world` parameter they do not yet use, because the
+next step resolves the job from the world rather than the person. Accepting it now means each call
+site is written once instead of twice, and the unused parameter is marked so the linter does not
+object.
+
+**Verification.** 15 tests pin the contract rather than the implementation: what the interface may
+ask and what shape it receives. Those are the assertions that will say whether the panels still work
+once the answers are rewritten against a different model. Mechanically confirmed by both the view and
+the renderer now containing zero references to `activeTask`, `taskStep` or `taskTimer`.
+
+**Two test failures worth keeping.** The first draft advanced a fixed 2,000 ticks to observe work in
+progress, which overshot and completed the task — a fixed tick count silently depends on durations
+that are about to change, so it now advances until the work actually starts. The second asserted
+progress above zero immediately after a step began, when the correct value at that instant is exactly
+zero. Both were wrong tests rather than wrong code, which is its own useful signal: an assertion
+written from an assumption about timing rather than from the model.
