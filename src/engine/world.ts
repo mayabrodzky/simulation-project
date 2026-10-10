@@ -90,7 +90,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     targetY: null,
     state: i < t.staffOnShiftCount ? 'idle' : 'off',
     energy: t.initialEnergyMin + rng.next() * t.initialEnergyRange,
-    speed: t.staffWalkSpeed,
+    speed: t.staffWalkGridPerMinute,
     color: `hsl(${i * 45}, 70%, 50%)`,
     activeTask: null,
     taskStep: 0,

@@ -26,23 +26,46 @@ export interface TickOptions {
   movementMultiplier?: number;
 }
 
+/**
+ * Advances by a slice of *real* time, for the live view.
+ *
+ * A convenience over `advance`: it applies the speed multiplier and converts
+ * real seconds into simulated minutes. Fast-forward is therefore a multiplier
+ * here rather than a change to the engine, which is what lets the same
+ * simulation be watched at ×1 and replayed at ×60.
+ */
 export function tick(
   world: WorldState,
   dtSeconds: number,
   options: TickOptions = {},
 ): EngineEvent[] {
+  const realSeconds = dtSeconds * world.speed;
+  world.elapsedSeconds += realSeconds;
+  return advance(world, realSeconds * world.tuning.minutesPerSecond, options);
+}
+
+/**
+ * Advances the world by `dtMinutes` of simulated time.
+ *
+ * This is the engine's real entry point, and the one the batch runner calls.
+ * Simulated minutes are the unit everything is expressed in: step durations,
+ * deadlines, shift hours, overtime.
+ */
+export function advance(
+  world: WorldState,
+  dtMinutes: number,
+  options: TickOptions = {},
+): EngineEvent[] {
   const events: EngineEvent[] = [];
   const rng = rngFor(world);
   const t = world.tuning;
-  const dt = dtSeconds * world.speed;
-
-  world.elapsedSeconds += dt;
+  const dt = dtMinutes;
 
   if (!options.freezeClock) {
-    world.simMinutes += dt * t.minutesPerSecond;
+    world.simMinutes += dt;
     world.minutes = minuteOfDay(world.simMinutes);
 
-    if (rng.chance(t.emergencyRatePerSecond, dt)) {
+    if (rng.chance(t.emergencyRatePerMinute, dt)) {
       if (!world.emergencies.some((e) => e.status === 'pending')) {
         raiseEmergency(world, events);
       }
@@ -56,7 +79,7 @@ export function tick(
 
   for (const eq of world.equipment) {
     if (eq.inUse) {
-      eq.condition -= dt * t.conditionWearPerSecond;
+      eq.condition -= dt * t.conditionWearPerMinute;
       eq.totalWorkTime += dt;
     }
   }
@@ -184,8 +207,8 @@ function tickStaff(
   if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
   const t = world.tuning;
 
-  if (person.state === 'working') person.energy -= dt * t.energyDrainPerSecond;
-  if (person.state === 'break') person.energy += dt * t.energyRecoverPerSecond;
+  if (person.state === 'working') person.energy -= dt * t.energyDrainPerMinute;
+  if (person.state === 'break') person.energy += dt * t.energyRecoverPerMinute;
   if (person.energy < t.energyBreakThreshold && person.state !== 'break') person.state = 'break';
   if (person.energy > t.energyRecoveredThreshold && person.state === 'break') person.state = 'idle';
 
@@ -337,9 +360,8 @@ function moveStaff(
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 0.1) {
       const speed = person.speed * (options.movementMultiplier ?? 1);
-      // The * 60 is historical: speed was authored per frame at 60fps.
-      person.x += (dx / dist) * speed * dt * 60;
-      person.y += (dy / dist) * speed * dt * 60;
+      person.x += (dx / dist) * speed * dt;
+      person.y += (dy / dist) * speed * dt;
     } else {
       person.x = person.targetX;
       person.y = person.targetY;
@@ -347,7 +369,7 @@ function moveStaff(
   } else if (
     person.state === 'idle' &&
     !person.activeTask &&
-    rng.chance(world.tuning.wanderRatePerSecond, dt)
+    rng.chance(world.tuning.wanderRatePerMinute, dt)
   ) {
     person.targetX = f.x + 1 + rng.next() * (f.w - 2);
     person.targetY = f.y + 1 + rng.next() * (f.h - 2);

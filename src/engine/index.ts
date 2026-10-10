@@ -12,12 +12,12 @@
  * reads back EngineEvents. It never mutates the world itself.
  */
 export { createWorld, cloneWorld, findStaff, findEquipment, type WorldState } from './world';
-export { tick, failTask, type TickOptions } from './tick';
+export { tick, advance, failTask, type TickOptions } from './tick';
 export { applyCommand, type Command } from './commands';
 export { isQualified, missingSkills } from './rules';
 export { createRng, type Rng } from './rng';
 export { isPanelAffecting, type EngineEvent, type RejectionReason } from './events';
-export { formatDuration } from './time';
+export { formatMinutes } from './time';
 export {
   dayOfWeek,
   isWithinShift,

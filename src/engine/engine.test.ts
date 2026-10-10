@@ -172,7 +172,7 @@ describe('the engine reports rather than renders', () => {
     // why it could not be tested at all. Forcing the rate high makes it
     // certain within a few ticks.
     const world = createWorld(chemistryLab, SEED, 480);
-    world.tuning = { ...world.tuning, emergencyRatePerSecond: 50 };
+    world.tuning = { ...world.tuning, emergencyRatePerMinute: 50 };
     const events = [];
     for (let i = 0; i < 20 && events.length === 0; i++) events.push(...tick(world, 1));
 

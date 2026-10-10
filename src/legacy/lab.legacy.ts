@@ -21,7 +21,7 @@ import {
   countTraining,
   createWorld,
   describeAssignment,
-  formatDuration,
+  formatMinutes,
   isPanelAffecting,
   isQualified,
   isUnoccupied,
@@ -660,7 +660,7 @@ const Lab = {
     if (!live) return;
     setHtmlById(
       'emergencyTaskDeadline',
-      html`<strong>Deadline:</strong> ${formatDuration(live.timeLimit, true)}`,
+      html`<strong>Deadline:</strong> ${formatMinutes(live.timeLimit)}`,
     );
   },
   updateUI() {
@@ -752,7 +752,7 @@ const Lab = {
                 <strong>${eq.name}</strong>
                 <div class="equipment-info">
                   ${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use:
-                  ${formatDuration(eq.totalWorkTime)}
+                  ${formatMinutes(eq.totalWorkTime)}
                 </div>
               </div>
             </div>
@@ -795,7 +795,7 @@ const Lab = {
         p,
         html`<div class="emergency-card" data-action="open-emergency" data-emergency-id="${t.id}">
           <strong>${t.name}</strong>
-          <div><span>${s}</span><span>Time Left: ${formatDuration(t.timeLimit, true)}</span></div>
+          <div><span>${s}</span><span>Time Left: ${formatMinutes(t.timeLimit)}</span></div>
         </div>`,
       );
     });
@@ -816,7 +816,7 @@ const Lab = {
         return html` <div class="task-def-card" data-hover-task="${task.id}">
           <strong>${task.name}</strong>
           <div class="details">
-            <span>Time: ${formatDuration(totalTime)} | Reward: $${task.reward}</span><br />
+            <span>Time: ${formatMinutes(totalTime)} | Reward: $${task.reward}</span><br />
             <strong>Required Skills:</strong> ${skills}<br /><strong>Qualified Staff:</strong>
             ${qualifiedStaff}
           </div>
@@ -890,7 +890,7 @@ const Lab = {
         >
           <strong>${t.name}</strong>
           <div style="font-size:0.875rem;color:#64748b;">
-            Reward: $${t.reward} | Time: ${formatDuration(t.timeLimit, true)} |
+            Reward: $${t.reward} | Time: ${formatMinutes(t.timeLimit)} |
             ${q ? '✅ Qualified' : '❌ Not Qualified'}
           </div>
         </div>`,
@@ -937,7 +937,7 @@ const Lab = {
     setHtmlById('emergencyTaskPenalty', html`<strong>Penalty:</strong> $${task.penalty}`);
     setHtmlById(
       'emergencyTaskDeadline',
-      html`<strong>Deadline:</strong> ${formatDuration(task.timeLimit, true)}`,
+      html`<strong>Deadline:</strong> ${formatMinutes(task.timeLimit)}`,
     );
     const staffListEl = document.getElementById('emergencyStaffList');
     staffListEl.replaceChildren();

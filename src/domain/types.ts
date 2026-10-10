@@ -159,7 +159,10 @@ export interface Tuning {
   startingMoney: number;
   startingMaterials: number;
   startingSamples: number;
-  /** Minutes of simulated clock per simulated second. */
+  /**
+   * Simulated minutes per real second, for the live view. The batch runner
+   * ignores it and steps in simulated minutes directly.
+   */
   minutesPerSecond: number;
   /** Clock position at startup, in minutes past midnight. */
   startMinutes: number;
@@ -171,21 +174,22 @@ export interface Tuning {
   calibrateCost: number;
   calibrateAmount: number;
 
-  energyDrainPerSecond: number;
-  energyRecoverPerSecond: number;
+  energyDrainPerMinute: number;
+  energyRecoverPerMinute: number;
   energyBreakThreshold: number;
   energyRecoveredThreshold: number;
-  conditionWearPerSecond: number;
+  conditionWearPerMinute: number;
 
   /**
    * Average occurrences per simulated second. Previously these were
    * probabilities rolled once per animation frame, which made the whole
    * simulation run faster on a high-refresh-rate monitor.
    */
-  emergencyRatePerSecond: number;
-  wanderRatePerSecond: number;
+  emergencyRatePerMinute: number;
+  wanderRatePerMinute: number;
 
-  staffWalkSpeed: number;
+  /** Grid units covered per simulated minute. */
+  staffWalkGridPerMinute: number;
   initialEnergyMin: number;
   initialEnergyRange: number;
   initialConditionMin: number;

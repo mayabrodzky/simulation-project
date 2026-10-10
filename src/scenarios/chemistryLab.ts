@@ -44,7 +44,10 @@ const tuning: Tuning = {
   startingMoney: 25000,
   startingMaterials: 200,
   startingSamples: 120,
-  minutesPerSecond: 0.5,
+  // One real second is one simulated minute, so a 20-minute step takes 20
+  // seconds to watch and advances the clock by 20 minutes. Before the unit
+  // correction those two disagreed by a factor of two.
+  minutesPerSecond: 1.0,
   startMinutes: 480, // 08:00. Overwritten at startup by the real clock today.
 
   trainingCost: 300,
@@ -54,19 +57,21 @@ const tuning: Tuning = {
   calibrateCost: 100,
   calibrateAmount: 25,
 
-  energyDrainPerSecond: 0.2,
-  energyRecoverPerSecond: 1,
+  energyDrainPerMinute: 0.2,
+  energyRecoverPerMinute: 1,
   energyBreakThreshold: 20,
   energyRecoveredThreshold: 95,
-  conditionWearPerSecond: 0.05,
+  conditionWearPerMinute: 0.05,
 
-  // Calibrated to match the old per-frame probabilities at 60fps, which is
-  // what these were implicitly tuned against: 0.0005 and 0.005 per frame,
-  // times 60 frames per second.
-  emergencyRatePerSecond: 0.03,
-  wanderRatePerSecond: 0.3,
+  // Rates per simulated minute. The numbers are unchanged from when they
+  // were per simulated second, which preserves the real-time spacing,
+  // because one real second is now one simulated minute.
+  emergencyRatePerMinute: 0.03,
+  wanderRatePerMinute: 0.3,
 
-  staffWalkSpeed: 0.02,
+  // 1.2 grid units a minute. Previously 0.02 multiplied by a hard-coded 60
+  // inside the movement code, which hid the unit.
+  staffWalkGridPerMinute: 1.2,
   initialEnergyMin: 80,
   initialEnergyRange: 20,
   initialConditionMin: 70,
