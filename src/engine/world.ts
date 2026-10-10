@@ -11,6 +11,7 @@
  * run possible at all, since nothing here needs a browser.
  */
 import type {
+  Calendar,
   CatalogItem,
   Emergency,
   EmergencyTemplate,
@@ -24,14 +25,28 @@ import type {
   Tuning,
   Wall,
 } from '../domain/types';
+import { minuteOfDay } from './calendar';
 import { createRng, type Rng } from './rng';
 
 export interface WorldState {
   scenarioId: string;
   /** Simulated seconds elapsed. */
   elapsedSeconds: number;
-  /** Clock, in minutes past midnight. */
+  /**
+   * The clock: minutes since the run began, where minute 0 is Sunday 00:00.
+   * Monotonic, never wrapped — which is what lets the engine know what day it
+   * is, and therefore what a deadline in working days means.
+   */
+  simMinutes: number;
+  /**
+   * Minutes past midnight, derived from simMinutes every tick.
+   *
+   * Kept only so the HUD and the time-of-day overlay need no change. Engine
+   * logic reads simMinutes; nothing should read this.
+   */
   minutes: number;
+  /** Working days, shift hours, and how deadlines are counted. */
+  calendar: Calendar;
   /** Multiplier applied to elapsed time. 1 is real time. */
   speed: number;
 
@@ -94,7 +109,9 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
   return {
     scenarioId: scenario.id,
     elapsedSeconds: 0,
-    minutes: startMinutes ?? t.startMinutes,
+    simMinutes: startMinutes ?? t.startMinutes,
+    minutes: minuteOfDay(startMinutes ?? t.startMinutes),
+    calendar: scenario.calendar,
     speed: 1,
 
     money: t.startingMoney,

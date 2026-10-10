@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { chemistryLab } from '../scenarios';
+import { dayOfWeek } from './calendar';
 import { applyCommand } from './commands';
 import { isQualified, missingSkills } from './rules';
 import { createRng } from './rng';
@@ -192,5 +193,41 @@ describe('the engine reports rather than renders', () => {
     });
     expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: amir.name }]);
     expect(amir.activeTask).toBeNull();
+  });
+});
+
+describe('the world clock', () => {
+  it('knows what day it is, and keeps counting past midnight', () => {
+    // Minute 0 is Sunday 00:00, so a world started at 480 begins Sunday 08:00.
+    const world = createWorld(chemistryLab, SEED, 480);
+    expect(world.simMinutes).toBe(480);
+    expect(dayOfWeek(world.simMinutes)).toBe(0);
+
+    // Run three simulated days. The old clock wrapped and lost the date.
+    const minutesToRun = 3 * 24 * 60;
+    const seconds = minutesToRun / chemistryLab.tuning.minutesPerSecond;
+    for (let i = 0; i < seconds; i++) tick(world, 1);
+
+    expect(world.simMinutes).toBeCloseTo(480 + minutesToRun, 6);
+    expect(dayOfWeek(world.simMinutes)).toBe(3); // Sunday + 3 → Wednesday
+  });
+
+  it('keeps the derived time of day inside a day, for the HUD', () => {
+    const world = createWorld(chemistryLab, SEED, 1380); // 23:00
+    for (let i = 0; i < 600; i++) {
+      tick(world, 1);
+      expect(world.minutes).toBeGreaterThanOrEqual(0);
+      expect(world.minutes).toBeLessThan(24 * 60);
+    }
+    // It wrapped past midnight while the absolute clock did not.
+    expect(world.minutes).toBeLessThan(1380);
+    expect(world.simMinutes).toBeGreaterThan(1380);
+  });
+
+  it('freezes both clocks in sandbox mode', () => {
+    const world = createWorld(chemistryLab, SEED, 480);
+    for (let i = 0; i < 100; i++) tick(world, 1, { freezeClock: true });
+    expect(world.simMinutes).toBe(480);
+    expect(world.minutes).toBe(480);
   });
 });

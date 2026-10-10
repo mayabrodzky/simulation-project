@@ -9,6 +9,7 @@
  * Math.random, Date, or the DOM. ESLint enforces all three for this directory.
  */
 import type { ActiveJob, Equipment, Staff } from '../domain/types';
+import { minuteOfDay } from './calendar';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
 import { findEquipmentByName, rngFor, type WorldState } from './world';
@@ -25,8 +26,6 @@ export interface TickOptions {
   movementMultiplier?: number;
 }
 
-const MINUTES_PER_DAY = 1440;
-
 export function tick(
   world: WorldState,
   dtSeconds: number,
@@ -40,8 +39,8 @@ export function tick(
   world.elapsedSeconds += dt;
 
   if (!options.freezeClock) {
-    world.minutes += dt * t.minutesPerSecond;
-    if (world.minutes >= MINUTES_PER_DAY) world.minutes -= MINUTES_PER_DAY;
+    world.simMinutes += dt * t.minutesPerSecond;
+    world.minutes = minuteOfDay(world.simMinutes);
 
     if (rng.chance(t.emergencyRatePerSecond, dt)) {
       if (!world.emergencies.some((e) => e.status === 'pending')) {

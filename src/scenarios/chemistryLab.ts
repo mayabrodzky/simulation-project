@@ -8,7 +8,7 @@
  * live here. That split is what lets the same engine model something else
  * later, and it is what Phase 4's editable assumptions panel reads.
  */
-import type { Layout, Scenario, Tuning } from '../domain/types';
+import type { Calendar, Layout, Scenario, Tuning } from '../domain/types';
 
 const layout: Layout = {
   gridWidth: 24,
@@ -19,6 +19,18 @@ const layout: Layout = {
   office1: { x: 17, y: 3, w: 5, h: 8 },
   office2: { x: 3, y: 11, w: 14, h: 5 },
   initialCamera: { x: 20, y: 100, zoom: 0.85 },
+};
+
+/**
+ * Sunday to Thursday, 08:00–16:00 — 40 hours a week, as the spec describes.
+ * Deadlines are quoted exclusive of the arrival day, and rush orders in
+ * wall-clock hours. Both are open questions for the lab manager rather than
+ * facts; see docs/product-spec.md.
+ */
+const calendar: Calendar = {
+  shift: { days: [0, 1, 2, 3, 4], startMinute: 480, endMinute: 960 },
+  deadlineCountsArrivalDay: false,
+  rushDeadlineMode: 'calendar',
 };
 
 const f = layout.labFloor;
@@ -67,6 +79,7 @@ export const chemistryLab: Scenario = {
   name: 'Chemistry Lab',
   layout,
   tuning,
+  calendar,
 
   staff: [
     {

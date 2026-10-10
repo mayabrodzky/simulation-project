@@ -213,6 +213,8 @@ export interface Scenario {
   name: string;
   layout: Layout;
   tuning: Tuning;
+  /** Working days and shift hours. The lab's week. */
+  calendar: Calendar;
   staff: StaffTemplate[];
   equipment: EquipmentTemplate[];
   tasks: TaskDefinition[];
