@@ -26,7 +26,7 @@ import type {
   Wall,
 } from '../domain/types';
 import { minuteOfDay } from './calendar';
-import { createRng, type Rng } from './rng';
+import { createRng, deriveSeed, type Rng } from './rng';
 
 export interface WorldState {
   scenarioId: string;
@@ -84,33 +84,43 @@ export interface WorldState {
 }
 
 export function createWorld(scenario: Scenario, seed: number, startMinutes?: number): WorldState {
-  const rng = createRng(seed);
+  const rng = createRng(deriveSeed(seed, 'operations'));
   const t = scenario.tuning;
   const f = scenario.layout.labFloor;
   const start = startMinutes ?? t.startMinutes;
 
-  const staff: Staff[] = scenario.staff.map((template, i) => ({
-    ...template,
-    skills: [...template.skills],
-    id: i,
-    x: f.x + 2 + (i % 4) * 3,
-    y: f.y + 2 + Math.floor(i / 4) * 2,
-    targetX: null,
-    targetY: null,
-    state: i < t.staffOnShiftCount ? 'idle' : 'off',
-    energy: t.initialEnergyMin + rng.next() * t.initialEnergyRange,
-    speed: t.staffWalkGridPerMinute,
-    color: `hsl(${i * 45}, 70%, 50%)`,
-    activeTask: null,
-    taskStep: 0,
-    taskTimer: 0,
-    nextWanderAtMinute: start + rng.nextInterval(t.wanderRatePerMinute),
-  }));
+  // Each person and each machine draws from a stream of its own, named after
+  // it. Appending a ninth person therefore leaves the other eight, every
+  // machine, and the schedule of events exactly as they were — which is what
+  // makes "with this decision" and "without it" the same lab.
+  const staff: Staff[] = scenario.staff.map((template, i) => {
+    const own = createRng(deriveSeed(seed, `staff:${i}`));
+    return {
+      ...template,
+      skills: [...template.skills],
+      id: i,
+      x: f.x + 2 + (i % 4) * 3,
+      y: f.y + 2 + Math.floor(i / 4) * 2,
+      targetX: null,
+      targetY: null,
+      state: i < t.staffOnShiftCount ? 'idle' : 'off',
+      energy: t.initialEnergyMin + own.next() * t.initialEnergyRange,
+      speed: t.staffWalkGridPerMinute,
+      color: `hsl(${i * 45}, 70%, 50%)`,
+      activeTask: null,
+      taskStep: 0,
+      taskTimer: 0,
+      nextWanderAtMinute: start + own.nextInterval(t.wanderRatePerMinute),
+      rngState: own.getState(),
+    };
+  });
 
   const equipment: Equipment[] = scenario.equipment.map((template, i) => ({
     ...template,
     id: i,
-    condition: t.initialConditionMin + rng.next() * t.initialConditionRange,
+    condition:
+      t.initialConditionMin +
+      createRng(deriveSeed(seed, `equipment:${i}`)).next() * t.initialConditionRange,
     inUse: false,
     assignedTo: null,
     totalWorkTime: 0,
@@ -170,10 +180,23 @@ export function cloneWorld(world: WorldState): WorldState {
   return structuredClone(world);
 }
 
-/** Restores the generator to where this world left off. */
+/** Restores the lab-wide operations generator to where this world left off. */
 export function rngFor(world: WorldState): Rng {
   const rng = createRng(1);
   rng.setState(world.rngState);
+  return rng;
+}
+
+/**
+ * Restores one person's own generator.
+ *
+ * Each entity carries its own stream, so how many entities exist cannot change
+ * what the others draw. The caller must write `getState()` back when done —
+ * see `deriveSeed` for why this is worth the bookkeeping.
+ */
+export function rngForStaff(person: Staff): Rng {
+  const rng = createRng(1);
+  rng.setState(person.rngState);
   return rng;
 }
 

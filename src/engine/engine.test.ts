@@ -12,7 +12,7 @@ import { dayOfWeek } from './calendar';
 import { applyCommand } from './commands';
 import { isQualified, missingSkills } from './rules';
 import { createRng } from './rng';
-import { tick } from './tick';
+import { advance, tick } from './tick';
 import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
@@ -169,12 +169,16 @@ describe('cancelling a task mid-flight', () => {
 describe('the engine reports rather than renders', () => {
   it('raises an emergency as an event, with no side effects outside the world', () => {
     // The emergency path crossed into the DOM before the extraction, which is
-    // why it could not be tested at all. Forcing the rate high makes it
-    // certain within a few ticks.
+    // why it could not be tested at all.
+    //
+    // The due instant is brought forward rather than the rate raised: the
+    // schedule is drawn once at creation, so a higher rate cannot move an
+    // event already on the books. This test used to raise the rate and pass
+    // only because that one seed happened to schedule an emergency two minutes
+    // in — luck, not a test.
     const world = createWorld(chemistryLab, SEED, 480);
-    world.tuning = { ...world.tuning, emergencyRatePerMinute: 50 };
-    const events = [];
-    for (let i = 0; i < 20 && events.length === 0; i++) events.push(...tick(world, 1));
+    world.nextEmergencyAtMinute = world.simMinutes + 5;
+    const events = advance(world, 10);
 
     const raised = events.find((e) => e.type === 'emergency-raised');
     expect(raised).toBeDefined();
