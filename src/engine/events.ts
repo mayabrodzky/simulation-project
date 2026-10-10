@@ -13,7 +13,7 @@
  * metrics and Phase 4's verdict card are new consumers of this stream, not new
  * branches inside the simulation.
  */
-import type { EquipmentId, Skill, StaffId } from '../domain/types';
+import type { EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 
 export type RejectionReason =
   | 'not-idle'
@@ -43,6 +43,11 @@ export type EngineEvent =
     }
   | { type: 'training-started'; staffId: StaffId; staffName: string; skill: Skill; cost: number }
   | { type: 'training-completed'; staffId: StaffId; staffName: string; skill: Skill }
+  /**
+   * A sample turned up. Carries the facts, not a sentence: the view decides
+   * whether one arrival is worth a notification or only a counter.
+   */
+  | { type: 'job-arrived'; jobId: JobId; name: string; dueAtMinute: number }
   | { type: 'emergency-raised'; emergencyId: string; name: string }
   | { type: 'emergency-expired'; emergencyId: string; name: string; penalty: number }
   | { type: 'emergency-resolved'; emergencyId: string; name: string }

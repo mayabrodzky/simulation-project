@@ -52,6 +52,13 @@ function discrete(world: WorldState) {
     ]),
     equipment: world.equipment.map((e) => [e.id, e.inUse, e.assignedTo]),
     emergencies: world.emergencies.map((e) => [e.id, e.status]),
+    // Which samples have arrived, in what order, and what they are due. An
+    // arrival stepped over rather than landed on would show up here as a job
+    // present in one run and still queued in the other.
+    jobs: world.jobs.map((j) => [j.id, j.status, j.stepIndex, j.dueAtMinute]),
+    queued: world.arrivalQueue.length,
+    weeksGenerated: world.weeksGenerated,
+    nextJobNumber: world.nextJobNumber,
   };
 }
 

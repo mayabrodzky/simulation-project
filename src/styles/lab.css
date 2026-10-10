@@ -416,6 +416,22 @@ body.sandbox-mode {
   color: #475569;
 }
 
+/* One line above the queue: how much is waiting, in jobs and in hours. */
+.queue-summary {
+  font-size: 0.875rem;
+  color: var(--text-light);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.queue-summary strong {
+  color: var(--text-dark);
+}
+.queue-overdue {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
 .ongoing-task-card {
   background: #f8fafc;
   border-radius: 12px;

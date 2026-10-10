@@ -940,3 +940,132 @@ Mutation B also exposed something the measurement alone would not have: `staff:0
 the same length, so any derivation keyed on label *length* rather than content collapses them onto
 one sequence. The cross-stream test catches that; a test that only compared `staff:0` against
 `equipment:0` would not have.
+
+---
+
+## 20. Work becomes a thing that exists on its own
+
+**Context.** Work did not exist until a person was told to do it. The lab held three *recipes* and a
+human picked one up out of nothing, so there was no queue, nothing waiting, nothing late, and no
+backlog to measure. "Are we falling behind?" — the question the product exists to answer — was not
+expressible against the model.
+
+**Decision.** Samples arrive on their own. A `Job` is one real instance of a `WorkType`: it arrived
+at a particular minute, is due at a particular minute, and holds its own progress as *remaining*
+counters. Progress moving off the person and onto the job is what makes every interruption free —
+shift close, sickness, reassignment and, later, a breakdown are all just "stop decrementing", with no
+code of their own.
+
+Split into three commits so each leaves a working application: arrivals and a backlog first, then
+jobs as the unit of work, then advisory blocking. This is the first.
+
+### Demand is generated per week, keyed by week number
+
+The plan called for pre-generating a fixed horizon at world creation. That was rejected once the live
+lab was specified as open-ended: a horizon has an edge, and past the edge demand silently stops.
+
+Each week's arrivals are instead derived from `deriveSeed(seed, 'demand:week:7')`, generated when the
+clock first needs them. This keeps the property the horizon was there to provide — week 7 is week 7
+whether it was generated up front or walked to over six simulated weeks — and removes the edge. A
+batch run that jumps straight to week 7 and a live session that walks there see the same samples.
+
+Generation is driven from the end of the span about to be simulated rather than per slice, which is
+what makes it independent of step size: one fortnight-long call and twenty thousand one-minute calls
+both finish having generated through the same week, because the last call ends at the same instant.
+
+**Alternatives considered.**
+
+- *Poisson arrivals.* More principled for independent events, and rejected because the scenario's
+  numbers come from a lab manager describing a range — "about eighty blood panels, give or take
+  twenty percent". A uniform band is what that sentence means. Recorded in `arrivals.ts` as a
+  modelling choice rather than left to look like an oversight.
+- *Arrivals spread across the whole week.* Rejected: samples are delivered by couriers and clients,
+  so they arrive while the lab is open. Spreading them across *opening minutes* is also what makes
+  "arrived Thursday 15:55" a case the model can produce, which is the awkward case for a deadline.
+- *Deadlines as countdowns.* Rejected, and this is the same correction the calendar made: a countdown
+  has to be decremented by someone, which is why lateness used to be binary and why a paused job kept
+  losing time. A deadline is now an absolute instant computed once at arrival and never recomputed.
+
+### Mass spectrometry is new work
+
+Phase 1 recorded that bought equipment could never relieve a bottleneck, because steps matched
+machines by exact name and no task named a machine the shop sold. The Mass Spectrometer existed,
+could be bought twice, and could never affect anything. There is now work that asks for it. A test
+asserts that, so the finding cannot quietly return.
+
+### The calibration reproduces the specification's own figure
+
+The step table was transcribed from `docs/product-spec.md`, which arrives at **186 hands-on hours per
+week** independently, from the lab manager's stated volumes. Summing the step table gives 11,160
+minutes — 186.0 hours. That agreement is the strongest available check that the numbers were
+transcribed rather than invented, since a wrong duration anywhere breaks it, so it is now a test
+rather than an observation. A7 does the full load audit; this is the headline.
+
+Observed behaviour with nothing consuming the queue, which is what this commit produces: 30 waiting
+after one day, 151 by Thursday close, and **flat across Friday and Saturday** — demand respects the
+calendar, not only deadlines. Also now a test.
+
+**Verification.** 25 new tests in four groups: fairness (demand unchanged by hiring, by leasing, and
+by how long the lab has been running), shape (weekly volume, never outside the declared band, varies
+week to week, business hours only), deadlines (close of business, skips the weekend, set from each
+job's own arrival), and admission (arrives at the right instant, never inherits post from before the
+run started, keeps generating indefinitely, unique ids in arrival order). The slicing fingerprint
+gained jobs, the arrival queue and the week counter, so arrivals are covered by the step-size
+invariance gate too.
+
+### What the mutation testing found, including two tests that were weaker than they looked
+
+Six deliberate breakages:
+
+| Mutation | Tests failed |
+|---|---|
+| A. Week key ignores the week number | 2 — the eight-week mean, and week-to-week variation |
+| B. Arrival seed renamed to the operations label | 0 — **not actually a defect**; see below |
+| C. Arrivals spread over 24 hours instead of opening hours | 3 — closed days, opening hours, spread |
+| D. Slice loop no longer clamps to arrivals | **0** |
+| E. Week seed keyed on headcount | 1 — unchanged by hiring |
+| F. Week seed keyed on machine count | 1 — unchanged by leasing |
+
+Three findings worth recording.
+
+**Mutation B was not a defect, and the first attempt at a real one still was not.** Renaming the
+derived label changes which sequence is used but keeps it independent of the lab, so nothing should
+have failed and nothing did. Making the week seed depend on `world.rngState` is a genuine regression —
+demand would then move when the lab's own generator moved — and it was caught by only one test, which
+exposed two separate weaknesses in the others:
+
+- The fairness tests advanced a fortnight in a single call. Demand for a whole span is generated at
+  the top of `advance`, so one long call generates every week *before the lab has done anything*, and
+  a test written that way cannot see demand becoming dependent on the lab. They now walk a day at a
+  time, which is also what the live view does.
+- They used the default roster, which is six of eight, so an appended ninth hire was off duty and made
+  no draws at all. **This is the second time that exact trap has appeared** — it was found in
+  `fairness.test.ts` the day before — so the helper and the reason are now written out in both files.
+
+Even corrected, the hiring test does not fail under that mutation, and the reason is the previous
+step's fix working: staffing cannot reach the operations stream at all any more, so demand keyed on
+`rngState` is still independent of headcount. Mutations E and F confirm the two fairness tests can
+fail, keying demand directly on the counts they are supposed to be independent of.
+
+**Mutation D failed nothing, and the code was kept anyway.** Clamping each slice to the next arrival
+is not yet load-bearing: nothing acts on a job the instant it arrives, so admitting one at the end of
+whatever slice it fell inside gives the same answer. It stops being true in the next commit, where a
+free person can pick a job up the moment it lands — and then the difference between "started at 09:40"
+and "started at midnight, because the batch runner steps a day at a time" is a working day of
+throughput. The comment in `tick.ts` says this explicitly, so the line does not read as dead weight,
+and the test that makes it load-bearing arrives with the behaviour that needs it.
+
+**A performance regression caught by a timeout, not by a wrong answer.** `ensureArrivalsThrough`
+sorted the arrival queue on every call. At a sixtieth-of-a-second step that is 864,000 calls for four
+simulated hours, and the invariance test went from two seconds to over twenty-five and timed out. The
+fix is an early return when there is nothing to generate. Worth noting as a shape: the slice loop runs
+often enough that anything called per slice has to cost nothing in its common case, which is a
+constraint the rest of this phase inherits.
+
+### The view
+
+One panel changed. "Task Definitions" listed the three recipes, which never changed and so told the
+manager nothing; it is now "Work Queue" and shows what is piling up — how many of each kind wait, the
+hands-on hours they represent, the soonest deadline, and how many are already overdue. Read entirely
+through the query seam built in A0, so the panel does not know how a job is represented and will not
+need touching when the next two commits change that.
