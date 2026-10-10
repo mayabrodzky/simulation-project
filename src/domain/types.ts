@@ -276,6 +276,8 @@ export interface Staff extends StaffTemplate {
   activeTask: ActiveTask | null;
   taskStep: number;
   taskTimer: number;
+  /** When this person next wanders, if idle. An absolute minute. */
+  nextWanderAtMinute: number;
 }
 
 export interface Equipment extends EquipmentTemplate {

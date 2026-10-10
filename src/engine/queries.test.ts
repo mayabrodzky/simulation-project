@@ -64,15 +64,18 @@ describe('describeAssignment', () => {
     const person = hadas(world);
     applyCommand(world, { type: 'ASSIGN_TASK', staffId: person.id, taskId: bloodPanel(world).id });
     runUntilWorking(world, person.id);
-    // Progress is exactly 0 at the instant a step begins, so let some of it
-    // elapse before asking.
-    expect(describeAssignment(world, person)?.progress).toBe(0);
-    for (let i = 0; i < 100; i++) tick(world, 1 / 30);
 
-    const view = describeAssignment(world, person);
-    expect(view?.statusText).toBe('Processing');
-    expect(view?.progress).toBeGreaterThan(0);
-    expect(view?.progress).toBeLessThanOrEqual(1);
+    // Work begins the instant the person arrives and continues through the
+    // rest of that slice, so a little progress has already been made.
+    const atStart = describeAssignment(world, person)!;
+    expect(atStart.statusText).toBe('Processing');
+    expect(atStart.progress).toBeGreaterThanOrEqual(0);
+    expect(atStart.progress).toBeLessThan(0.1);
+
+    for (let i = 0; i < 100; i++) tick(world, 1 / 30);
+    const later = describeAssignment(world, person)!;
+    expect(later.progress).toBeGreaterThan(atStart.progress);
+    expect(later.progress).toBeLessThanOrEqual(1);
   });
 
   it('distinguishes training from a job', () => {

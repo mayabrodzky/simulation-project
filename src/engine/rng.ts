@@ -32,6 +32,20 @@ export interface Rng {
    * of exceeding 1 the way `rate * dt` would.
    */
   chance(ratePerUnit: number, dt: number): boolean;
+  /**
+   * How long until the next event in a Poisson process of the given rate.
+   *
+   * This is what `chance` should have been. `chance` asks "did it happen
+   * during this slice?", so the number of draws — and therefore the answer —
+   * depends on how finely time is stepped. Drawing the *interval* once and
+   * waiting for it makes the result identical whether the simulation advances
+   * a minute at a time or a day at a time, which is the property the batch
+   * runner depends on: three hundred fast runs must agree with the one being
+   * watched.
+   *
+   * Returns Infinity for a rate of zero, so "never" needs no special case.
+   */
+  nextInterval(ratePerUnit: number): number;
   /** Current internal state, for snapshotting and resuming a run. */
   getState(): number;
   setState(state: number): void;
@@ -57,6 +71,12 @@ export function createRng(seed: number): Rng {
     chance: (ratePerUnit, dt) => {
       if (ratePerUnit <= 0 || dt <= 0) return false;
       return next() < 1 - Math.exp(-ratePerUnit * dt);
+    },
+    nextInterval: (ratePerUnit) => {
+      if (ratePerUnit <= 0) return Infinity;
+      // Inverse-transform sampling of the exponential distribution. 1 - u
+      // rather than u so the argument is never zero, which would be -Infinity.
+      return -Math.log(1 - next()) / ratePerUnit;
     },
     getState: () => state,
     setState: (s) => {

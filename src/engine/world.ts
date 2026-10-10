@@ -67,6 +67,14 @@ export interface WorldState {
   layout: Layout;
   tuning: Tuning;
 
+  /**
+   * When the next emergency is due, as an absolute minute.
+   *
+   * Scheduled once and waited for, rather than rolled for on every tick. A
+   * per-tick roll makes the outcome depend on how finely time is stepped,
+   * which would mean a fast batch run and the run being watched disagreeing.
+   */
+  nextEmergencyAtMinute: number;
   /** The generator's position. Stored so a run can be cloned or resumed. */
   rngState: number;
   /** Source of unique ids. Replaces Date.now(), which is not deterministic. */
@@ -79,6 +87,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
   const rng = createRng(seed);
   const t = scenario.tuning;
   const f = scenario.layout.labFloor;
+  const start = startMinutes ?? t.startMinutes;
 
   const staff: Staff[] = scenario.staff.map((template, i) => ({
     ...template,
@@ -95,6 +104,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     activeTask: null,
     taskStep: 0,
     taskTimer: 0,
+    nextWanderAtMinute: start + rng.nextInterval(t.wanderRatePerMinute),
   }));
 
   const equipment: Equipment[] = scenario.equipment.map((template, i) => ({
@@ -109,8 +119,8 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
   return {
     scenarioId: scenario.id,
     elapsedSeconds: 0,
-    simMinutes: startMinutes ?? t.startMinutes,
-    minutes: minuteOfDay(startMinutes ?? t.startMinutes),
+    simMinutes: start,
+    minutes: minuteOfDay(start),
     calendar: scenario.calendar,
     speed: 1,
 
@@ -136,6 +146,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     layout: scenario.layout,
     tuning: scenario.tuning,
 
+    nextEmergencyAtMinute: start + rng.nextInterval(t.emergencyRatePerMinute),
     rngState: rng.getState(),
     nextId: 1,
 
