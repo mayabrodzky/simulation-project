@@ -667,3 +667,17 @@ body.sandbox-mode {
   padding: 0.35rem 0.75rem;
   font-size: 0.75rem;
 }
+
+/* Which run this is, in the game header. Small and quiet: it is for checking a
+   demo or a verification, not something a lab manager needs to read. */
+.run-badge {
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+  align-self: center;
+}

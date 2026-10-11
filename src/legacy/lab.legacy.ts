@@ -38,6 +38,7 @@ import {
 import { createRenderer } from '../render/renderer';
 import { installActions, installEscape, installHover } from '../ui/actions';
 import { appendHtml, html, setHtml, setHtmlById } from '../ui/dom';
+import { formatStart, parseRunOptions } from '../ui/runOptions';
 
 /**
  * How often the sidebar is rebuilt, in milliseconds. The canvas is redrawn
@@ -51,6 +52,7 @@ const Lab = {
   scenario: chemistryLab,
   renderer: null,
   seed: 1,
+  runOptions: null,
   lastPanelTick: 0,
   canvas: null,
   timeOverlay: null,
@@ -102,24 +104,38 @@ const Lab = {
   },
 
   init() {
-    // Seeded so a run can be reproduced: ?seed=123 replays it exactly.
-    // Without the parameter the seed is taken from the clock, which keeps
-    // today's behaviour of a different lab on every load.
-    const seedParam = new URLSearchParams(window.location.search).get('seed');
-    this.seed = seedParam !== null && seedParam !== '' ? Number(seedParam) : Date.now();
-    if (!Number.isFinite(this.seed)) this.seed = Date.now();
-    console.log('Simulation seed:', this.seed);
+    // Which lab, when it opens, and how fast the clock runs — all three from
+    // the URL, so a demo or a verification can name the exact run it wants:
+    //
+    //   ?seed=42&start=sun-08:00&speed=60
+    //
+    // The clock used to start from the real time of day. That made two loads
+    // of the same seed non-comparable, showed an empty lab to anyone opening
+    // the page in the evening, and put the weekend pause days of real time
+    // away. It now opens Sunday 08:00 unless told otherwise.
+    const options = parseRunOptions(window.location.search, Date.now());
+    this.seed = options.seed;
+    this.runOptions = options;
+    for (const warning of options.warnings) console.warn('Run options:', warning);
+    console.log(
+      `Simulation seed: ${this.seed} · opens ${formatStart(options.startMinutes)} · speed ×${options.speed}`,
+    );
+
     this.scenario = this.businessProfile
       ? scenarioFromBusinessProfile(this.businessProfile)
       : chemistryLab;
 
-    // The clock still starts from the real time of day, which is why the lab
-    // renders in daylight or at night depending on when it is opened. The
-    // engine takes it as a parameter, so a fixed start is now one argument
-    // away when Phase 2 wants comparable runs.
-    const now = new Date();
-    const startMinutes = now.getHours() * 60 + now.getMinutes();
-    this.world = createWorld(this.scenario, this.seed, startMinutes);
+    this.world = createWorld(this.scenario, this.seed, options.startMinutes);
+    this.world.speed = options.speed;
+
+    // Shown in the game header so a run identifies itself on screen. Reading
+    // the console to find out which lab you are looking at is fine for one
+    // person debugging and useless for comparing two tabs side by side.
+    setHtmlById(
+      'runBadge',
+      html`seed ${String(this.seed)} · ${formatStart(options.startMinutes)} ·
+      ×${String(options.speed)}`,
+    );
 
     this.camera = { ...this.scenario.layout.initialCamera };
     this.canvas = document.getElementById('gameCanvas');

@@ -68,6 +68,32 @@ describe('determinism', () => {
   });
 });
 
+describe('speed', () => {
+  it('scales simulated time without changing what happens', () => {
+    // ?speed=60 in the live view, and the x1/x10/x60 controls Phase 4 needs.
+    // It multiplies the dt handed to the engine rather than changing any rule,
+    // which is why a fast-forwarded run and a watched one agree — the slice
+    // loop still lands on every event.
+    const normal = createWorld(chemistryLab, SEED, 480);
+    const fast = createWorld(chemistryLab, SEED, 480);
+    fast.speed = 60;
+
+    for (let i = 0; i < 60; i++) tick(normal, 1);
+    tick(fast, 1);
+
+    expect(fast.simMinutes).toBeCloseTo(normal.simMinutes, 6);
+    expect(fast.jobs.map((j) => j.id)).toEqual(normal.jobs.map((j) => j.id));
+    expect(fast.nextEmergencyAtMinute).toBeCloseTo(normal.nextEmergencyAtMinute, 6);
+  });
+
+  it('leaves the clock still when stopped', () => {
+    const world = createWorld(chemistryLab, SEED, 480);
+    world.speed = 0;
+    tick(world, 1000);
+    expect(world.simMinutes).toBe(480);
+  });
+});
+
 describe('isQualified', () => {
   const task = (...skills: (string | null)[]) => ({
     equipmentSequence: skills.map((skillRequired) => ({

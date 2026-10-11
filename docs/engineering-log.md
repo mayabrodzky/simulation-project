@@ -1069,3 +1069,84 @@ manager nothing; it is now "Work Queue" and shows what is piling up — how many
 hands-on hours they represent, the soonest deadline, and how many are already overdue. Read entirely
 through the query seam built in A0, so the panel does not know how a job is represented and will not
 need touching when the next two commits change that.
+
+---
+
+## 21. A run has to be nameable before it can be verified
+
+**Context.** Verifying A3a on a preview exposed a limitation that had been inherited from Phase 1
+without being noticed: the simulated clock started from the real time of day. Three consequences, all
+of which only become visible once there is something to verify that takes more than a minute of
+simulated time to happen:
+
+- **Two loads of the same seed were not comparable.** `?seed=42` fixed which lab, but not when the
+  run opened, so the same seed produced a different sequence of events on every load. The one thing
+  the seed existed to provide was undermined by the clock.
+- **A demo opened in the evening showed an empty lab.** Everyone off shift, no arrivals, nothing
+  happening — the worst possible first impression, decided by what time the page happened to be
+  opened.
+- **Anything later in the week was unreachable.** The weekend pause and the first overdue job are
+  real behaviours with tests behind them, but confirming them on screen meant waiting days of real
+  time. Three of the five checks requested for A3a could not be carried out.
+
+**Decision.** Three options in the URL, parsed in the view layer only:
+
+```
+?seed=42&start=sun-08:00&speed=60
+```
+
+`start` takes a day name and a time (`thu-15:55`), or a bare time meaning Sunday. A day name rather
+than a date, because the simulation's calendar is a repeating week with no notion of a month, so
+"Thursday afternoon" is the most specific thing that can be meant. `speed` multiplies simulated time,
+clamped to 0.1–1440; the upper bound is a simulated day per real second, past which a frame advances
+more than the eye can follow.
+
+**The default start is now Sunday 08:00 rather than the wall clock.** A run that is not told when to
+open should open at the beginning of a working day, because that is the only choice that makes the
+same seed mean the same run.
+
+**Where this lives, and why it matters.** `src/ui/runOptions.ts` — the view layer. The engine takes
+the start minute and the speed as plain arguments and may not read `window`, `Date` or the URL, which
+lint enforces. Parsing is pure: it takes the query string and the current time as arguments rather
+than reading either, so it is testable with no browser. That is the same discipline as the rest of
+the engine boundary, applied to the one place where a URL is allowed to be read.
+
+Bad values warn and fall back rather than guessing, and one bad value does not discard the others. A
+demo that silently opened on the wrong day would be worse than one that says it could not read what
+was asked for.
+
+**The run identifies itself on screen.** A badge in the game header reads `seed 42 · sun-08:00 · ×60`.
+Reading the console to find out which lab you are looking at is adequate for one person debugging and
+useless for comparing two tabs side by side, which is exactly what Phase 4 asks a manager to do.
+
+**Verification.** 17 tests on the parsing, including a round-trip through the label the badge shows,
+and that `?seed=42&start=sun-08:00&speed=60` produces exactly `{ seed: 42, startMinutes: 480, speed: 60 }`.
+
+Two engine tests on `speed`, which had none despite the field existing since Phase 1: sixty ticks at
+×1 agree with one tick at ×60 — same clock, same jobs, same event schedule, to six decimal places —
+and ×0 stops the clock. The agreement is not a coincidence to be grateful for; it is the slice loop
+from A2 doing its job, because speed multiplies the `dt` handed to the engine rather than changing any
+rule. Worth having as a test now that a URL can set it, since the ×1/×10/×60 controls Phase 4 needs
+are the same mechanism.
+
+### The deadline convention, confirmed and written down
+
+Review asked whether deadlines are close of business on the n-th working day. They are, and the
+observed numbers confirm it: a blood panel arriving Sunday 13:52 showed "due in 2d 2h", and
+2 working days later at 16:00 is minute 3,840 against an arrival at minute 832 — 3,008 minutes, which
+is 2 days and 2.1 hours. The cell culture's "9d 2h" is the same arithmetic over seven working days
+with Friday and Saturday skipped.
+
+Two separate choices are buried in that convention, and neither was written down anywhere. Both are
+now question 9 in `docs/product-spec.md`:
+
+- *Close of business rather than the same time of day.* A sample arriving at 15:55 gets effectively
+  the same deadline as one arriving at 08:05. The alternative, 48 working hours from the moment of
+  arrival, would give the late arrival five minutes more. Close of business is what a client means by
+  "by Tuesday", and it makes the deadline one unambiguous instant rather than one that depends on
+  when a courier turned up.
+- *The arrival day does not count.* Already configurable as `calendar.deadlineCountsArrivalDay`, but
+  the reasoning was only in a code comment.
+
+Worth confirming with the lab manager, because it shifts every deadline by a day and so changes how
+much work the simulation reports as late.

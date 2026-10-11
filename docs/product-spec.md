@@ -152,7 +152,7 @@ Keep the engine domain-agnostic (resources, capabilities, work types, events); e
 
 ### Added while building the model (Phase 2)
 
-Three modelling assumptions that this spec does not settle, where a reading had to be chosen to
+Four modelling assumptions that this spec does not settle, where a reading had to be chosen to
 write the code. Each is a `Tuning` value or a scenario field, so a different answer is a data change
 rather than a rewrite.
 
@@ -165,7 +165,25 @@ rather than a rewrite.
 8. **When does a client give up?** The spec has partial credit for lateness but no point at which a
    job stops being worth doing. Modelled as abandonment **3 working days past the deadline**, with
    the work written off. Does that happen at all, and if so after how long?
-9. **How are the hands-on minutes split across the steps of a job?** The spec gives a total per work
+9. **What does a deadline of "two working days" actually fall on?** Modelled as **close of business
+   on the n-th working day, not counting the day the sample arrived**. So a blood panel arriving
+   Sunday 13:52 is due Tuesday 16:00, and a cell culture arriving then is due Tuesday of the
+   following week at 16:00 — seven working days later, with Friday and Saturday not counted.
+
+   Two separate readings are buried in that, and both are choices:
+
+   - *Close of business, not the same time of day.* A sample arriving at 15:55 gets effectively the
+     same deadline as one arriving at 08:05. The alternative — 48 working hours from the moment of
+     arrival — would give the late arrival five minutes more. Close of business is what a client
+     means by "by Tuesday", and it makes the deadline a single unambiguous instant rather than one
+     that depends on when a courier happened to turn up.
+   - *The arrival day does not count.* A sample arriving Sunday has Monday and Tuesday, not Sunday
+     and Monday. Configurable as `calendar.deadlineCountsArrivalDay`.
+
+   Worth confirming, because it shifts every deadline in the simulation by a day and so changes how
+   much work is late.
+
+10. **How are the hands-on minutes split across the steps of a job?** The spec gives a total per work
    type, not a per-step breakdown — but the split decides which instrument is the bottleneck. The
    numbers chosen reproduce this spec's own claim that mass spec binds first; a different split makes
    the microscope bind instead. This is the single assumption most worth checking, because it
