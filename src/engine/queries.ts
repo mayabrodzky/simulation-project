@@ -143,6 +143,11 @@ export function backlogView(world: WorldState): BacklogView {
   return { waiting, overdue, minutesOfWorkWaiting: minutes };
 }
 
+/** Whether any hands-on minutes have been spent on this job. */
+function hasBeenStarted(job: Job): boolean {
+  return job.steps.some((step) => step.remaining < step.total);
+}
+
 /** Work that has arrived and nobody has finished. */
 function isWaiting(status: Job['status']): boolean {
   return status === 'waiting' || status === 'blocked';
@@ -268,7 +273,12 @@ export function listAssignableJobs(world: WorldState, person: Staff): Assignable
         price: job.basePrice,
         qualified: missing.length === 0,
         missingSkills: missing,
-        partlyDone: job.stepIndex > 0,
+        // Any work at all, not just a completed step. This was `stepIndex > 0`,
+        // which detects progress only across a step *boundary* — so a
+        // single-step job 86% finished reported itself as untouched, and mass
+        // spectrometry is a quarter of what the lab sells. The one signal for
+        // "has anyone worked on this?" was wrong for all of it.
+        partlyDone: hasBeenStarted(job),
       };
     });
 }

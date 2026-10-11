@@ -1380,3 +1380,118 @@ The Work Queue's hover highlight lit up everyone qualified, including people off
 those who could take the work now, dashed and faded for those who could not. "Three people can do this
 and two of them are out" is a more useful sentence than "three people can do this", and it is the one
 that makes a hire or a training worth considering.
+
+---
+
+## 24. A reported bug that was a lying label, and a measurement that refuted its own premise
+
+Two items from review of entry 23, both instructive for the same reason: a number on screen was
+trusted as evidence about the simulation, and in both cases the number was wrong rather than the
+simulation.
+
+### "Progress is not kept at end of shift"
+
+Reported with a precise reproduction: seed 42, Thursday 14:00, ×5; a mass-spec job assigned, worked
+for about fifteen simulated minutes, and after 16:00 showing in the queue as "1h left" with no
+part-finished marker — while the sick-mid-job path demonstrably did keep progress.
+
+Reproducing it exactly, down to the same job id, the engine turns out to be correct:
+
+```
+assigned : remaining = 60.0   status = in-progress
+at 16:00 : remaining =  8.1   status = waiting
+Mass Spectrometer totalWorkTime = 51.9
+```
+
+Fifty-two minutes of work done, 8.1 remaining, and the machine's own counter agrees. Nothing was
+lost. The assign dialogue would have printed "8m left".
+
+What *was* wrong is the marker the report relied on. `partlyDone` was `job.stepIndex > 0`, which
+detects progress only across a step **boundary**. Mass spectrometry has a single step, so a job 86%
+finished reported itself as untouched — and mass spectrometry is a quarter of what the lab sells. The
+only signal available for "has anybody worked on this?" was wrong for all single-step work. It is now
+`steps.some(step => step.remaining < step.total)`.
+
+**The second-order lesson is the useful one.** The reported symptom ("1h left") could not be
+reproduced and the reported diagnosis was wrong, but the report was still right that something was
+broken, because the reporter was reasoning from the only evidence the interface offered and that
+evidence was false. A misleading label does not merely fail to inform — it actively produces wrong
+conclusions about working code, and costs more than a missing one.
+
+### Why the walk looked ten times longer than it is
+
+The same report noted roughly seven real seconds at ×5 between assigning a job and the badge reading
+"working" — about thirty-five simulated minutes of walking.
+
+The walk is actually about one and a half simulated minutes. The lag was the **staff panel**, which
+was driven by the event stream alone. Arriving at a machine and starting work produces no event: it
+is a consequence of the clock. So a badge could read "idle" for as long as it took the next unrelated
+event to arrive and rebuild the panel — and at ×5 that is tens of simulated minutes of apparent lag,
+at ×60 hundreds.
+
+The staff panel now refreshes on the same 250 ms interval as the panels that already needed it. The
+event-driven rebuild was introduced in Phase 1 to stop four panels being rebuilt 240 times a second;
+the correct split is not events-against-frames but *changes caused by an event* against *changes
+caused by the clock*, and a person's state moved into the second category the moment the engine
+started changing it on its own.
+
+### The walking measurement, and the theory it refuted
+
+Review asked for average walking minutes per step over a simulated week, reported against the 186
+hours offered and 240 hours rostered. The premise was reasonable and checked out arithmetically:
+before A2 walking was 1.2 grid units per simulated *second* with the clock at 0.5 simulated minutes
+per second, i.e. 2.4 grid units a simulated minute; after A2 it is 1.2 a minute. **The simulated cost
+of walking did exactly double.**
+
+The first measurement appeared to confirm the theory: 6.87 minutes a step, 24.7 hours a week, a 23.6%
+overhead on hands-on time. That number was wrong. It counted *standing at a machine somebody else is
+using* as walking, because the two are indistinguishable in the state — on a job, not working. They
+mean opposite things: one is overhead, the other is a bottleneck.
+
+Separated, over one simulated week with every free person taking the most urgent job they can:
+
+| | h/week | per step |
+|---|---|---|
+| Hands-on work | 104.8 | |
+| **Travelling** | **4.8** | **1.33 min** |
+| **Waiting for a busy machine** | **19.9** | |
+| On a break (energy) | 18.0 | |
+| **On shift with nothing they can do** | **92.5** | |
+| Total on-shift | 240.0 | |
+| Work offered | 186.0 | |
+| Jobs completed | 105 of ~162 arriving | |
+
+Walking costs 2% of rostered time. It is not what stops the lab keeping up. What does:
+
+- **92.5 hours a week of people on shift with no job they can start.** Forty of those are the junior
+  researcher, who holds no skills at all, so his rostered time can never be used by anyone. Another
+  26.7 are the manager, whose three skills match only two steps across the whole catalogue. This is a
+  **finding about the lab, not a defect** — "somebody is idle all week because they are not trained on
+  anything" is precisely the sentence this product exists to produce — so the scenario is left
+  untouched.
+- **19.9 hours a week waiting for a machine somebody else is using.** Genuine contention, and the
+  first measurement in this project that points at the kind of bottleneck the scenario is built
+  around. A5's instrument counts and A7's audit are what explain it.
+- **18 hours on a break**, driven by the invented energy percentage, which B1 deletes.
+
+**Walking is left as it is for now, and the reason is worth stating.** It is physically indefensible
+— 1.2 grid units a minute is about 1.2 metres a minute if a grid unit is roughly a metre, against a
+human pace of eighty — but correcting it recovers 2% of capacity and would make the sprites cross the
+lab in a fraction of a second at ×1, since one real second is one simulated minute. The tension is
+between a model that is right and a picture that is legible, and it belongs to Phase 2.5, which owns
+the visual redesign and the speed controls. Added to that list rather than decided here.
+
+### The measurement is now a test
+
+`capacity.test.ts`, in two parts. A conservation law — every person-minute is accounted for as exactly
+one of working, travelling, waiting, on a break, free or off shift, to four decimal places — because
+minutes that go missing or get counted twice would corrupt every capacity figure downstream and
+nothing else would notice; all three A2 ordering bugs were of that shape. And the measurement itself,
+with bounds, so the figures above cannot drift unnoticed.
+
+It uses a deliberately naive assignment rule rather than waiting for B3's dispatcher, because the
+point is to measure what the *model* costs and a clever assignment would hide it.
+
+This is the second time in two entries that the aggregate view has found something no unit test
+could. It is now a standing part of checking a step rather than something reached for after a
+surprise.

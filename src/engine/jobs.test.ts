@@ -18,6 +18,7 @@ import type { Job, Staff } from '../domain/types';
 import { applyCommand } from './commands';
 import { MINUTES_PER_DAY } from './calendar';
 import { canOperate } from './jobs';
+import { listAssignableJobs } from './queries';
 import { advance } from './tick';
 import { createWorld, type WorldState } from './world';
 
@@ -34,8 +35,8 @@ const SUNDAY_0800 = 480;
  * measured. Silenced here rather than worked around, so an assertion about
  * money is an assertion about jobs.
  */
-function newWorld(): WorldState {
-  const world = createWorld(chemistryLab, SEED, SUNDAY_0800);
+function newWorld(startMinutes = SUNDAY_0800): WorldState {
+  const world = createWorld(chemistryLab, SEED, startMinutes);
   world.tuning = { ...world.tuning, emergencyRatePerMinute: 0 };
   world.nextEmergencyAtMinute = Infinity;
   return world;
@@ -500,5 +501,60 @@ describe('a scheduled instant is never missed by a hair', () => {
     // The boundary belongs to the client: due at 16:00 means 16:00 is fine.
     expect(job.status).toBe('done-on-time');
     expect(operator.jobId).toBeNull();
+  });
+});
+
+describe('a part-finished job says so', () => {
+  it('marks a single-step job that was started and put down', () => {
+    // Review read a part-finished mass-spec job as having lost its progress,
+    // because the dialogue showed no "part-finished" tag. The progress was
+    // there — the tag was lying.
+    //
+    // `partlyDone` was `stepIndex > 0`, which detects progress only across a
+    // step *boundary*. Mass spectrometry has one step, so a job 86% finished
+    // reported itself as untouched. The one signal available for "has anyone
+    // worked on this?" was wrong for a quarter of the work the lab sells.
+    const world = newWorld(4 * MINUTES_PER_DAY + 14 * 60); // Thursday 14:00
+    const job = waitForJob(world, 'mass-spec');
+    const amit = available(world, 'Dr. Amit Katz');
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: amit.id, jobId: job.id });
+
+    // Up to closing time, which sets the job down mid-step.
+    advance(world, 4 * MINUTES_PER_DAY + 16 * 60 - world.simMinutes);
+
+    expect(job.stepIndex).toBe(0);
+    expect(job.status).toBe('waiting');
+    const step = job.steps[0]!;
+    expect(step.remaining).toBeGreaterThan(0);
+    expect(step.remaining).toBeLessThan(step.total);
+
+    const lihi = world.staff.find((p) => p.name === 'Dr. Lihi Dayan')!;
+    const row = listAssignableJobs(world, lihi).find((r) => r.id === job.id)!;
+    expect(row.minutesOfWork).toBeCloseTo(step.remaining, 6);
+    expect(row.partlyDone).toBe(true);
+  });
+
+  it('does not mark a job nobody has touched', () => {
+    const world = newWorld();
+    const job = waitForJob(world, 'blood-panel');
+    const hadas = available(world, 'Hadas Ben Hamo');
+
+    const row = listAssignableJobs(world, hadas).find((r) => r.id === job.id)!;
+    expect(row.partlyDone).toBe(false);
+  });
+
+  it('marks a job whose first step is complete', () => {
+    // Given to Dana, who can centrifuge but not use a microscope, so the job
+    // is handed back to the queue after step one and is visible there.
+    const world = newWorld();
+    const job = waitForJob(world, 'blood-panel');
+    const dana = available(world, 'Dana Cohen');
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: dana.id, jobId: job.id });
+    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) advance(world, 0.5);
+
+    expect(job.stepIndex).toBe(1);
+    expect(job.status).toBe('waiting');
+    const row = listAssignableJobs(world, dana).find((r) => r.id === job.id)!;
+    expect(row.partlyDone).toBe(true);
   });
 });

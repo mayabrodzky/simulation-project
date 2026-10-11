@@ -693,16 +693,26 @@ const Lab = {
         movementMultiplier: this.isSandboxMode ? 5 : 1,
       }),
     );
-    // Previously these four ran on every frame, rebuilding each panel's whole
+    // Previously these ran on every frame, rebuilding each panel's whole
     // subtree with innerHTML about 240 times a second between them, and
     // throwing away scroll position and hover state each time. Panels that
     // react to a change are driven by the event stream instead; this interval
-    // only covers the things that tick down on their own.
+    // only covers the things that change with the clock rather than with an
+    // event.
+    //
+    // The staff panel is on this list because a person's state now changes
+    // without any event: they arrive at a machine and start work, or finish a
+    // step. Driven by events alone, a badge could read "idle" for seconds after
+    // work began — and at ×5 or ×60 that is tens or hundreds of simulated
+    // minutes of apparent lag, which reads as a walk taking ten times longer
+    // than it does. Review saw exactly that and reasonably read it as a bug in
+    // the simulation.
     if (now - this.lastPanelTick >= PANEL_INTERVAL_MS) {
       this.lastPanelTick = now;
       this.updateTimeOfDayOverlay();
       this.updateUI();
       this.updateStatusCounts();
+      this.updateStaffPanel();
       this.updateEmergencyListPanel();
       this.updateOngoingTasksPanel();
       this.updateEmergencyModalDeadline();
