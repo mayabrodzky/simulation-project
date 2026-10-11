@@ -46,10 +46,13 @@ function isPersonalAbsence(person: Staff): boolean {
  * of thousands of times for a simulated week.
  */
 export function applyShiftWindow(world: WorldState, events: EngineEvent[]): void {
-  const open = isWithinShift(world.calendar.shift, world.simMinutes);
-
   for (const person of world.staff) {
     if (isPersonalAbsence(person)) continue;
+
+    // Each person's own window, not the lab's. Two of the eight are part-time,
+    // and an evening shift — decision C — is a change to some people's hours
+    // rather than to when the building is unlocked.
+    const open = isWithinShift(person.shift, world.simMinutes);
 
     if (!person.rostered) {
       // Not on the rota: at home whatever the clock says.
@@ -94,10 +97,22 @@ function sendHome(world: WorldState, person: Staff, events: EngineEvent[]): void
  * time, which is eight hours of work nobody did.
  */
 export function nextShiftEventIn(world: WorldState): number {
-  return nextCalendarBoundary(world.calendar.shift, world.simMinutes) - world.simMinutes;
+  let soonest = Infinity;
+  // Every distinct shift, because a part-timer leaving at noon is an instant
+  // the loop has to land on just as much as the lab closing at four.
+  for (const person of world.staff) {
+    const next = nextCalendarBoundary(person.shift, world.simMinutes) - world.simMinutes;
+    if (next > 0 && next < soonest) soonest = next;
+  }
+  return soonest;
 }
 
-/** Whether anyone could be given work right now. Used by the view and A3c. */
+/** Whether the building is open at all. Individual shifts may be shorter. */
 export function isLabOpen(world: WorldState): boolean {
   return isWithinShift(world.calendar.shift, world.simMinutes);
+}
+
+/** Whether this person is contracted to be here right now. */
+export function isOnShift(person: Staff, minute: number): boolean {
+  return isWithinShift(person.shift, minute);
 }

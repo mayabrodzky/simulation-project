@@ -1495,3 +1495,109 @@ point is to measure what the *model* costs and a clever assignment would hide it
 This is the second time in two entries that the aggregate view has found something no unit test
 could. It is now a standing part of checking a step rather than something reached for after a
 surprise.
+
+---
+
+## 25. The scenario had drifted from the specification
+
+**Context.** Review checked the scenario's staff against `docs/product-spec.md` §3.2, which is the
+source of truth, and found that **seven of the eight people differed**. The previous entry had
+reported 92.5 hours a week of people on shift with nothing they could do, and concluded it was a
+finding about the lab. It was mostly a data mismatch.
+
+| Person | Spec §3.2 | Scenario | Difference |
+|---|---|---|---|
+| Amit Katz | Microscopy, PCR, Mass Spec, Biosafety | same | role wording only |
+| Michal Levi | Spectrophotometry, Incubator, **Biosafety** | **Management**, Spectrophotometry, Incubator | Biosafety missing; "Management" matches no step |
+| Dana Cohen | Centrifuge, **Microscopy** | Centrifuge | Microscopy missing |
+| Hadas Ben Hamo | Centrifuge, Microscopy, **Spectrophotometry** | Centrifuge, Microscopy | Spectrophotometry missing |
+| Lihi Dayan | Mass Spec, Spectrophotometry, **PCR** | Mass Spec, Spectrophotometry | PCR missing |
+| Amir Barzilay | **Centrifuge** | **none** | all of it |
+| Nina Zur | **Part-time 20 h** · Biosafety, Microscopy, **Incubator** | Biosafety, Microscopy · **not employed** | Incubator missing; not employed |
+| Alex Tom | **Part-time 20 h** · **Spectrophotometry** | **none** · **not employed** | all of it |
+
+Every difference ran the same way: less capability than the spec grants. And `staffOnShiftCount`
+stood at six, which excluded precisely the two part-timers — so a fifth of the lab's contracted hours
+did not exist at all.
+
+The drift is inherited. These skills are Phase 1 data, written before the specification existed, and
+nothing had ever compared the two. "Management", which Michal held, is a capability no step requires
+and could never have matched anything.
+
+**Decision.** Transcribe §3.2 exactly. Contracted hours become real: `StaffTemplate.weeklyHours`, 40
+or 20, and `Staff.shift` derived from it — so a part-timer on twenty hours works 08:00 to 12:00 and
+goes home while the lab stays open until four. That required shifts to move **from the lab to the
+person**, which is a change worth having anyway: decision C, add an evening shift, is a change to some
+people's hours rather than to when the building is unlocked, and a single lab-wide shift could not
+express it.
+
+The morning reading of "part-time (20 h)" is a modelling choice rather than something the spec states;
+it is one function, `shiftForWeeklyHours`, and a different reading is a data change.
+
+### What it changed, measured the same way as before
+
+One simulated week, same seed, same naive assignment rule — every free person takes the most urgent
+job they can.
+
+| | Drifted roster | Spec roster |
+|---|---|---|
+| Contracted hours | 240 | **280** |
+| Hands-on work | 104.8 h | **126.2 h** |
+| Travelling | 4.8 h (1.33 min/step) | 10.1 h (2.41 min/step) |
+| **Waiting for a busy machine** | 19.9 h | **58.5 h** |
+| On a break | 18.0 h | 22.7 h |
+| **On shift, nothing they can do** | **92.5 h** | **62.4 h** |
+| Jobs completed | 105 | 105 |
+
+**Answering the question directly: it was mostly a data mismatch.** Idle time fell by 30 hours, and —
+more to the point — the shape of it changed completely. It was one person with no skills absorbing 40
+hours; it is now spread across all eight, the largest being 17.6 of Alex's 20 contracted hours. That
+is a part-timer with one skill having gaps, not a lab that cannot use its people.
+
+**The constraint moved from people to instruments**, which is what the specification intends.
+Machine waiting tripled, from 19.9 to 58.5 hours a week. With proper skill coverage people can
+actually take work, and what they then queue for is equipment.
+
+### But the wrong instrument binds
+
+```
+Microscope A         31.7 h waiting
+Centrifuge           13.2 h
+Mass Spectrometer     4.4 h
+PCR Machine           4.2 h
+```
+
+The microscope binds, not the mass spectrometer the scenario is built around. This is precisely the
+risk the plan recorded against the step table: *"a different split makes the microscope bind before
+the mass spec and the spec's whole story collapses."*
+
+It is expected at this stage rather than alarming, because the thing that makes mass spectrometry
+heavy does not exist yet. The spec's bottleneck claim is 30 jobs × 90 minutes of **instrument** time
+= 45 hours a week, and instrument time separate from operator time is A4. Today a mass-spec job holds
+its instrument for the 60 attended minutes only. Microscopy meanwhile is 80 blood panels × 20 min
+plus 12 cell cultures × 45 min = 35.7 hours against roughly 40 hours of availability — 89%
+utilisation, which queues.
+
+Recorded now, before A4 changes it, so that the comparison can be made afterwards rather than
+asserted. A7's load audit is the step that settles which instrument binds, and it is a fatal-error
+check rather than an observation.
+
+**Verification.** 214 tests. Fourteen needed updating, and what they needed is itself a record of how
+much had been resting on the drifted data:
+
+- Four tests used **Amir as the unqualified person**. He now holds Centrifuge Usage, so Alex Tom —
+  Spectrophotometry alone — is the genuinely unqualified one for a blood panel.
+- Three used **Dana as the person who can start a blood panel but not finish it**. She now holds
+  Microscopy, so that role passes to Amir.
+- Two trained **Dana on Microscopy**, which she now already holds, so the command was refused as
+  already-known and the tests asserted nothing. Retargeted at Amir, who is also the person a training
+  decision would realistically be about.
+- Three assumed **somebody was off shift at 08:00**. All eight are employed now, so being off duty
+  has to be arranged rather than found.
+- One compared against a world whose **shift never ends** by overriding `world.calendar`, which stopped
+  working when shifts moved onto the person — it would have passed vacuously.
+- `capacity.test.ts` asserted **240 rostered hours** as head-count times forty. It now sums contracted
+  hours per person, which is 280 and is the figure that was wrong before.
+
+Two tests added: a part-timer goes home at noon while the full-timers work on, and a part-timer is
+excluded from the free list once their shorter shift ends.

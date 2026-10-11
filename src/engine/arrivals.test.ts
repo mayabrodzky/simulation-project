@@ -77,7 +77,10 @@ describe('demand does not depend on the lab', () => {
     const hired = createWorld(
       {
         ...roster,
-        staff: [...roster.staff, { name: 'New Hire', role: 'Technician', skills: ['Microscopy'] }],
+        staff: [
+          ...roster.staff,
+          { name: 'New Hire', role: 'Technician', skills: ['Microscopy'], weeklyHours: 40 },
+        ],
         tuning: { ...roster.tuning, staffOnShiftCount: roster.staff.length + 1 },
       },
       SEED,

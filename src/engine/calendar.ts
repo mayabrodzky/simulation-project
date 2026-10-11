@@ -54,6 +54,35 @@ export function dayOfWeekOf(day: number): DayOfWeek {
   return (((day % DAYS_PER_WEEK) + DAYS_PER_WEEK) % DAYS_PER_WEEK) as DayOfWeek;
 }
 
+/**
+ * The shift a given number of contracted hours a week implies.
+ *
+ * Spread evenly across the lab's working days, starting when the lab opens — so
+ * 40 hours over five days is the lab's own 08:00–16:00, and 20 hours is
+ * 08:00–12:00. A part-timer working mornings is the common arrangement and the
+ * one the spec's "part-time (20 h)" most plausibly means; it is a modelling
+ * choice rather than something the spec states, and a different reading is a
+ * data change rather than a rewrite.
+ *
+ * Never longer than the lab is open: contracted hours beyond the opening hours
+ * would be overtime, which B1 handles, not a longer shift.
+ */
+export function shiftForWeeklyHours(calendar: Calendar, weeklyHours: number): Shift {
+  const base = calendar.shift;
+  const days = base.days.length;
+  if (days === 0) throw new Error('calendar: no working days');
+
+  const openPerDay = base.endMinute - base.startMinute;
+  const wanted = Math.round((weeklyHours * MINUTES_PER_HOUR) / days);
+  const perDay = Math.max(0, Math.min(openPerDay, wanted));
+
+  return {
+    days: [...base.days],
+    startMinute: base.startMinute,
+    endMinute: base.startMinute + perDay,
+  };
+}
+
 /* --- Is the lab open? ------------------------------------------------------ */
 
 export function isWorkingDay(shift: Shift, minute: number): boolean {

@@ -27,6 +27,10 @@ const layout: Layout = {
  * wall-clock hours. Both are open questions for the lab manager rather than
  * facts; see docs/product-spec.md.
  */
+/** Contracted hours a week, from the spec's "Full-time" and "Part-time (20 h)". */
+const FULL_TIME_HOURS = 40;
+const PART_TIME_HOURS = 20;
+
 const calendar: Calendar = {
   shift: { days: [0, 1, 2, 3, 4], startMinute: 480, endMinute: 960 },
   deadlineCountsArrivalDay: false,
@@ -76,7 +80,10 @@ const tuning: Tuning = {
   initialEnergyRange: 20,
   initialConditionMin: 70,
   initialConditionRange: 30,
-  staffOnShiftCount: 6,
+  // All eight are employed. The spec has six full-time and two part-time, and
+  // this previously stood at six — which excluded exactly the two part-timers,
+  // so a fifth of the lab's contracted hours did not exist.
+  staffOnShiftCount: 8,
 
   // Three working days past the deadline before the client cancels. An
   // assumption to put to the lab manager, not a fact — see
@@ -165,27 +172,64 @@ export const chemistryLab: Scenario = {
   calendar,
   workTypes,
 
+  // Transcribed from docs/product-spec.md section 3.2, which is the source of
+  // truth. The scenario had drifted: seven of the eight people differed, and
+  // the differences all pointed the same way — less capability than the spec
+  // gives them, which made people rather than instruments the thing the lab
+  // runs out of. Amir held no skills at all, so his forty rostered hours a week
+  // could never be used by anyone.
+  //
+  // "Management", which Michal used to hold, is gone: no step requires it, so it
+  // was a capability that could never match anything.
   staff: [
     {
       name: 'Dr. Amit Katz',
-      role: 'Senior Researcher',
+      role: 'Senior scientist',
+      weeklyHours: FULL_TIME_HOURS,
       skills: ['Microscopy', 'PCR Operation', 'Mass Spectrometry', 'Biosafety Protocols'],
     },
     {
       name: 'Dr. Michal Levi',
-      role: 'Lab Director',
-      skills: ['Management', 'Spectrophotometry', 'Incubator Handling'],
+      role: "Lab manager's deputy",
+      weeklyHours: FULL_TIME_HOURS,
+      skills: ['Spectrophotometry', 'Incubator Handling', 'Biosafety Protocols'],
     },
-    { name: 'Dana Cohen', role: 'Research Assistant', skills: ['Centrifuge Usage'] },
-    { name: 'Hadas Ben Hamo', role: 'Lab Technician', skills: ['Centrifuge Usage', 'Microscopy'] },
+    {
+      name: 'Dana Cohen',
+      role: 'Technician',
+      weeklyHours: FULL_TIME_HOURS,
+      skills: ['Centrifuge Usage', 'Microscopy'],
+    },
+    {
+      name: 'Hadas Ben Hamo',
+      role: 'Technician',
+      weeklyHours: FULL_TIME_HOURS,
+      skills: ['Centrifuge Usage', 'Microscopy', 'Spectrophotometry'],
+    },
     {
       name: 'Dr. Lihi Dayan',
-      role: 'Data Analyst',
-      skills: ['Mass Spectrometry', 'Spectrophotometry'],
+      role: 'Scientist',
+      weeklyHours: FULL_TIME_HOURS,
+      skills: ['Mass Spectrometry', 'Spectrophotometry', 'PCR Operation'],
     },
-    { name: 'Amir Barzilay', role: 'Junior Researcher', skills: [] },
-    { name: 'Nina Zur', role: 'Quality Control', skills: ['Biosafety Protocols', 'Microscopy'] },
-    { name: 'Alex Tom', role: 'Lab Assistant', skills: [] },
+    {
+      name: 'Amir Barzilay',
+      role: 'Junior technician',
+      weeklyHours: FULL_TIME_HOURS,
+      skills: ['Centrifuge Usage'],
+    },
+    {
+      name: 'Nina Zur',
+      role: 'Technician',
+      weeklyHours: PART_TIME_HOURS,
+      skills: ['Biosafety Protocols', 'Microscopy', 'Incubator Handling'],
+    },
+    {
+      name: 'Alex Tom',
+      role: 'Junior technician',
+      weeklyHours: PART_TIME_HOURS,
+      skills: ['Spectrophotometry'],
+    },
   ],
 
   equipment: [

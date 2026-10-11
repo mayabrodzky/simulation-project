@@ -81,6 +81,16 @@ export interface StaffTemplate {
   name: string;
   role: string;
   skills: Skill[];
+  /**
+   * Contracted hours a week. 40 for full-time, 20 for a part-timer.
+   *
+   * Turned into an actual shift window at world creation, because the engine
+   * needs to know *when* somebody is in the building, not only how much. A
+   * number rather than a window because that is what a contract says, and
+   * because B1 charges labour against contracted hours whether or not they are
+   * worked — an idle hire has to cost something or decision A looks free.
+   */
+  weeklyHours: number;
 }
 
 export interface EquipmentTemplate {
@@ -403,6 +413,15 @@ export interface Staff extends StaffTemplate {
    * on the rota. A hire changes this; the clock changes `state`.
    */
   rostered: boolean;
+  /**
+   * When this person is in the building.
+   *
+   * Per person, not per lab. The spec employs two part-timers on 20 hours, and
+   * decision C — add an evening shift — is a change to some people's shifts and
+   * not to the lab's opening hours. Derived from `weeklyHours` and the lab
+   * calendar at creation.
+   */
+  shift: Shift;
   state: StaffState;
   speed: number;
   color: string;

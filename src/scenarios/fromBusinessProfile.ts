@@ -54,7 +54,12 @@ export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario 
 
     staff:
       employees.length > 0
-        ? employees.map((e) => ({ name: e.name, role: e.role, skills: [e.role] }))
+        ? employees.map((e) => ({
+            name: e.name,
+            role: e.role,
+            skills: [e.role],
+            weeklyHours: 40,
+          }))
         : chemistryLab.staff,
 
     equipment:

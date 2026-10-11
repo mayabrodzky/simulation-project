@@ -132,13 +132,14 @@ describe('taking a job on', () => {
   it('refuses a job to someone who cannot do it, with a reason not a sentence', () => {
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    const amir = available(world, 'Amir Barzilay');
+    // Alex holds Spectrophotometry alone; a blood panel starts on a centrifuge.
+    const alex = available(world, 'Alex Tom');
 
-    const events = applyCommand(world, { type: 'ASSIGN_JOB', staffId: amir.id, jobId: job.id });
+    const events = applyCommand(world, { type: 'ASSIGN_JOB', staffId: alex.id, jobId: job.id });
 
-    expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: amir.name }]);
+    expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: alex.name }]);
     expect(job.status).toBe('waiting');
-    expect(amir.jobId).toBeNull();
+    expect(alex.jobId).toBeNull();
   });
 
   it('refuses a second job to someone already working', () => {
@@ -237,10 +238,11 @@ describe('an interruption costs nothing', () => {
   });
 
   it('hands a job on when the next step needs a different specialist', () => {
-    // Dana can use a centrifuge and not a microscope. A blood panel is
-    // centrifuge then microscopy, so she can *start* it and cannot finish it —
-    // and when her step is done the job goes back to the queue part-finished
-    // rather than stalling on her.
+    // Amir holds Centrifuge Usage alone. A blood panel is centrifuge then
+    // microscopy, so he can *start* it and cannot finish it — and when his step
+    // is done the job goes back to the queue part-finished rather than stalling
+    // on him. (This was Dana until the roster was aligned with the spec, which
+    // gave her Microscopy as well.)
     //
     // This is the behaviour that makes the scenario's work reachable at all.
     // Requiring one person to hold every skill a job needs left 96 of the 186
@@ -249,13 +251,13 @@ describe('an interruption costs nothing', () => {
     // needs.
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    const dana = available(world, 'Dana Cohen');
-    expect(dana.skills).toContain('Centrifuge Usage');
-    expect(dana.skills).not.toContain('Microscopy');
+    const starter = available(world, 'Amir Barzilay');
+    expect(starter.skills).toContain('Centrifuge Usage');
+    expect(starter.skills).not.toContain('Microscopy');
 
-    expect(applyCommand(world, { type: 'ASSIGN_JOB', staffId: dana.id, jobId: job.id })).toEqual([
-      expect.objectContaining({ type: 'job-assigned' }),
-    ]);
+    expect(applyCommand(world, { type: 'ASSIGN_JOB', staffId: starter.id, jobId: job.id })).toEqual(
+      [expect.objectContaining({ type: 'job-assigned' })],
+    );
 
     const events = [];
     for (let i = 0; i < 5000 && job.stepIndex < 1; i++) events.push(...advance(world, 0.5));
@@ -263,7 +265,7 @@ describe('an interruption costs nothing', () => {
     expect(job.stepIndex).toBe(1);
     expect(job.status).toBe('waiting');
     expect(job.operatorId).toBeNull();
-    expect(dana.jobId).toBeNull();
+    expect(starter.jobId).toBeNull();
     expect(job.steps[0]!.remaining).toBe(0);
     expect(job.steps[1]!.remaining).toBe(job.steps[1]!.total);
 
@@ -544,17 +546,17 @@ describe('a part-finished job says so', () => {
   });
 
   it('marks a job whose first step is complete', () => {
-    // Given to Dana, who can centrifuge but not use a microscope, so the job
+    // Given to Amir, who can centrifuge but not use a microscope, so the job
     // is handed back to the queue after step one and is visible there.
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    const dana = available(world, 'Dana Cohen');
-    applyCommand(world, { type: 'ASSIGN_JOB', staffId: dana.id, jobId: job.id });
+    const starter = available(world, 'Amir Barzilay');
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: starter.id, jobId: job.id });
     for (let i = 0; i < 5000 && job.stepIndex < 1; i++) advance(world, 0.5);
 
     expect(job.stepIndex).toBe(1);
     expect(job.status).toBe('waiting');
-    const row = listAssignableJobs(world, dana).find((r) => r.id === job.id)!;
+    const row = listAssignableJobs(world, starter).find((r) => r.id === job.id)!;
     expect(row.partlyDone).toBe(true);
   });
 });

@@ -150,10 +150,12 @@ describe('closing time and work in progress', () => {
     // identical — if the close discards the slice it lands on, it will not be.
     const closing = newWorld(SUNDAY_0800);
     const neverCloses = newWorld(SUNDAY_0800);
-    neverCloses.calendar = {
-      ...neverCloses.calendar,
-      shift: { ...shift, endMinute: MINUTES_PER_DAY },
-    };
+    // Per person, not per lab: shifts moved onto the individual when the spec's
+    // two part-timers were introduced, so overriding the calendar alone would
+    // change nothing and this test would pass vacuously.
+    for (const p of neverCloses.staff) {
+      p.shift = { ...p.shift, endMinute: MINUTES_PER_DAY };
+    }
 
     const a = workingOnBloodPanel(closing, SUNDAY_1600 - 20);
     const b = workingOnBloodPanel(neverCloses, SUNDAY_1600 - 20);
@@ -255,29 +257,53 @@ describe('the roster and the clock are different things', () => {
     expect(operator.state).toBe('off');
   });
 
-  it('puts someone on the rota and brings them in, if the lab is open', () => {
+  it('puts someone back on the rota and brings them in, if the lab is open', () => {
+    // Every one of the eight is employed under the spec roster, so being off
+    // the rota now has to be arranged rather than found.
     const world = newWorld(SUNDAY_0800);
-    const nina = person(world, 'Nina Zur');
-    expect(nina.rostered).toBe(false);
-    expect(nina.state).toBe('off');
+    const alex = person(world, 'Alex Tom');
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: alex.id });
+    expect(alex.rostered).toBe(false);
+    expect(alex.state).toBe('off');
 
-    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: nina.id });
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: alex.id });
 
-    expect(nina.rostered).toBe(true);
-    expect(nina.state).toBe('idle');
+    expect(alex.rostered).toBe(true);
+    expect(alex.state).toBe('idle');
   });
 
-  it('leaves a new roster addition at home until morning', () => {
+  it('leaves a roster addition at home until morning', () => {
     const world = newWorld(2 * 60); // 02:00
-    const nina = person(world, 'Nina Zur');
+    const alex = person(world, 'Alex Tom');
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: alex.id });
 
-    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: nina.id });
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: alex.id });
 
-    expect(nina.rostered).toBe(true);
-    expect(nina.state).toBe('off');
+    expect(alex.rostered).toBe(true);
+    expect(alex.state).toBe('off');
 
     advance(world, shift.startMinute - world.simMinutes);
-    expect(nina.state).toBe('idle');
+    expect(alex.state).toBe('idle');
+  });
+
+  it('sends a part-timer home at the end of their own shorter shift', () => {
+    // Nina is contracted for twenty hours, which is 08:00 to 12:00. The lab
+    // stays open until four, and this is exactly the case a single lab-wide
+    // shift could not express.
+    const world = newWorld(SUNDAY_0800);
+    const nina = person(world, 'Nina Zur');
+    const hadas = person(world, 'Hadas Ben Hamo');
+    expect(nina.weeklyHours).toBe(20);
+
+    advance(world, 12 * 60 - world.simMinutes - 1);
+    expect(nina.state).not.toBe('off');
+
+    advance(world, 1);
+    expect(world.simMinutes).toBeCloseTo(12 * 60, 6);
+    expect(nina.state).toBe('off');
+    // And the full-timers are still working.
+    expect(hadas.state).not.toBe('off');
+    expect(isLabOpen(world)).toBe(true);
   });
 
   it('sets a job down when someone is taken off the rota', () => {
@@ -320,12 +346,13 @@ describe('the roster and the clock are different things', () => {
 
   it('never brings in someone who is not on the rota', () => {
     const world = newWorld(SUNDAY_0800);
-    const notRostered = world.staff.filter((p) => !p.rostered);
-    expect(notRostered.length).toBeGreaterThan(0);
+    const alex = person(world, 'Alex Tom');
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: alex.id });
+    expect(alex.rostered).toBe(false);
 
     for (let day = 0; day < 3; day++) {
       advance(world, MINUTES_PER_DAY);
-      for (const p of notRostered) expect(p.state).toBe('off');
+      expect(alex.state).toBe('off');
     }
   });
 });

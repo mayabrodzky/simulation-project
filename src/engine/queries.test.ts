@@ -92,15 +92,18 @@ describe('describeAssignment', () => {
 
   it('distinguishes training from a job', () => {
     const world = newWorld();
-    const dana = world.staff.find((p) => p.name === 'Dana Cohen')!;
+    // Amir, not Dana: under the spec roster Dana already holds Microscopy, so
+    // the command would be refused as already-known and this would assert
+    // nothing.
+    const trainee = world.staff.find((p) => p.name === 'Amir Barzilay')!;
     const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
     applyCommand(world, {
       type: 'START_TRAINING',
-      staffId: dana.id,
+      staffId: trainee.id,
       equipmentId: microscope.id,
       skill: 'Microscopy',
     });
-    expect(describeAssignment(world, dana)?.isTraining).toBe(true);
+    expect(describeAssignment(world, trainee)?.isTraining).toBe(true);
     expect(countTraining(world)).toBe(1);
   });
 
@@ -156,8 +159,21 @@ describe('listActiveWork', () => {
 describe('who is free', () => {
   it('counts everyone on shift and unoccupied', () => {
     const world = newWorld();
-    // Six start on shift; the other two are off.
-    expect(unoccupiedStaffIds(world)).toHaveLength(6);
+    // All eight are employed under the spec roster, and at 08:00 both
+    // part-timers are in — their shift is 08:00 to 12:00.
+    expect(unoccupiedStaffIds(world)).toHaveLength(world.staff.length);
+  });
+
+  it('excludes a part-timer once their shorter shift is over', () => {
+    const world = newWorld();
+    const nina = world.staff.find((p) => p.name === 'Nina Zur')!;
+    expect(nina.weeklyHours).toBe(20);
+    expect(isUnoccupied(world, nina)).toBe(true);
+
+    advance(world, 5 * 60); // 13:00: the lab is open, Nina's shift is not
+    expect(nina.state).toBe('off');
+    expect(isUnoccupied(world, nina)).toBe(false);
+    expect(unoccupiedStaffIds(world)).not.toContain(nina.id);
   });
 
   it('excludes someone who has been given work', () => {
@@ -170,7 +186,9 @@ describe('who is free', () => {
 
   it('excludes someone off shift', () => {
     const world = newWorld();
-    const offDuty = world.staff.find((p) => p.state === 'off')!;
+    const offDuty = world.staff.find((p) => p.name === 'Alex Tom')!;
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: offDuty.id });
+    expect(offDuty.state).toBe('off');
     expect(isUnoccupied(world, offDuty)).toBe(false);
   });
 });

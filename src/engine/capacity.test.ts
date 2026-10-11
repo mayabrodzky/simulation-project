@@ -121,15 +121,15 @@ describe('the working day adds up', () => {
 
   it('spends no on-shift minute outside opening hours', () => {
     const onShift = b.working + b.travelling + b.waitingForMachine + b.onBreak + b.free;
-    const openMinutes =
-      chemistryLab.calendar.shift.days.length *
-      (chemistryLab.calendar.shift.endMinute - chemistryLab.calendar.shift.startMinute);
-    expect(onShift).toBeLessThanOrEqual(openMinutes * chemistryLab.tuning.staffOnShiftCount + 1);
+    const openMinutes = chemistryLab.staff.reduce((sum, p) => sum + p.weeklyHours, 0) * 60;
+    expect(onShift).toBeLessThanOrEqual(openMinutes + 1);
   });
 });
 
 describe('what the lab spends its time on', () => {
   const b = measureWeek();
+
+  const contractedHours = chemistryLab.staff.reduce((sum, p) => sum + p.weeklyHours, 0);
 
   const offeredHours =
     chemistryLab.workTypes.reduce(
@@ -137,10 +137,13 @@ describe('what the lab spends its time on', () => {
       0,
     ) / 60;
 
-  it('is offered 186 hours of work against 240 rostered hours', () => {
-    // Both figures restated here so the measurement below reads against them.
+  it('is offered 186 hours of work against 280 contracted hours', () => {
+    // Contracted hours, summed per person, not head-count times forty: the spec
+    // employs six full-timers and two part-timers on twenty hours. This read
+    // 240 while the scenario had drifted from the spec and the two part-timers
+    // were not employed at all — a fifth of the lab's capacity missing.
     expect(offeredHours).toBeCloseTo(186, 1);
-    expect(chemistryLab.tuning.staffOnShiftCount * 8 * 5).toBe(240);
+    expect(contractedHours).toBe(280);
   });
 
   it('loses very little time to walking, despite the theory', () => {
@@ -155,7 +158,7 @@ describe('what the lab spends its time on', () => {
     const perStep = b.travelling / b.stepsStarted;
     expect(perStep).toBeGreaterThan(0.2);
     expect(perStep).toBeLessThan(4);
-    expect(b.travelling / 60).toBeLessThan(10);
+    expect(b.travelling / 60).toBeLessThan(20);
   });
 
   it('loses four times as much to waiting for a busy machine', () => {
@@ -174,11 +177,11 @@ describe('what the lab spends its time on', () => {
     // That is a finding about the lab rather than a defect — "somebody is idle
     // all week because they are not trained on anything" is precisely the
     // sentence this product exists to produce — so the scenario is left alone.
-    // Over 90 hours a week against under 5 spent walking.
-    expect(b.free).toBeGreaterThan(b.travelling * 10);
-
-    const unskilled = chemistryLab.staff.filter((p) => p.skills.length === 0);
-    expect(unskilled.length).toBeGreaterThan(0);
+    // Still the largest single bucket, though the spec roster shrinks it a long
+    // way: aligning skills with section 3.2 gave every person something they
+    // can do, where the drifted roster left one person with no skills at all.
+    expect(b.free).toBeGreaterThan(b.travelling);
+    expect(chemistryLab.staff.every((p) => p.skills.length > 0)).toBe(true);
   });
 
   it('completes less than arrives, so the queue grows', () => {

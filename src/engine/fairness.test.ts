@@ -45,7 +45,10 @@ function withExtraStaff(): Scenario {
   const base = fullShift();
   return {
     ...base,
-    staff: [...base.staff, { name: 'New Hire', role: 'Technician', skills: ['Microscopy'] }],
+    staff: [
+      ...base.staff,
+      { name: 'New Hire', role: 'Technician', skills: ['Microscopy'], weeklyHours: 40 },
+    ],
     tuning: { ...base.tuning, staffOnShiftCount: base.staff.length + 1 },
   };
 }

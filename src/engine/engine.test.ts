@@ -134,31 +134,42 @@ describe('isQualified', () => {
     const bloodPanel = world.workTypes.find((w) => w.id === 'blood-panel')!;
     const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo')!;
     const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
+    const alex = world.staff.find((p) => p.name === 'Alex Tom')!;
+
     // isQualified reads `equipmentSequence`, which a work type does not have;
-    // the job path asks `canOperate` instead, over the steps still to do.
+    // the job path asks `canOperate` instead, over the step it is on.
     const qualified = qualifiedStaffForWorkType(world, bloodPanel.id);
-    expect([...qualified.available, ...qualified.unavailable]).toContain(hadas.id);
-    expect([...qualified.available, ...qualified.unavailable]).not.toContain(amir.id);
-    // Off-duty people are qualified but not available, which the panel shows
-    // differently: "three can do this and two are out" is the useful sentence.
-    const nina = world.staff.find((p) => p.name === 'Nina Zur')!;
-    expect(nina.state).toBe('off');
-    expect(qualified.unavailable).toContain(nina.id);
-    expect(qualified.available).not.toContain(nina.id);
+    const anyone = [...qualified.available, ...qualified.unavailable];
+
+    // Hadas can do both steps. Amir can do only the centrifuge, and counts,
+    // because a job moves between specialists. Alex holds Spectrophotometry
+    // alone, which no step of a blood panel asks for.
+    expect(anyone).toContain(hadas.id);
+    expect(anyone).toContain(amir.id);
+    expect(anyone).not.toContain(alex.id);
   });
 });
 
 describe('cancelling a task mid-flight', () => {
+  /**
+   * Trains Amir on the microscope.
+   *
+   * Was Dana, who under the spec roster already holds Microscopy — so the
+   * command was refused as already-known and the test passed by doing nothing.
+   * Amir holds Centrifuge Usage alone, which makes him the person a training
+   * decision would actually be about.
+   */
   function startTraining(world: WorldState) {
-    const dana = world.staff.find((p) => p.name === 'Dana Cohen')!;
+    const trainee = world.staff.find((p) => p.name === 'Amir Barzilay')!;
     const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
+    expect(trainee.skills).not.toContain('Microscopy');
     applyCommand(world, {
       type: 'START_TRAINING',
-      staffId: dana.id,
+      staffId: trainee.id,
       equipmentId: microscope.id,
       skill: 'Microscopy',
     });
-    return dana;
+    return trainee;
   }
 
   it('does not throw or corrupt the budget when someone is marked sick during training', () => {
@@ -167,35 +178,40 @@ describe('cancelling a task mid-flight', () => {
     // task.equipmentSequence, which a training does not have either, so it
     // threw. Typing ActiveTask as a real union is what made both impossible.
     const world = createWorld(chemistryLab, SEED, 480);
-    const dana = startTraining(world);
+    const trainee = startTraining(world);
     const budgetDuringTraining = world.money;
 
     expect(() =>
-      applyCommand(world, { type: 'SET_STATUS', staffId: dana.id, sick: true }),
+      applyCommand(world, { type: 'SET_STATUS', staffId: trainee.id, sick: true }),
     ).not.toThrow();
 
     expect(Number.isFinite(world.money)).toBe(true);
     expect(world.money).toBe(budgetDuringTraining);
-    expect(dana.state).toBe('sick');
-    expect(dana.activeTask).toBeNull();
+    expect(trainee.state).toBe('sick');
+    expect(trainee.activeTask).toBeNull();
   });
 
   it('releases the machine the trainee was holding', () => {
     const world = createWorld(chemistryLab, SEED, 480);
-    const dana = startTraining(world);
+    const trainee = startTraining(world);
     const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
     // Walk her to the machine so the training actually starts.
     for (let i = 0; i < 400; i++) tick(world, 1 / 30);
     expect(microscope.inUse).toBe(true);
 
-    applyCommand(world, { type: 'SET_STATUS', staffId: dana.id, sick: true });
+    applyCommand(world, { type: 'SET_STATUS', staffId: trainee.id, sick: true });
     expect(microscope.inUse).toBe(false);
     expect(microscope.assignedTo).toBeNull();
   });
 
   it('refuses to mark an off-shift person sick, rather than putting them back on shift', () => {
+    // Every one of the eight is now employed and the lab is open at 08:00, so
+    // somebody has to be taken off the rota to be off duty at all.
     const world = createWorld(chemistryLab, SEED, 480);
-    const offDuty = world.staff.find((p) => p.state === 'off')!;
+    const offDuty = world.staff.find((p) => p.name === 'Alex Tom')!;
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: offDuty.id });
+    expect(offDuty.state).toBe('off');
+
     const events = applyCommand(world, { type: 'SET_STATUS', staffId: offDuty.id, sick: true });
     expect(events).toEqual([{ type: 'rejected', reason: 'off-shift', detail: offDuty.name }]);
     expect(offDuty.state).toBe('off');
@@ -224,18 +240,19 @@ describe('the engine reports rather than renders', () => {
 
   it('gives refusals a reason instead of a sentence', () => {
     const world = createWorld(chemistryLab, SEED, 480);
-    const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
+    // Alex holds only Spectrophotometry; a blood panel starts on the centrifuge.
+    const alex = world.staff.find((p) => p.name === 'Alex Tom')!;
     for (let i = 0; i < 2000 && !world.jobs.some((j) => j.workTypeId === 'blood-panel'); i++) {
       advance(world, 1);
     }
     const bloodPanel = world.jobs.find((j) => j.workTypeId === 'blood-panel')!;
     const events = applyCommand(world, {
       type: 'ASSIGN_JOB',
-      staffId: amir.id,
+      staffId: alex.id,
       jobId: bloodPanel.id,
     });
-    expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: amir.name }]);
-    expect(amir.jobId).toBeNull();
+    expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: alex.name }]);
+    expect(alex.jobId).toBeNull();
   });
 });
 

@@ -27,7 +27,7 @@ import type {
   Wall,
 } from '../domain/types';
 import { generateWeekArrivals } from './arrivals';
-import { isWithinShift, minuteOfDay, weekIndex } from './calendar';
+import { isWithinShift, minuteOfDay, shiftForWeeklyHours, weekIndex } from './calendar';
 import { hasReached } from './geometry';
 import { createRng, deriveSeed, type Rng } from './rng';
 
@@ -119,7 +119,6 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
   const t = scenario.tuning;
   const f = scenario.layout.labFloor;
   const start = startMinutes ?? t.startMinutes;
-  const labOpenAtStart = isWithinShift(scenario.calendar.shift, start);
 
   // Each person and each machine draws from a stream of its own, named after
   // it. Appending a ninth person therefore leaves the other eight, every
@@ -127,6 +126,9 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
   // makes "with this decision" and "without it" the same lab.
   const staff: Staff[] = scenario.staff.map((template, i) => {
     const own = createRng(deriveSeed(seed, `staff:${i}`));
+    // Contracted hours become an actual window. A part-timer on twenty hours
+    // works mornings; see shiftForWeeklyHours for why that reading was chosen.
+    const shift = shiftForWeeklyHours(scenario.calendar, template.weeklyHours);
     return {
       ...template,
       skills: [...template.skills],
@@ -136,11 +138,12 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
       targetX: null,
       targetY: null,
       rostered: i < t.staffOnShiftCount,
+      shift,
       // A world opened at 02:00 starts with an empty floor, not a full one.
       // Read from the calendar here rather than by calling applyShiftWindow,
       // which would make world.ts depend on shifts.ts and jobs.ts and so on
       // itself — the dependency direction is worth more than the reuse.
-      state: i < t.staffOnShiftCount && labOpenAtStart ? 'idle' : 'off',
+      state: i < t.staffOnShiftCount && isWithinShift(shift, start) ? 'idle' : 'off',
       energy: t.initialEnergyMin + own.next() * t.initialEnergyRange,
       speed: t.staffWalkGridPerMinute,
       color: `hsl(${i * 45}, 70%, 50%)`,
