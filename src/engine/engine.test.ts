@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { chemistryLab } from '../scenarios';
 import { dayOfWeek } from './calendar';
 import { applyCommand } from './commands';
+import { qualifiedStaffForWorkType } from './queries';
 import { isQualified, missingSkills } from './rules';
 import { createRng } from './rng';
 import { advance, tick } from './tick';
@@ -130,11 +131,13 @@ describe('isQualified', () => {
 
   it('matches the scenario it was extracted from', () => {
     const world = createWorld(chemistryLab, SEED, 480);
-    const bloodPanel = world.tasks.find((t) => t.name === 'Blood Sample Analysis');
-    const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo');
-    const amir = world.staff.find((p) => p.name === 'Amir Barzilay');
-    expect(isQualified(hadas!, bloodPanel!)).toBe(true);
-    expect(isQualified(amir!, bloodPanel!)).toBe(false);
+    const bloodPanel = world.workTypes.find((w) => w.id === 'blood-panel')!;
+    const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo')!;
+    const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
+    // isQualified reads `equipmentSequence`, which a work type does not have;
+    // the job path asks `canOperate` instead, over the steps still to do.
+    expect(qualifiedStaffForWorkType(world, bloodPanel.id)).toContain(hadas.id);
+    expect(qualifiedStaffForWorkType(world, bloodPanel.id)).not.toContain(amir.id);
   });
 });
 
@@ -215,14 +218,17 @@ describe('the engine reports rather than renders', () => {
   it('gives refusals a reason instead of a sentence', () => {
     const world = createWorld(chemistryLab, SEED, 480);
     const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
-    const bloodPanel = world.tasks.find((t) => t.name === 'Blood Sample Analysis')!;
+    for (let i = 0; i < 2000 && !world.jobs.some((j) => j.workTypeId === 'blood-panel'); i++) {
+      advance(world, 1);
+    }
+    const bloodPanel = world.jobs.find((j) => j.workTypeId === 'blood-panel')!;
     const events = applyCommand(world, {
-      type: 'ASSIGN_TASK',
+      type: 'ASSIGN_JOB',
       staffId: amir.id,
-      taskId: bloodPanel.id,
+      jobId: bloodPanel.id,
     });
     expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: amir.name }]);
-    expect(amir.activeTask).toBeNull();
+    expect(amir.jobId).toBeNull();
   });
 });
 

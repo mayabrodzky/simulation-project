@@ -10,14 +10,21 @@
  * calling showNotification from inside business logic. That was the single
  * biggest obstacle to running the simulation without a browser.
  */
-import type { EquipmentId, Skill, StaffId, TaskId } from '../domain/types';
+import type { EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 import type { EngineEvent, RejectionReason } from './events';
+import { assignJob, releaseJobOf } from './jobs';
 import { isQualified } from './rules';
 import { failTask } from './tick';
 import { findEquipment, findEquipmentByName, findStaff, type WorldState } from './world';
 
 export type Command =
-  | { type: 'ASSIGN_TASK'; staffId: StaffId; taskId: TaskId }
+  /**
+   * Hands a waiting job to a person, and records that a human chose the
+   * pairing — the dispatcher in B3 must not override it. Replaces ASSIGN_TASK,
+   * which created work out of nothing from a recipe; work now already exists
+   * and is waiting.
+   */
+  | { type: 'ASSIGN_JOB'; staffId: StaffId; jobId: JobId }
   | { type: 'ASSIGN_EMERGENCY'; staffId: StaffId; emergencyId: string }
   | { type: 'START_TRAINING'; staffId: StaffId; equipmentId: EquipmentId; skill: Skill }
   | { type: 'SET_STATUS'; staffId: StaffId; sick: boolean }
@@ -28,11 +35,11 @@ export type Command =
 export function applyCommand(world: WorldState, command: Command): EngineEvent[] {
   const events: EngineEvent[] = [];
   switch (command.type) {
-    case 'ASSIGN_TASK':
-      assignTask(world, command.staffId, command.taskId, null, events);
+    case 'ASSIGN_JOB':
+      assignJobCommand(world, command.staffId, command.jobId, events);
       break;
     case 'ASSIGN_EMERGENCY':
-      assignTask(world, command.staffId, null, command.emergencyId, events);
+      assignEmergency(world, command.staffId, command.emergencyId, events);
       break;
     case 'START_TRAINING':
       startTraining(world, command, events);
@@ -57,23 +64,54 @@ function reject(events: EngineEvent[], reason: RejectionReason, detail?: string)
   events.push({ type: 'rejected', reason, detail });
 }
 
-function assignTask(
+function assignJobCommand(
   world: WorldState,
   staffId: StaffId,
-  taskId: TaskId | null,
-  emergencyId: string | null,
+  jobId: JobId,
+  events: EngineEvent[],
+): void {
+  const outcome = assignJob(world, staffId, jobId, true);
+  if (!outcome.ok) {
+    if (outcome.reason !== 'no-such-job') reject(events, outcome.reason, outcome.detail);
+    return;
+  }
+  const person = findStaff(world, staffId);
+  if (!person) return;
+  events.push({
+    type: 'job-assigned',
+    jobId: outcome.job.id,
+    name: outcome.job.name,
+    staffId: person.id,
+    staffName: person.name,
+  });
+}
+
+/**
+ * Hands an emergency to a person.
+ *
+ * The last user of the old shape: progress lives on the person as
+ * `taskStep`/`taskTimer`, work is copied out of a template rather than existing
+ * in its own right, and lateness is a flat penalty. A6 replaces emergencies
+ * with a `rush` flag on a normal job and this function goes with them.
+ *
+ * Was `assignTask`, which also served ordinary work. Ordinary work is now
+ * assigned through `assignJobCommand`, which does none of this copying because
+ * the job is already there.
+ */
+function assignEmergency(
+  world: WorldState,
+  staffId: StaffId,
+  emergencyId: string,
   events: EngineEvent[],
 ): void {
   const person = findStaff(world, staffId);
   if (!person) return;
-  if (person.state !== 'idle' || person.activeTask) {
+  if (person.state !== 'idle' || person.activeTask || person.jobId !== null) {
     reject(events, 'not-idle', person.name);
     return;
   }
 
-  const source = emergencyId
-    ? world.emergencies.find((e) => e.id === emergencyId)
-    : world.tasks.find((t) => t.id === taskId);
+  const source = world.emergencies.find((e) => e.id === emergencyId);
   if (!source) return;
 
   if (!isQualified(person, source)) {
@@ -93,21 +131,13 @@ function assignTask(
     return;
   }
 
-  const copy = structuredClone(source);
-  person.activeTask = emergencyId
-    ? { ...copy, id: emergencyId, isEmergency: true }
-    : { ...copy, id: taskId ?? copy.id };
+  person.activeTask = { ...structuredClone(source), id: emergencyId };
   person.taskStep = 0;
   person.taskTimer = 0;
   person.state = 'idle';
 
-  if (emergencyId) {
-    const emergency = world.emergencies.find((e) => e.id === emergencyId);
-    if (emergency) {
-      emergency.status = 'in-progress';
-      emergency.assignedTo = person.id;
-    }
-  }
+  source.status = 'in-progress';
+  source.assignedTo = person.id;
 
   if (firstEquipment) {
     person.targetX = firstEquipment.x;
@@ -190,6 +220,12 @@ function setStatus(
   // charged task.penalty (undefined, so the budget became NaN) and indexed
   // task.equipmentSequence (absent, so it threw). failTask now handles both.
   if (person.activeTask) failTask(world, person, person.activeTask, events);
+
+  // A job, by contrast, needs nothing unwound: it goes back to the queue with
+  // its remaining counters exactly as they were, and someone else can pick up
+  // where this person stopped. That is the whole argument for holding progress
+  // on the job rather than the person.
+  releaseJobOf(world, person);
 
   person.state = sick ? 'sick' : 'idle';
   events.push({

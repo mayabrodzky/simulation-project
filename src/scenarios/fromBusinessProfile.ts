@@ -22,9 +22,19 @@ export interface BusinessProfile {
 
 const DEFAULT_REWARD = 500;
 const DEFAULT_DURATION = 30;
-/** The original derived a deadline as twelve times the task's duration. */
-const TIME_LIMIT_FACTOR = 12;
-const PENALTY_FRACTION = 0.3;
+
+/**
+ * Invented, because a business profile cannot describe demand.
+ *
+ * The old shape needed only a reward and a duration. A work type also needs how
+ * much of it arrives each week and how long a client waits, and the onboarding
+ * form asks for neither — so these are placeholders that produce a plausible
+ * simulation of nothing in particular. Already on the Phase 2.5 list: either
+ * the form asks, or this path stops pretending to model a real business.
+ */
+const DEFAULT_PER_WEEK = 20;
+const DEFAULT_VARIATION = 0.2;
+const DEFAULT_DUE_WORKING_DAYS = 3;
 
 export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario {
   const { layout } = chemistryLab;
@@ -58,21 +68,25 @@ export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario 
           }))
         : chemistryLab.equipment,
 
-    tasks:
+    // A profile's "tasks" become work types, which now also need a volume and
+    // a deadline. Both are guesses, and flagged: this path was already on the
+    // Phase 2.5 list for review, since a profile cannot describe a lab's
+    // demand and inventing one produces a simulation of nothing in particular.
+    workTypes:
       tasks.length > 0
         ? tasks.map((t, i) => {
-            const reward = t.reward ?? DEFAULT_REWARD;
             const duration = t.duration ?? DEFAULT_DURATION;
             return {
-              id: 'TSK' + String(i + 1).padStart(3, '0'),
+              id: 'wt' + String(i + 1).padStart(3, '0'),
               name: t.name,
-              reward,
-              timeLimit: duration * TIME_LIMIT_FACTOR,
-              penalty: Math.round(reward * PENALTY_FRACTION),
-              equipmentSequence: [{ name: 'Workstation', duration, skillRequired: null }],
+              perWeek: DEFAULT_PER_WEEK,
+              variation: DEFAULT_VARIATION,
+              basePrice: t.reward ?? DEFAULT_REWARD,
+              dueWorkingDays: DEFAULT_DUE_WORKING_DAYS,
+              steps: [{ name: 'Workstation', duration, skillRequired: null }],
             };
           })
-        : chemistryLab.tasks,
+        : chemistryLab.workTypes,
 
     catalog: [
       { id: 'cat001', name: 'Workstation', icon: '💼', cost: 1000, skill: null },

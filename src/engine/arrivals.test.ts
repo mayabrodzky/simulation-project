@@ -67,7 +67,7 @@ function fullShift(): Scenario {
 }
 
 function week(n: number, scenario: Scenario = chemistryLab, seed = SEED): Job[] {
-  return generateWeekArrivals(scenario.workTypes, scenario.calendar, seed, n, 1);
+  return generateWeekArrivals(scenario.workTypes, scenario.calendar, scenario.tuning, seed, n, 1);
 }
 
 describe('demand does not depend on the lab', () => {
@@ -257,6 +257,7 @@ describe('deadlines are absolute instants, set once at arrival', () => {
         },
       ],
       chemistryLab.calendar,
+      chemistryLab.tuning,
       SEED,
       0,
       1,

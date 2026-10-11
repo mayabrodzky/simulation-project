@@ -8,8 +8,10 @@
  * depends only on (world, dt), which is guaranteed here by having no access to
  * Math.random, Date, or the DOM. ESLint enforces all three for this directory.
  */
-import type { ActiveJob, Equipment, Staff } from '../domain/types';
+import type { ActiveEmergency, Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
+import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './geometry';
+import { expireAbandonedJobs, nextJobEventIn, tickJobs } from './jobs';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
 import {
@@ -59,12 +61,6 @@ export function tick(
  * deadlines, shift hours, overtime.
  */
 /** Below this, two instants are the same instant. Guards against float dust. */
-/** How close counts as arrived. */
-const ARRIVAL_RADIUS = 0.1;
-
-/** Below this, two instants are the same instant. Guards against float dust. */
-const EPSILON = 1e-9;
-
 /**
  * An upper bound on slices per call, so a zero-length event cannot spin
  * forever. Generous: a simulated day produces a few thousand.
@@ -138,6 +134,9 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
     // line breaks no test today.
     const nextArrival = world.arrivalQueue[0];
     if (nextArrival) at(nextArrival.arrivedAtMinute);
+
+    // A step finishing, or a client giving up.
+    inMinutes(nextJobEventIn(world));
     at(world.nextEmergencyAtMinute);
     for (const e of world.emergencies) {
       if (e.status === 'pending' || e.status === 'in-progress') inMinutes(e.timeLimit);
@@ -189,27 +188,6 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
  * depending only on how the simulation was being watched. Arrival is an event
  * the loop already lands on exactly.
  */
-function hasArrivedAt(person: Staff, equipment: Equipment): boolean {
-  const dx = equipment.x - person.x;
-  const dy = equipment.y - person.y;
-  return isArrived(Math.sqrt(dx * dx + dy * dy));
-}
-
-/**
- * Whether a distance counts as arrived.
- *
- * The tolerance is not decoration. Clamping a slice to the exact instant of
- * arrival leaves the distance a hair above the radius, and an untolerated
- * comparison then reports "not arrived" while the follow-up event is too small
- * to be worth a slice — so a whole step is taken and the walker overshoots.
- * One definition, used by the movement, the arrival test and the event clamp,
- * is what keeps those three agreeing.
- */
-function isArrived(distance: number): boolean {
-  return distance <= ARRIVAL_RADIUS + EPSILON;
-}
-
-/** Advances everything by a slice guaranteed not to step over any event. */
 function applySlice(
   world: WorldState,
   dt: number,
@@ -229,7 +207,7 @@ function applySlice(
     // countdown depend on step size.
     tickEmergencies(world, dt, events);
 
-    if (world.simMinutes >= world.nextEmergencyAtMinute) {
+    if (hasReached(world.simMinutes, world.nextEmergencyAtMinute)) {
       if (!world.emergencies.some((e) => e.status === 'pending')) {
         raiseEmergency(world, events);
       }
@@ -248,6 +226,8 @@ function applySlice(
         dueAtMinute: job.dueAtMinute,
       });
     }
+
+    expireAbandonedJobs(world, events);
   }
 
   // Machines are charged for the slice before people act in it. A slice is
@@ -265,6 +245,12 @@ function applySlice(
   for (const person of world.staff) {
     tickStaff(world, person, dt, options, events);
   }
+
+  // Jobs advance after people have moved, so arrival and the start of work are
+  // the same instant rather than a slice apart. The loop iterates jobs rather
+  // than people: work exists whether or not anyone is attached to it, which is
+  // the whole point of the change.
+  tickJobs(world, dt, events);
 }
 
 function raiseEmergency(world: WorldState, events: EngineEvent[]): void {
@@ -347,7 +333,7 @@ export function failTask(
   const currentStep = task.equipmentSequence[person.taskStep];
   if (currentStep) releaseEquipment(findEquipmentByName(world, currentStep.name), person);
 
-  if (task.isEmergency) {
+  {
     const emergency = world.emergencies.find((e) => e.id === task.id);
     if (emergency) emergency.status = 'failed';
   }
@@ -449,7 +435,7 @@ function tickTraining(
 function tickJob(
   world: WorldState,
   person: Staff,
-  task: ActiveJob,
+  task: ActiveEmergency,
   dt: number,
   events: EngineEvent[],
 ): void {
@@ -471,7 +457,7 @@ function tickJob(
       world.money += task.reward;
       world.metrics.revenue += task.reward;
       world.metrics.tasksCompleted += 1;
-      if (task.isEmergency) {
+      {
         const emergency = world.emergencies.find((e) => e.id === task.id);
         if (emergency) {
           emergency.status = 'completed';
@@ -545,7 +531,7 @@ function moveStaff(world: WorldState, person: Staff, dt: number, options: TickOp
   } else if (
     person.state === 'idle' &&
     !person.activeTask &&
-    world.simMinutes >= person.nextWanderAtMinute
+    hasReached(world.simMinutes, person.nextWanderAtMinute)
   ) {
     // Drawn from this person's own stream, not the lab's. Wandering is
     // cosmetic, but if it drew from the shared stream then how many people

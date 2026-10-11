@@ -23,7 +23,9 @@ export type RejectionReason =
   | 'equipment-missing'
   | 'no-space'
   | 'already-known'
-  | 'off-shift';
+  | 'off-shift'
+  /** The job was taken, finished or abandoned between showing it and clicking. */
+  | 'job-not-open';
 
 export type EngineEvent =
   | { type: 'task-assigned'; staffId: StaffId; staffName: string; taskName: string }
@@ -48,6 +50,32 @@ export type EngineEvent =
    * whether one arrival is worth a notification or only a counter.
    */
   | { type: 'job-arrived'; jobId: JobId; name: string; dueAtMinute: number }
+  | { type: 'job-assigned'; jobId: JobId; name: string; staffId: StaffId; staffName: string }
+  /** `minutesLate` is zero when on time, so a caller needs no second check. */
+  | {
+      type: 'job-completed';
+      jobId: JobId;
+      name: string;
+      onTime: boolean;
+      revenue: number;
+      minutesLate: number;
+    }
+  /**
+   * A step finished and the person cannot do the next one, so the job went back
+   * to the queue part-finished. Not a failure — it is how a sample moves
+   * between specialists — but worth reporting, because a job that waits a long
+   * time for its second specialist is a real cost with no other symptom.
+   */
+  | {
+      type: 'job-handed-over';
+      jobId: JobId;
+      name: string;
+      staffId: StaffId;
+      staffName: string;
+      nextStep: string;
+    }
+  /** The client gave up. Nothing is charged; the work is simply not paid for. */
+  | { type: 'job-expired'; jobId: JobId; name: string; workingDaysLate: number }
   | { type: 'emergency-raised'; emergencyId: string; name: string }
   | { type: 'emergency-expired'; emergencyId: string; name: string; penalty: number }
   | { type: 'emergency-resolved'; emergencyId: string; name: string }

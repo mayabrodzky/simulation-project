@@ -13,6 +13,15 @@
  */
 export { createWorld, cloneWorld, findStaff, findEquipment, type WorldState } from './world';
 export { tick, advance, failTask, type TickOptions } from './tick';
+export {
+  assignJob,
+  canOperate,
+  findJob,
+  isFinished,
+  isOpen,
+  jobOf,
+  missingSkillsFor,
+} from './jobs';
 export { applyCommand, type Command } from './commands';
 export { isQualified, missingSkills } from './rules';
 export { createRng, type Rng } from './rng';
@@ -39,13 +48,16 @@ export {
   clockView,
   isUnoccupied,
   listActiveWork,
+  listAssignableJobs,
   listUrgentWork,
   progressByStaff,
+  qualifiedStaffForWorkType,
   queueByWorkType,
   staffLoadPercent,
   unoccupiedStaffIds,
   urgentTimeLeft,
   type ActiveWorkView,
+  type AssignableJobView,
   type BacklogView,
   type AssignmentView,
   type ClockView,

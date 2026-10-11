@@ -55,7 +55,14 @@ function discrete(world: WorldState) {
     // Which samples have arrived, in what order, and what they are due. An
     // arrival stepped over rather than landed on would show up here as a job
     // present in one run and still queued in the other.
-    jobs: world.jobs.map((j) => [j.id, j.status, j.stepIndex, j.dueAtMinute]),
+    jobs: world.jobs.map((j) => [
+      j.id,
+      j.status,
+      j.stepIndex,
+      j.dueAtMinute,
+      j.operatorId,
+      j.equipmentId,
+    ]),
     queued: world.arrivalQueue.length,
     weeksGenerated: world.weeksGenerated,
     nextJobNumber: world.nextJobNumber,
@@ -72,6 +79,10 @@ function continuous(world: WorldState) {
     energy: world.staff.map((p) => p.energy),
     taskTimer: world.staff.map((p) => p.taskTimer),
     condition: world.equipment.map((e) => e.condition),
+    // Progress on every step of every job. The thing this step moved off the
+    // person, so the thing most likely to have become step-size dependent.
+    jobRemaining: world.jobs.flatMap((j) => j.steps.map((step) => step.remaining)),
+    jobRevenue: world.jobs.map((j) => j.settledRevenue),
     deadlines: world.emergencies.map((e) => e.timeLimit),
   };
 }
@@ -95,9 +106,12 @@ function expectAgrees(a: WorldState, b: WorldState): void {
 function run(totalMinutes: number, stepMinutes: number, assignWork = false): WorldState {
   const world = createWorld(chemistryLab, SEED, START);
   if (assignWork) {
+    // Walk to the first arrival, then hand it to someone. Work has to exist
+    // before it can be assigned, which is the change this step made.
     const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo')!;
-    const task = world.tasks.find((t) => t.name === 'Blood Sample Analysis')!;
-    applyCommand(world, { type: 'ASSIGN_TASK', staffId: hadas.id, taskId: task.id });
+    for (let i = 0; i < 2000 && world.jobs.length === 0; i++) advance(world, 1);
+    const job = world.jobs.find((j) => j.workTypeId === 'blood-panel');
+    if (job) applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
   }
   const steps = Math.round(totalMinutes / stepMinutes);
   for (let i = 0; i < steps; i++) advance(world, stepMinutes);

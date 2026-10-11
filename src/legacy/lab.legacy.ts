@@ -27,8 +27,10 @@ import {
   isQualified,
   isUnoccupied,
   listActiveWork,
+  listAssignableJobs,
   listUrgentWork,
   progressByStaff,
+  qualifiedStaffForWorkType,
   queueByWorkType,
   staffLoadPercent,
   tick,
@@ -80,9 +82,6 @@ const Lab = {
   },
   get equipment() {
     return this.world.equipment;
-  },
-  get tasks() {
-    return this.world.tasks;
   },
   get emergencyQueue() {
     return this.world.emergencies;
@@ -232,7 +231,7 @@ const Lab = {
       'toggle-shift': (el) => this.toggleShift(staffId(el)),
       'toggle-sick': (el) => this.setStaffStatus(staffId(el), 'sick'),
       'open-emergency': (el) => this.openEmergencyModalById(el.dataset.emergencyId),
-      'assign-task': (el) => this.assignTask(el.dataset.taskId),
+      'assign-job': (el) => this.assignJob(el.dataset.jobId),
       'assign-emergency': (el) => this.assignEmergencyTask(staffId(el)),
       'start-training': (el) => this.assignTraining(el.dataset.skill, equipmentId(el)),
       repair: (el) => this.repairEquipment(equipmentId(el)),
@@ -266,10 +265,8 @@ const Lab = {
     }
     this.hoveredEntity = foundEntity;
   },
-  highlightQualifiedStaff(taskId) {
-    const task = this.tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    this.highlightedStaffIds = this.staff.filter((p) => isQualified(p, task)).map((p) => p.id);
+  highlightQualifiedStaff(workTypeId) {
+    this.highlightedStaffIds = qualifiedStaffForWorkType(this.world, workTypeId);
     this.updateStaffPanel();
   },
   clearStaffHighlights() {
@@ -493,6 +490,33 @@ const Lab = {
         case 'task-assigned':
           this.announce(`${e.staffName} assigned to "${e.taskName}"`, 'info');
           break;
+        // Arrivals are not announced. Over a hundred and sixty a week would
+        // bury everything else; the Work Queue panel is where they belong, and
+        // the event still rebuilds it.
+        case 'job-arrived':
+          break;
+        case 'job-assigned':
+          this.announce(`${e.staffName} took on ${e.name} (${e.jobId})`, 'info');
+          break;
+        case 'job-completed':
+          this.showNotification(
+            e.onTime
+              ? `${e.name} ${e.jobId} finished. +₪${e.revenue}`
+              : `${e.name} ${e.jobId} finished ${formatMinutes(e.minutesLate)} late. +₪${e.revenue}`,
+            e.onTime ? 'success' : 'info',
+          );
+          break;
+        // A handover is normal traffic, not news: the sample has moved to the
+        // next specialist. Logged in the sandbox, not shouted about.
+        case 'job-handed-over':
+          this.announce(`${e.name} ${e.jobId} ready for ${e.nextStep}`, 'info');
+          break;
+        case 'job-expired':
+          this.announce(
+            `${e.name} ${e.jobId} cancelled by the client — ${String(e.workingDaysLate)} working days past its deadline`,
+            'error',
+          );
+          break;
         case 'task-completed':
           this.showNotification(
             `Task "${e.taskName}" completed by ${e.staffName}. +$${e.reward}`,
@@ -583,9 +607,9 @@ const Lab = {
     this.handleEvents(applyCommand(this.world, command));
   },
 
-  assignTask(taskId) {
+  assignJob(jobId) {
     if (!this.selectedStaff) return;
-    this.dispatch({ type: 'ASSIGN_TASK', staffId: this.selectedStaff.id, taskId });
+    this.dispatch({ type: 'ASSIGN_JOB', staffId: this.selectedStaff.id, jobId });
     this.closeAllModals();
   },
 
@@ -932,40 +956,58 @@ const Lab = {
     document.getElementById('taskModal').className = 'modal active';
     const o = document.getElementById('taskOptions');
     const options = [];
-    this.tasks.forEach((t, i) => {
-      const q = isQualified(this.selectedStaff, t);
+
+    // Real samples that are waiting, not a list of things the lab can do.
+    // Soonest deadline first, because that is the order they matter in.
+    const jobs = listAssignableJobs(this.world, this.selectedStaff);
+    if (jobs.length === 0) {
+      options.push(
+        html`<div class="task-option" disabled>
+          <strong>Nothing waiting</strong>
+          <div style="font-size:0.875rem;color:#64748b;">
+            No samples in the queue. Work arrives through the day.
+          </div>
+        </div>`,
+      );
+    }
+
+    // Capped: a backlog of a hundred and fifty is realistic and a dialogue of
+    // a hundred and fifty rows is not. Phase 2.5 decides how to present a
+    // queue properly; this keeps the live lab usable until then.
+    jobs.slice(0, 12).forEach((job) => {
+      const overdue = job.dueInMinutes < 0;
+      const due = overdue
+        ? html`<span class="queue-overdue">overdue by ${formatMinutes(-job.dueInMinutes)}</span>`
+        : html`due in ${formatMinutes(job.dueInMinutes)}`;
       options.push(
         html`<div
           class="task-option"
-          ${!q ? 'disabled' : ''}
-          ${q ? html`data-action="assign-task" data-task-id="${t.id}"` : ''}
+          ${!job.qualified ? 'disabled' : ''}
+          ${job.qualified ? html`data-action="assign-job" data-job-id="${job.id}"` : ''}
         >
-          <strong>${t.name}</strong>
+          <strong>${job.name}</strong>
+          <span style="float:right;font-size:0.75rem;color:#94a3b8;">${job.id}</span>
           <div style="font-size:0.875rem;color:#64748b;">
-            Reward: $${t.reward} | Time: ${formatMinutes(t.timeLimit)} |
-            ${q ? '✅ Qualified' : '❌ Not Qualified'}
+            ₪${job.price} | next: ${job.nextStep} | ${formatMinutes(job.minutesOfWork)} left |
+            ${due}<br />
+            ${job.qualified ? '✅ Qualified' : html`❌ Needs ${job.missingSkills.join(', ')}`}${
+              job.partlyDone ? ' · part-finished' : ''
+            }
           </div>
         </div>`,
       );
     });
-    this.equipment.forEach((eq) => {
-      if (!this.selectedStaff.skills.includes(eq.skill)) {
-        options.push(
-          html`<div
-            class="task-option"
-            data-action="start-training"
-            data-skill="${eq.skill}"
-            data-equipment-id="${eq.id}"
-          >
-            <strong>🎓 Train: ${eq.name}</strong>
-            <div style="font-size:0.875rem;color:#64748b;">
-              Cost: $${this.scenario.tuning.trainingCost} | Duration:
-              ${this.scenario.tuning.trainingDuration} min
-            </div>
-          </div>`,
-        );
-      }
-    });
+
+    if (jobs.length > 12) {
+      options.push(
+        html`<div class="task-option" disabled>
+          <div style="font-size:0.875rem;color:#64748b;">
+            …and ${String(jobs.length - 12)} more waiting.
+          </div>
+        </div>`,
+      );
+    }
+
     setHtml(o, html`${options}`);
   },
   closeAllModals() {

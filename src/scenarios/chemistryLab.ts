@@ -206,43 +206,6 @@ export const chemistryLab: Scenario = {
     },
   ],
 
-  tasks: [
-    {
-      id: 'TSK001',
-      name: 'Blood Sample Analysis',
-      reward: 500,
-      timeLimit: 300,
-      penalty: 250,
-      equipmentSequence: [
-        { name: 'Centrifuge', duration: 20, skillRequired: 'Centrifuge Usage' },
-        { name: 'Microscope A', duration: 40, skillRequired: 'Microscopy' },
-      ],
-    },
-    {
-      id: 'TSK002',
-      name: 'DNA Sequencing',
-      reward: 1200,
-      timeLimit: 600,
-      penalty: 500,
-      equipmentSequence: [
-        { name: 'PCR Machine', duration: 60, skillRequired: 'PCR Operation' },
-        { name: 'Spectrophotometer', duration: 30, skillRequired: 'Spectrophotometry' },
-      ],
-    },
-    {
-      id: 'TSK003',
-      name: 'Cell Culture Test',
-      reward: 850,
-      timeLimit: 480,
-      penalty: 400,
-      equipmentSequence: [
-        { name: 'Incubator', duration: 15, skillRequired: 'Incubator Handling' },
-        { name: 'Biosafety Cabinet', duration: 45, skillRequired: 'Biosafety Protocols' },
-        { name: 'Microscope A', duration: 30, skillRequired: 'Microscopy' },
-      ],
-    },
-  ],
-
   emergencies: [
     {
       name: 'Critical Sample Analysis',

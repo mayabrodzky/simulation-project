@@ -19,7 +19,7 @@ import {
   staffLoadPercent,
   unoccupiedStaffIds,
 } from './queries';
-import { tick } from './tick';
+import { advance, tick } from './tick';
 import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
@@ -39,7 +39,19 @@ function runUntilWorking(world: WorldState, staffId: number, maxTicks = 5000): v
   }
   throw new Error('runUntilWorking: never started');
 }
-const bloodPanel = (w: WorldState) => w.tasks.find((t) => t.name === 'Blood Sample Analysis')!;
+/**
+ * The first waiting blood panel, which now has to have *arrived* rather than
+ * being looked up from a recipe. Advancing to the first arrival is part of the
+ * setup, because work no longer exists on demand.
+ */
+function bloodPanel(world: WorldState) {
+  for (let i = 0; i < 2000 && !world.jobs.some((j) => j.workTypeId === 'blood-panel'); i++) {
+    advance(world, 1);
+  }
+  const job = world.jobs.find((j) => j.workTypeId === 'blood-panel');
+  if (!job) throw new Error('bloodPanel: none arrived');
+  return job;
+}
 
 describe('describeAssignment', () => {
   it('returns nothing for someone with no work', () => {
@@ -50,10 +62,10 @@ describe('describeAssignment', () => {
   it('names the work and reports travel before it starts', () => {
     const world = newWorld();
     const person = hadas(world);
-    applyCommand(world, { type: 'ASSIGN_TASK', staffId: person.id, taskId: bloodPanel(world).id });
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: bloodPanel(world).id });
 
     const view = describeAssignment(world, person);
-    expect(view?.label).toBe('Blood Sample Analysis');
+    expect(view?.label).toBe('Blood panel');
     expect(view?.statusText).toBe('Moving to equipment');
     expect(view?.progress).toBe(0);
     expect(view?.isTraining).toBe(false);
@@ -62,7 +74,7 @@ describe('describeAssignment', () => {
   it('reports progress once the work is under way', () => {
     const world = newWorld();
     const person = hadas(world);
-    applyCommand(world, { type: 'ASSIGN_TASK', staffId: person.id, taskId: bloodPanel(world).id });
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: bloodPanel(world).id });
     runUntilWorking(world, person.id);
 
     // Work begins the instant the person arrives and continues through the
@@ -95,9 +107,9 @@ describe('describeAssignment', () => {
   it('keeps progress within bounds for every person over a long run', () => {
     const world = newWorld();
     applyCommand(world, {
-      type: 'ASSIGN_TASK',
+      type: 'ASSIGN_JOB',
       staffId: hadas(world).id,
-      taskId: bloodPanel(world).id,
+      jobId: bloodPanel(world).id,
     });
     for (let i = 0; i < 5000; i++) {
       tick(world, 1 / 30);
@@ -119,20 +131,20 @@ describe('listActiveWork', () => {
   it('lists work with its assignee', () => {
     const world = newWorld();
     const person = hadas(world);
-    applyCommand(world, { type: 'ASSIGN_TASK', staffId: person.id, taskId: bloodPanel(world).id });
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: bloodPanel(world).id });
 
     const [item, ...rest] = listActiveWork(world);
     expect(rest).toHaveLength(0);
-    expect(item?.name).toBe('Blood Sample Analysis');
+    expect(item?.name).toBe('Blood panel');
     expect(item?.assignee).toBe('Hadas Ben Hamo');
   });
 
   it('returns display data, holding no reference into the world', () => {
     const world = newWorld();
     applyCommand(world, {
-      type: 'ASSIGN_TASK',
+      type: 'ASSIGN_JOB',
       staffId: hadas(world).id,
-      taskId: bloodPanel(world).id,
+      jobId: bloodPanel(world).id,
     });
     const item = listActiveWork(world)[0]!;
     const before = world.staff.map((p) => p.name);
@@ -151,7 +163,7 @@ describe('who is free', () => {
   it('excludes someone who has been given work', () => {
     const world = newWorld();
     const person = hadas(world);
-    applyCommand(world, { type: 'ASSIGN_TASK', staffId: person.id, taskId: bloodPanel(world).id });
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: bloodPanel(world).id });
     expect(isUnoccupied(world, person)).toBe(false);
     expect(unoccupiedStaffIds(world)).not.toContain(person.id);
   });
@@ -167,9 +179,9 @@ describe('progressByStaff', () => {
   it('has an entry only for people actually working', () => {
     const world = newWorld();
     applyCommand(world, {
-      type: 'ASSIGN_TASK',
+      type: 'ASSIGN_JOB',
       staffId: hadas(world).id,
-      taskId: bloodPanel(world).id,
+      jobId: bloodPanel(world).id,
     });
     expect(progressByStaff(world)).toEqual({});
 

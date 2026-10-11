@@ -26,7 +26,7 @@
  * past the edge demand silently stops. Keying each week independently gives the
  * same fairness guarantee with no edge.
  */
-import type { Calendar, Job, WorkType } from '../domain/types';
+import type { Calendar, Job, Tuning, WorkType } from '../domain/types';
 import { addWorkingDays, dayOfWeekOf, dayStart, DAYS_PER_WEEK } from './calendar';
 import { createRng, deriveSeed } from './rng';
 
@@ -39,6 +39,7 @@ import { createRng, deriveSeed } from './rng';
 export function generateWeekArrivals(
   workTypes: WorkType[],
   calendar: Calendar,
+  tuning: Tuning,
   seed: number,
   week: number,
   firstJobNumber: number,
@@ -52,7 +53,7 @@ export function generateWeekArrivals(
   for (const workType of workTypes) {
     const count = drawWeeklyCount(rng.next(), workType);
     for (let i = 0; i < count; i++) {
-      jobs.push(makeJob(workType, calendar, openingMinuteIn(calendar, week, rng.next())));
+      jobs.push(makeJob(workType, calendar, tuning, openingMinuteIn(calendar, week, rng.next())));
     }
   }
 
@@ -109,7 +110,12 @@ function openingMinuteIn(calendar: Calendar, week: number, u: number): number {
 }
 
 /** A job is built once, at arrival, and its deadline never recomputed. */
-function makeJob(workType: WorkType, calendar: Calendar, arrivedAtMinute: number): Job {
+function makeJob(
+  workType: WorkType,
+  calendar: Calendar,
+  tuning: Tuning,
+  arrivedAtMinute: number,
+): Job {
   return {
     // Replaced by the caller once the week is sorted.
     id: '',
@@ -118,6 +124,11 @@ function makeJob(workType: WorkType, calendar: Calendar, arrivedAtMinute: number
     status: 'waiting',
     arrivedAtMinute,
     dueAtMinute: addWorkingDays(calendar, arrivedAtMinute, workType.dueWorkingDays),
+    expiresAtMinute: addWorkingDays(
+      calendar,
+      arrivedAtMinute,
+      workType.dueWorkingDays + tuning.abandonAfterWorkingDays,
+    ),
     basePrice: workType.basePrice,
     steps: workType.steps.map((step) => ({
       name: step.name,

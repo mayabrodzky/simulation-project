@@ -68,6 +68,24 @@ export interface QueueLineView {
   priceEach: number;
 }
 
+/** One row in the dialogue that hands a job to a person. */
+export interface AssignableJobView {
+  id: string;
+  name: string;
+  /** Working time until the deadline. Negative when already overdue. */
+  dueInMinutes: number;
+  /** Hands-on minutes still to do, which is not the same as the recipe total. */
+  minutesOfWork: number;
+  price: number;
+  qualified: boolean;
+  /** Named so the refusal explains itself and points at a training. */
+  missingSkills: string[];
+  /** Which machine this person would go to, for the step that is next. */
+  nextStep: string;
+  /** Someone started this and stopped, so it needs whoever can do the rest. */
+  partlyDone: boolean;
+}
+
 /** Headline numbers about the backlog, for one line at the top of a panel. */
 export interface BacklogView {
   waiting: number;
@@ -132,10 +150,25 @@ export interface ClockView {
 const NIGHT_START_HOUR = 21;
 const NIGHT_END_HOUR = 6;
 
-// `_world` is unused while work still lives on the person. The parameter is
-// present because the next step looks the job up from the world, and taking it
-// now means every call site is written once rather than twice.
-export function describeAssignment(_world: WorldState, person: Staff): AssignmentView | null {
+/**
+ * What one person is doing.
+ *
+ * Three sources now, and the caller knows about none of them: an ordinary job
+ * (looked up from the world by id), an emergency, or a training. The panels
+ * asked this question through here before any of that was true, which is why
+ * this change is one function rather than six call sites.
+ */
+export function describeAssignment(world: WorldState, person: Staff): AssignmentView | null {
+  const job = person.jobId === null ? undefined : world.jobs.find((j) => j.id === person.jobId);
+  if (job) {
+    return {
+      label: job.name,
+      statusText: person.state === 'working' ? 'Processing' : 'Moving to equipment',
+      progress: jobProgress(job),
+      isTraining: false,
+    };
+  }
+
   const task = person.activeTask;
   if (!task) return null;
 
@@ -163,6 +196,24 @@ export function describeAssignment(_world: WorldState, person: Staff): Assignmen
   };
 }
 
+/**
+ * How far through the whole job, not the current step.
+ *
+ * Across every step rather than within one, because a progress bar that resets
+ * to zero three times tells a manager less than one that moves once. Possible
+ * only now that the steps and their totals live in one place.
+ */
+function jobProgress(job: Job): number {
+  let total = 0;
+  let done = 0;
+  job.steps.forEach((step, i) => {
+    total += step.total;
+    if (i < job.stepIndex) done += step.total;
+    else if (i === job.stepIndex) done += step.total - step.remaining;
+  });
+  return total > 0 ? clamp01(done / total) : 0;
+}
+
 /** Work currently being carried out, whoever is carrying it. */
 export function listActiveWork(world: WorldState): ActiveWorkView[] {
   const items: ActiveWorkView[] = [];
@@ -178,6 +229,63 @@ export function listActiveWork(world: WorldState): ActiveWorkView[] {
     });
   }
   return items;
+}
+
+/**
+ * Jobs this person could take, soonest deadline first.
+ *
+ * Replaces the list of recipes the assign dialogue used to show. Unqualified
+ * jobs are included rather than hidden, with the missing skill named: "you
+ * cannot do this, and here is why" is the sentence that makes training worth
+ * buying, and a shorter list would hide the reason the lab is stuck.
+ */
+export function listAssignableJobs(world: WorldState, person: Staff): AssignableJobView[] {
+  return world.jobs
+    .filter((job) => isWaiting(job.status))
+    .slice()
+    .sort((a, b) => a.dueAtMinute - b.dueAtMinute || a.id.localeCompare(b.id))
+    .map((job) => {
+      const remaining = job.steps.slice(job.stepIndex);
+      // Against the *current* step only: a job moves between specialists at
+      // each step boundary, so being able to start it is the question.
+      const step = job.steps[job.stepIndex];
+      const needed = step?.skillRequired ?? null;
+      const missing = needed !== null && !person.skills.includes(needed) ? [needed] : [];
+      return {
+        id: job.id,
+        name: job.name,
+        dueInMinutes: job.dueAtMinute - world.simMinutes,
+        minutesOfWork: remaining.reduce((sum, s) => sum + s.remaining, 0),
+        nextStep: step?.name ?? '',
+        price: job.basePrice,
+        qualified: missing.length === 0,
+        missingSkills: missing,
+        partlyDone: job.stepIndex > 0,
+      };
+    });
+}
+
+/**
+ * Who could carry out a kind of work, by id.
+ *
+ * Used to highlight the staff list when the queue is hovered. Replaces a lookup
+ * into the old recipe list, which after the queue panel started passing a work
+ * type id silently matched nothing and highlighted nobody — a bug with no
+ * symptom beyond an effect not happening.
+ */
+export function qualifiedStaffForWorkType(world: WorldState, workTypeId: string): StaffId[] {
+  const workType = world.workTypes.find((w) => w.id === workTypeId);
+  if (!workType) return [];
+  // Anyone who can do *any* step of it, since a job moves between specialists.
+  // Highlighting only those who could do the whole thing would highlight nobody
+  // for three of the four kinds of work this lab sells.
+  return world.staff
+    .filter((person) =>
+      workType.steps.some(
+        (step) => step.skillRequired === null || person.skills.includes(step.skillRequired),
+      ),
+    )
+    .map((person) => person.id);
 }
 
 /** How many people are currently learning a skill. */
@@ -232,7 +340,7 @@ export function staffLoadPercent(_world: WorldState, person: Staff): number {
  * canvas — an unoccupied person bobs on the spot.
  */
 export function isUnoccupied(_world: WorldState, person: Staff): boolean {
-  return person.state === 'idle' && !person.activeTask;
+  return person.state === 'idle' && !person.activeTask && person.jobId === null;
 }
 
 /** Ids of everyone free to take work. */

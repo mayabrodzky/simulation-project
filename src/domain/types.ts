@@ -98,15 +98,6 @@ export interface TaskStep {
   skillRequired: Skill | null;
 }
 
-export interface TaskDefinition {
-  id: TaskId;
-  name: string;
-  reward: number;
-  timeLimit: number;
-  penalty: number;
-  equipmentSequence: TaskStep[];
-}
-
 /* --- Work ------------------------------------------------------------------
  *
  * A `WorkType` is what the lab sells — a recipe, scenario data, never changed
@@ -196,6 +187,14 @@ export interface Job {
    * simply compared against the clock.
    */
   dueAtMinute: number;
+  /**
+   * When the client gives up, as an absolute minute. Also set once at arrival.
+   *
+   * Stored rather than derived because deriving it means walking the calendar
+   * day by day, and the alternative is doing that for every waiting job on
+   * every slice — hundreds of thousands of times a simulated week.
+   */
+  expiresAtMinute: number;
   basePrice: number;
   steps: JobStep[];
   stepIndex: number;
@@ -339,13 +338,8 @@ export interface Scenario {
   calendar: Calendar;
   staff: StaffTemplate[];
   equipment: EquipmentTemplate[];
-  /**
-   * What the lab sells, and how much of it arrives. Replaces `tasks` as the
-   * source of work; `tasks` survives one more step so the existing assign flow
-   * keeps working while jobs are introduced alongside it.
-   */
+  /** What the lab sells, and how much of it arrives. */
   workTypes: WorkType[];
-  tasks: TaskDefinition[];
   catalog: CatalogItem[];
   props: Prop[];
   walls: Wall[];
@@ -361,10 +355,18 @@ export interface Scenario {
  * Treating them as one loose shape is what lets failTask reach for
  * `task.equipmentSequence[...]` on a training and crash.
  */
-export type ActiveTask = ActiveJob | ActiveTraining;
+export type ActiveTask = ActiveEmergency | ActiveTraining;
 
-/** A copy of a task definition or an emergency, taken when it was assigned. */
-export interface ActiveJob {
+/**
+ * An emergency someone has taken on.
+ *
+ * Was `ActiveJob`, and used to carry ordinary work too. Ordinary work is now a
+ * `Job` with its own progress, so this shape serves emergencies alone — which
+ * is why `isEmergency` is gone, being always true. A6 deletes emergencies in
+ * favour of a `rush` flag on a normal job and this type goes with them; until
+ * then two work paths coexist, deliberately and visibly.
+ */
+export interface ActiveEmergency {
   type?: undefined;
   id: TaskId;
   name: string;
@@ -373,7 +375,6 @@ export interface ActiveJob {
   /** Counts down; absent on tasks with no deadline. */
   timeLimit?: number;
   equipmentSequence: TaskStep[];
-  isEmergency?: boolean;
   status?: EmergencyStatus;
   assignedTo?: StaffId | null;
 }
@@ -397,6 +398,22 @@ export interface Staff extends StaffTemplate {
   color: string;
   /** @deprecated Invented metric. Phase 2 replaces it with workload and overtime. */
   energy: number;
+  /**
+   * The job this person is on, if any.
+   *
+   * An id rather than the job itself: the job is the thing that holds progress,
+   * and two references to one job would be two places to keep in step. The
+   * pairing is symmetric — `job.operatorId` points back — and both are cleared
+   * together.
+   */
+  jobId: JobId | null;
+  /**
+   * An emergency or a training in progress, with its own step and timer.
+   *
+   * Only these two still live on the person. Ordinary work moved onto the job,
+   * which is what makes an interruption free; these three fields are what that
+   * looked like before, kept until A6 removes the last user of them.
+   */
   activeTask: ActiveTask | null;
   taskStep: number;
   taskTimer: number;

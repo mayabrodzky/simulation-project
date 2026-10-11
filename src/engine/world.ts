@@ -23,12 +23,12 @@ import type {
   Prop,
   Scenario,
   Staff,
-  TaskDefinition,
   Tuning,
   Wall,
 } from '../domain/types';
 import { generateWeekArrivals } from './arrivals';
 import { minuteOfDay, weekIndex } from './calendar';
+import { hasReached } from './geometry';
 import { createRng, deriveSeed, type Rng } from './rng';
 
 export interface WorldState {
@@ -91,7 +91,6 @@ export interface WorldState {
   workTypes: WorkType[];
   /** Templates new emergencies are raised from. */
   emergencyTemplates: EmergencyTemplate[];
-  tasks: TaskDefinition[];
   catalog: CatalogItem[];
   props: Prop[];
   walls: Wall[];
@@ -139,6 +138,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
       energy: t.initialEnergyMin + own.next() * t.initialEnergyRange,
       speed: t.staffWalkGridPerMinute,
       color: `hsl(${i * 45}, 70%, 50%)`,
+      jobId: null,
       activeTask: null,
       taskStep: 0,
       taskTimer: 0,
@@ -185,10 +185,6 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     emergencyTemplates: scenario.emergencies.map((e) => ({
       ...e,
       equipmentSequence: e.equipmentSequence.map((step) => ({ ...step })),
-    })),
-    tasks: scenario.tasks.map((task) => ({
-      ...task,
-      equipmentSequence: task.equipmentSequence.map((step) => ({ ...step })),
     })),
     catalog: scenario.catalog.map((item) => ({ ...item })),
     props: scenario.props.map((prop) => ({ ...prop })),
@@ -240,6 +236,7 @@ export function ensureArrivalsThrough(world: WorldState, throughMinute: number):
     const arrivals = generateWeekArrivals(
       world.workTypes,
       world.calendar,
+      world.tuning,
       world.seed,
       week,
       world.nextJobNumber,
@@ -262,7 +259,7 @@ export function admitArrivals(world: WorldState): Job[] {
   const admitted: Job[] = [];
   while (
     world.arrivalQueue.length > 0 &&
-    world.arrivalQueue[0]!.arrivedAtMinute <= world.simMinutes
+    hasReached(world.simMinutes, world.arrivalQueue[0]!.arrivedAtMinute)
   ) {
     const job = world.arrivalQueue.shift()!;
     world.jobs.push(job);

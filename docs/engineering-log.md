@@ -1150,3 +1150,126 @@ now question 9 in `docs/product-spec.md`:
 
 Worth confirming with the lab manager, because it shifts every deadline by a day and so changes how
 much work the simulation reports as late.
+
+---
+
+## 22. Jobs become the unit of work
+
+**Context.** Entry 20 made work arrive and queue. It still could not be *done*: progress lived on the
+person as `taskStep` and `taskTimer`, so a job could only advance while a particular person was
+attached to it, and any interruption had to be unwound by hand.
+
+**Decision.** The tick loop iterates jobs rather than people. A job holds its own progress as
+`remaining` on its current step; `Staff.jobId` points at the job and `Job.operatorId` points back,
+and both are written in one place so they cannot drift apart.
+
+Holding `remaining` rather than elapsed-plus-total is the whole argument. Pausing is not
+decrementing. A shift ending, a person going sick, a reassignment and later a breakdown need no code
+of their own and nothing restored on resume, because nothing anywhere records when a step started and
+so nothing can disagree about it.
+
+`ASSIGN_TASK` is replaced by `ASSIGN_JOB`, and the recipe path is deleted: `TaskDefinition`,
+`scenario.tasks`, `world.tasks` and the dialogue that listed three things the lab could do. The
+dialogue now lists real samples that are waiting, soonest deadline first, with the price, the work
+left, the next machine and — for work this person cannot start — the skill they are missing.
+
+Deliberately not in this commit: lateness still pays full price (the partial-credit arithmetic
+belongs with rush orders in A6), nothing chooses who works on what (the dispatcher is B3), and
+`blocked` is never set (A3c). Emergencies keep their own code path, including the last uses of
+`activeTask`, `taskStep` and `taskTimer`, until A6 deletes them.
+
+### A modelling error found by a smoke test, not by a unit test
+
+Everything passed. Then a throwaway script ran ten simulated days with every free person taking the
+soonest job they could, and the backlog *grew* — 11 waiting on day one, 82 by day ten, against a lab
+with 240 rostered hours a week offered 186 hours of work.
+
+The cause was a choice made two hours earlier and documented as if it were obviously right:
+qualification was judged over **every remaining step** of a job, so a job could only be taken by
+someone able to finish the whole thing. An audit of what that implied:
+
+| Work type | Offered | Needs one person with | Rostered who can |
+|---|---|---|---|
+| Blood panel | 60 h/wk | Centrifuge Usage + Microscopy | 1 — Hadas |
+| DNA / PCR | 60 h/wk | PCR Operation + Spectrophotometry | **nobody** |
+| Cell culture | 36 h/wk | Biosafety + Incubator + Microscopy | **nobody** |
+| Mass spectrometry | 30 h/wk | Mass Spectrometry | 2 |
+
+**96 of 186 offered hours a week were structurally impossible**, and the binding constraint was one
+technician's skill set rather than the mass spectrometer the scenario is built around. A7's load audit
+run against that model would have reported a bottleneck that was an artefact of a single `.every()`.
+
+Real labs hand a sample from one specialist to the next between steps, which is what the plan's own
+handover design assumes. So qualification is now per step: a person can take a job if they can do the
+step it is on, and at a step boundary they keep it only if they can do the next one. Otherwise the job
+goes back to the queue part-finished, prepped, for whoever can — reported as `job-handed-over`, which
+is normal traffic rather than a failure, but worth reporting because a job waiting a long time for its
+second specialist is a real cost with no other symptom.
+
+Same ten days after the change: the queue clears rather than growing, 246 jobs done against 164, 192
+handovers, nothing abandoned.
+
+Two things about how this was found are worth recording. The unit tests could not have caught it —
+every one of them passed, because each tested a single job in isolation and the error only shows up
+as an aggregate over a week. And the test that *did* encode the wrong behaviour had been written
+confidently, with a comment explaining why requiring the whole remaining job was correct. A regression
+test now asserts that every step of every work type has a rostered person who can do it, which is the
+cheap version of the audit above.
+
+### A scheduled instant missed by two ulps
+
+The second real bug in this commit, found by a test that changed nothing but the slice pattern.
+
+Silencing the old emergencies inside the job tests — they fire every half hour, go unassigned, and
+charged a quarter of a million in penalties over the weeks these tests span, drowning out the figures
+being measured — made three expiry tests fail. The job due to be abandoned at minute 11,040 was
+reached at **11,039.999999999998**, so `simMinutes >= expiresAtMinute` was false and it was never
+abandoned.
+
+The slice loop clamps a slice to end exactly on a scheduled instant, but `simMinutes + slice` is not
+bit-identical to that instant after thousands of additions. Worse, whether it lands short depends on
+the history of slice lengths — so the same scheduled event fires in one run and is skipped in
+another, which is precisely the step-size dependence the loop exists to remove, reappearing two ulps
+below the threshold.
+
+Every comparison of the clock against a scheduled instant now goes through one tolerant function,
+`hasReached(now, instant)`: job expiry, the emergency schedule, idle wandering, and arrival
+admission. The deadline comparison is tolerant the other way, so finishing *at* the deadline counts
+as on time — the boundary belongs to the client.
+
+A2 recorded two bugs of this shape and called them float dust. This is the third, and the lesson is
+sharper than "add an epsilon": a loop that deliberately lands on instants needs **one** definition of
+having reached one, used everywhere, for the same reason it needs one definition of having arrived
+somewhere. Both now live in `geometry.ts` next to each other.
+
+Confirmed load-bearing: restoring the exact comparison fails four tests, including one that runs the
+same scenario with and without emergencies and requires the same outcome.
+
+### A silent bug from the previous commit
+
+The Work Queue cards pass a work-type id to `highlightQualifiedStaff`, which looked it up in the
+now-deleted recipe list — so hovering the queue highlighted nobody. No error, no symptom beyond an
+effect not happening. Replaced with `qualifiedStaffForWorkType` through the query seam, which matches
+anyone who can do *any* step, since highlighting only those who could do a whole job would have
+highlighted nobody for three of the four kinds of work.
+
+Worth noting what kind of bug this is: the previous commit changed what a `data-` attribute carried
+and the consumer silently accepted the new value. Neither the compiler nor the linter can see across
+a DOM attribute, which is the same gap that produced the `setHtmlById` incident in Phase 1.
+
+**Verification.** 23 tests on the job lifecycle, in five groups: taking a job on, interruption costing
+nothing (counters unchanged, machine given back, someone else finishing with no work lost or
+repeated), handover between specialists, finishing (paid, freed, reported, steps in order, late when
+late), one machine one job, and abandonment. Plus the two regression tests above. The slicing
+fingerprint gained job status, operator, machine, every step's `remaining` and settled revenue, so
+all of it is inside the step-size invariance gate.
+
+### Also
+
+`fromBusinessProfile` had to invent a weekly volume, a variation and a deadline, because the
+onboarding form asks for none of them. Flagged in the code and already on the Phase 2.5 list: either
+the form asks, or that path stops presenting itself as a model of a real business.
+
+A test helper now throws when handed an off-duty person, naming the reason. The scenario rosters six
+of eight, and an off-duty person silently refuses every assignment — which had produced a
+passing-for-the-wrong-reason test for the **third** time in three files.
