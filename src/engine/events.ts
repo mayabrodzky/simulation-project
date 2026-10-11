@@ -94,6 +94,13 @@ export type EngineEvent =
     }
   | { type: 'staff-status-changed'; staffId: StaffId; staffName: string; status: string }
   | { type: 'shift-toggled'; staffId: StaffId; staffName: string; onShift: boolean }
+  /** The clock brought someone in. Distinct from a roster change. */
+  | { type: 'shift-started'; staffId: StaffId; staffName: string }
+  /**
+   * The clock sent someone home. `jobSetDown` names the job they put down, if
+   * any — work carried over to tomorrow is a cost worth being able to count.
+   */
+  | { type: 'shift-ended'; staffId: StaffId; staffName: string; jobSetDown: JobId | null }
   | { type: 'rejected'; reason: RejectionReason; detail?: string };
 
 /** True for events that change something a sidebar panel displays. */

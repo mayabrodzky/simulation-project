@@ -258,6 +258,13 @@ body.sandbox-mode {
 .staff-card:hover {
   border-color: var(--primary-color);
 }
+/* Qualified for this work, but busy, off duty, sick or on leave. Marked rather
+   than lit, so "could do it" and "could do it now" do not look the same. */
+.staff-card.qualified-unavailable {
+  border-color: var(--border-color);
+  border-style: dashed;
+  opacity: 0.55;
+}
 .staff-card.qualified-highlight {
   border-color: var(--highlight-color);
   background-color: #f0fdf4;

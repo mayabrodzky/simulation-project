@@ -12,6 +12,7 @@ import type { ActiveEmergency, Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
 import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './geometry';
 import { expireAbandonedJobs, nextJobEventIn, tickJobs } from './jobs';
+import { applyShiftWindow, nextShiftEventIn } from './shifts';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
 import {
@@ -137,6 +138,11 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
 
     // A step finishing, or a client giving up.
     inMinutes(nextJobEventIn(world));
+
+    // The lab opening or closing. Stepping over a close means a shift that
+    // ends at 16:00 ends at midnight in a batch run that steps a day at a
+    // time, which is eight hours of work nobody did.
+    inMinutes(nextShiftEventIn(world));
     at(world.nextEmergencyAtMinute);
     for (const e of world.emergencies) {
       if (e.status === 'pending' || e.status === 'in-progress') inMinutes(e.timeLimit);
@@ -251,6 +257,20 @@ function applySlice(
   // than people: work exists whether or not anyone is attached to it, which is
   // the whole point of the change.
   tickJobs(world, dt, events);
+
+  // People arrive and leave *last*, after the slice they were present for has
+  // been paid for.
+  //
+  // This was the other way round and it lost work. A slice clamped to end at
+  // 16:00 lies entirely inside working hours, so every minute of it counts —
+  // but sending people home first meant the job was already back in the queue
+  // when tickJobs ran, and the final slice before closing was discarded. How
+  // much work vanished depended on how long that slice happened to be, so a
+  // coarse run and a fine run disagreed: 14 minutes against 15.
+  //
+  // Same rule as A2: whatever was true during a slice is charged for that
+  // slice before anything changes.
+  if (!options.freezeClock) applyShiftWindow(world, events);
 }
 
 function raiseEmergency(world: WorldState, events: EngineEvent[]): void {

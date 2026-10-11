@@ -86,6 +86,14 @@ export interface AssignableJobView {
   partlyDone: boolean;
 }
 
+/** People who can do a kind of work, and whether they can start it now. */
+export interface QualifiedStaffView {
+  /** Idle, on shift, holding nothing. Could be given the work this instant. */
+  available: StaffId[];
+  /** Qualified but busy, off duty, sick or on leave. */
+  unavailable: StaffId[];
+}
+
 /** Headline numbers about the backlog, for one line at the top of a panel. */
 export interface BacklogView {
   waiting: number;
@@ -266,26 +274,34 @@ export function listAssignableJobs(world: WorldState, person: Staff): Assignable
 }
 
 /**
- * Who could carry out a kind of work, by id.
+ * Who could carry out a kind of work, split by whether they can take it now.
  *
- * Used to highlight the staff list when the queue is hovered. Replaces a lookup
- * into the old recipe list, which after the queue panel started passing a work
- * type id silently matched nothing and highlighted nobody — a bug with no
- * symptom beyond an effect not happening.
+ * Two lists rather than one. "Three people can do this and two of them are out"
+ * is a more useful sentence than "three people can do this", and it is the
+ * sentence that makes a hire or a training worth considering — a lab with
+ * enough skills on paper and nobody available is a different problem from a lab
+ * with nobody trained.
+ *
+ * Qualification is per step, since a job moves between specialists: anyone who
+ * can do *any* step counts. Requiring the whole recipe would name nobody for
+ * three of the four kinds of work this lab sells.
  */
-export function qualifiedStaffForWorkType(world: WorldState, workTypeId: string): StaffId[] {
+export function qualifiedStaffForWorkType(
+  world: WorldState,
+  workTypeId: string,
+): QualifiedStaffView {
   const workType = world.workTypes.find((w) => w.id === workTypeId);
-  if (!workType) return [];
-  // Anyone who can do *any* step of it, since a job moves between specialists.
-  // Highlighting only those who could do the whole thing would highlight nobody
-  // for three of the four kinds of work this lab sells.
-  return world.staff
-    .filter((person) =>
-      workType.steps.some(
-        (step) => step.skillRequired === null || person.skills.includes(step.skillRequired),
-      ),
-    )
-    .map((person) => person.id);
+  if (!workType) return { available: [], unavailable: [] };
+
+  const canDoSomeStep = world.staff.filter((person) =>
+    workType.steps.some(
+      (step) => step.skillRequired === null || person.skills.includes(step.skillRequired),
+    ),
+  );
+  return {
+    available: canDoSomeStep.filter((p) => isUnoccupied(world, p)).map((p) => p.id),
+    unavailable: canDoSomeStep.filter((p) => !isUnoccupied(world, p)).map((p) => p.id),
+  };
 }
 
 /** How many people are currently learning a skill. */

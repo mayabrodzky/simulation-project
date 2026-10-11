@@ -27,7 +27,7 @@ import type {
   Wall,
 } from '../domain/types';
 import { generateWeekArrivals } from './arrivals';
-import { minuteOfDay, weekIndex } from './calendar';
+import { isWithinShift, minuteOfDay, weekIndex } from './calendar';
 import { hasReached } from './geometry';
 import { createRng, deriveSeed, type Rng } from './rng';
 
@@ -119,6 +119,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
   const t = scenario.tuning;
   const f = scenario.layout.labFloor;
   const start = startMinutes ?? t.startMinutes;
+  const labOpenAtStart = isWithinShift(scenario.calendar.shift, start);
 
   // Each person and each machine draws from a stream of its own, named after
   // it. Appending a ninth person therefore leaves the other eight, every
@@ -134,7 +135,12 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
       y: f.y + 2 + Math.floor(i / 4) * 2,
       targetX: null,
       targetY: null,
-      state: i < t.staffOnShiftCount ? 'idle' : 'off',
+      rostered: i < t.staffOnShiftCount,
+      // A world opened at 02:00 starts with an empty floor, not a full one.
+      // Read from the calendar here rather than by calling applyShiftWindow,
+      // which would make world.ts depend on shifts.ts and jobs.ts and so on
+      // itself — the dependency direction is worth more than the reuse.
+      state: i < t.staffOnShiftCount && labOpenAtStart ? 'idle' : 'off',
       energy: t.initialEnergyMin + own.next() * t.initialEnergyRange,
       speed: t.staffWalkGridPerMinute,
       color: `hsl(${i * 45}, 70%, 50%)`,

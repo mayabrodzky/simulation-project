@@ -71,6 +71,7 @@ const Lab = {
   activeEmergencyTask: null,
   hoveredEntity: null,
   highlightedStaffIds: [],
+  dimmedStaffIds: [],
   sandboxSessionHistory: [],
   currentSandboxSession: null,
 
@@ -266,11 +267,17 @@ const Lab = {
     this.hoveredEntity = foundEntity;
   },
   highlightQualifiedStaff(workTypeId) {
-    this.highlightedStaffIds = qualifiedStaffForWorkType(this.world, workTypeId);
+    // Qualified and free is a different thing from qualified and out sick, so
+    // the two are shown differently rather than both lit up as if either could
+    // take the work.
+    const qualified = qualifiedStaffForWorkType(this.world, workTypeId);
+    this.highlightedStaffIds = qualified.available;
+    this.dimmedStaffIds = qualified.unavailable;
     this.updateStaffPanel();
   },
   clearStaffHighlights() {
     this.highlightedStaffIds = [];
+    this.dimmedStaffIds = [];
     this.updateStaffPanel();
   },
 
@@ -562,8 +569,21 @@ const Lab = {
           break;
         case 'shift-toggled':
           this.announce(
-            `${e.staffName} has ${e.onShift ? 'started' : 'ended'} their shift`,
+            `${e.staffName} is ${e.onShift ? 'now on the rota' : 'off the rota'}`,
             'info',
+          );
+          break;
+        // The clock bringing people in and sending them home is not news: it
+        // happens to everyone twice a day. Logged in the sandbox so a session
+        // can be read back, but never announced.
+        case 'shift-started':
+          this.logSandboxAction(`${e.staffName} arrived.`);
+          break;
+        case 'shift-ended':
+          this.logSandboxAction(
+            e.jobSetDown
+              ? `${e.staffName} left, setting down ${e.jobSetDown}.`
+              : `${e.staffName} left.`,
           );
           break;
         case 'rejected':
@@ -745,7 +765,13 @@ const Lab = {
         // string of markup would be escaped and shown as literal tags.
         const skillTags = p.skills.map((skill) => html`<span class="skill-tag">${skill}</span>`);
         const isHighlighted = this.highlightedStaffIds.includes(p.id);
-        return html` <div class="staff-card ${isHighlighted ? 'qualified-highlight' : ''}">
+        const isDimmed = this.dimmedStaffIds.includes(p.id);
+        const highlightClass = isHighlighted
+          ? 'qualified-highlight'
+          : isDimmed
+            ? 'qualified-unavailable'
+            : '';
+        return html` <div class="staff-card ${highlightClass}">
           <div class="staff-header">
             <span class="staff-name">${p.name}</span>
             <span class="staff-badge badge-${p.state}">${p.state}</span>
@@ -772,7 +798,7 @@ const Lab = {
               Assign Task
             </button>
             <button class="btn btn-secondary" data-action="toggle-shift" data-staff-id="${p.id}">
-              ${p.state === 'off' ? 'Start Shift' : 'End Shift'}
+              ${p.rostered ? 'Take Off Rota' : 'Put On Rota'}
             </button>
             <button class="btn btn-secondary" data-action="toggle-sick" data-staff-id="${p.id}">
               ${p.state === 'sick' ? 'Clear Sick' : 'Set Sick'}

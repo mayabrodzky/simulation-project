@@ -393,6 +393,16 @@ export interface Staff extends StaffTemplate {
   y: number;
   targetX: number | null;
   targetY: number | null;
+  /**
+   * Whether this person is on the roster at all.
+   *
+   * Separate from `state`, and the separation matters. `state === 'off'` used to
+   * mean two unrelated things — "not employed on this shift" and "outside
+   * opening hours" — so once the calendar started sending people home at 16:00
+   * there was no way to tell someone who had gone home from someone who is not
+   * on the rota. A hire changes this; the clock changes `state`.
+   */
+  rostered: boolean;
   state: StaffState;
   speed: number;
   color: string;

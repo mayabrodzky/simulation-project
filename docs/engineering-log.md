@@ -1178,7 +1178,7 @@ belongs with rush orders in A6), nothing chooses who works on what (the dispatch
 `blocked` is never set (A3c). Emergencies keep their own code path, including the last uses of
 `activeTask`, `taskStep` and `taskTimer`, until A6 deletes them.
 
-### A modelling error found by a smoke test, not by a unit test
+### An aggregate-only bug: no unit test could have caught it
 
 Everything passed. Then a throwaway script ran ten simulated days with every free person taking the
 soonest job they could, and the backlog *grew* — 11 waiting on day one, 82 by day ten, against a lab
@@ -1209,12 +1209,24 @@ second specialist is a real cost with no other symptom.
 Same ten days after the change: the queue clears rather than growing, 246 jobs done against 164, 192
 handovers, nothing abandoned.
 
-Two things about how this was found are worth recording. The unit tests could not have caught it —
-every one of them passed, because each tested a single job in isolation and the error only shows up
-as an aggregate over a week. And the test that *did* encode the wrong behaviour had been written
-confidently, with a comment explaining why requiring the whole remaining job was correct. A regression
-test now asserts that every step of every work type has a rostered person who can do it, which is the
-cheap version of the audit above.
+**This was an aggregate-only bug, and that is the part worth keeping.** No unit test could have
+caught it, and no additional unit test would have. Every one of the twenty-three tests on the job
+lifecycle passed, before the fix and after, because each one follows a single job through a single
+sequence and the defect is only visible as a property of the whole lab over a week: *more work
+arrives than leaves.* Each individual job behaved exactly as specified. The specification was wrong.
+
+The class matters beyond this instance. Unit tests answer "does each part do what I said", and that
+question is silent about "is what I said coherent as a system". The second question needed a
+different instrument — thirty lines of throwaway script running ten simulated days and printing one
+line per day — and it is now a standing part of how each step gets checked, not a one-off. A7's load
+audit is the formal version of the same idea, computed in closed form rather than simulated.
+
+Two further notes on how it was found. The test that *encoded* the wrong behaviour had been written
+confidently, with a comment explaining why requiring the whole remaining job was correct — so the
+tests did not merely fail to catch the error, they asserted it. And the regression test now in place
+is deliberately the cheap version of the audit above rather than a re-run of the simulation: every
+step of every work type must have a rostered person who can do it. If qualification ever reverts to
+whole-job, three of the four work types fail immediately and by name.
 
 ### A scheduled instant missed by two ulps
 
@@ -1273,3 +1285,98 @@ the form asks, or that path stops presenting itself as a model of a real busines
 A test helper now throws when handed an off-duty person, naming the reason. The scenario rosters six
 of eight, and an off-duty person silently refuses every assignment — which had produced a
 passing-for-the-wrong-reason test for the **third** time in three files.
+
+---
+
+## 23. The calendar finally drives the working day
+
+**Context.** A1 built a working-time calendar — `isWithinShift`, `nextOpen`, `shiftEndAfter`,
+`nextCalendarBoundary` — with 48 tests, and then **nothing called any of it** except for deadlines
+and clock labels. People changed shift only when someone clicked a button.
+
+That was invisible for two entries, because work could not outlive a few minutes. With jobs it means
+a technician works through the night, the lab has no closing time, every figure about capacity is
+wrong, and decision C of the four the product exists to evaluate — add an evening shift — is
+unmodellable, because the day shift never gives the instruments back.
+
+A1's own log entry promised the opposite: *"Work in progress at 16:00 pauses, the operator goes off
+shift, and the resource is released."* It was written as a settled design decision and never
+implemented. Worth recording as a kind of error in its own right: a tested module with no callers
+reads as finished work, and the test suite is no help, because the tests pass.
+
+**Decision.** One untangling and one hook.
+
+**`rostered` is now separate from `state`.** `state === 'off'` had meant two unrelated things — "not
+employed on this shift" and "outside opening hours" — so once the clock started sending people home
+there was no way to tell someone who had gone home from someone who is not on the rota. `rostered` is
+what a hire changes and what the shift button toggles; `state` is the clock's to write. The button is
+relabelled "Put On Rota" / "Take Off Rota", because that is what it does.
+
+**`applyShiftWindow` runs every slice**, bringing rostered people in at opening and sending them home
+at close. Sending someone home releases their job and the machine it holds. The job goes back to the
+queue part-finished with its counters untouched, which is the whole return on holding progress as
+`remaining`: there is nothing to save, nothing to restore, and no overnight special case anywhere.
+
+Releasing the *machine* is the part with consequences. Held overnight, utilisation would read 100%
+with nobody in the building, and an evening shift would add no capacity at all.
+
+Sickness and leave survive a shift change: being sick is about the person, not the hour, and letting
+the clock clear it would mean an illness that ends at closing time. `SET_STATUS` and `TOGGLE_SHIFT`
+now both defer to `applyShiftWindow` for where someone actually lands, rather than writing `state`
+themselves — which is the Phase 1 "clearing sick put an off-duty person back on shift" regression
+fixed at the root rather than patched again.
+
+`createWorld` reads the calendar directly rather than calling `applyShiftWindow`, because that would
+make `world.ts` depend on `shifts.ts` → `jobs.ts` → `world.ts`. The dependency direction is worth
+more than the reuse; the duplication is one `isWithinShift` call.
+
+### An ordering bug that lost work, caught by the step-size test
+
+The first version ran `applyShiftWindow` with the other clock business, before anyone worked. It lost
+the last slice before closing.
+
+A slice clamped to end at 16:00 lies **entirely inside** working hours, so every minute of it counts.
+Sending people home first meant the job was already back in the queue when `tickJobs` ran, so that
+slice's work was discarded — and how much vanished depended on how long the slice happened to be. A
+fine run and a coarse run disagreed: 14 minutes of work against 15.
+
+The fix is to run it last, after the slice everyone was present for has been paid for. That is the
+same rule A2 arrived at for emergencies and equipment wear — *whatever was true during a slice is
+charged for that slice before anything changes* — which is now the third distinct bug caused by
+getting it wrong. It is worth stating as a standing rule of this loop rather than rediscovering:
+
+> Within a slice, charge first and change state afterwards. Anything that ends a slice has already
+> been true for the whole of it.
+
+The assertion that caught it is worth describing, because the obvious version did not work. Measuring
+"she started at 15:40, so twenty minutes must be gone" failed on a rounding artefact of the test's own
+setup loop. Comparing against **a second lab with the same seed whose shift never ends** is exact: up
+to 16:00 the two are the same lab, so the work done must be identical, and from 16:00 they must
+diverge. No tolerance, and it tests the thing directly.
+
+**Verification.** 21 tests in four groups: who is in the building (empty floor at 02:00, sent home at
+16:00 to the minute, back next morning, empty all weekend, events for both), closing time and work in
+progress (set down part-finished, machine returned, no progress overnight, the carried-over job named,
+picked up and finished next day, no assignment outside hours), the roster against the clock (off the
+rota goes home now, onto the rota waits for morning, sickness survives a shift change, clearing
+sickness at night does not put someone on the floor, someone off the rota is never brought in), and
+step-size invariance across six step sizes from half a minute to a whole day.
+
+Three mutations, all caught: running the shift window before jobs advance fails 2 (both invariance
+assertions); ending a shift without releasing the job fails 6, including the slicing fingerprint; and
+removing the loop's clamp to opening and closing fails the invariance test.
+
+**Observed.** Twelve simulated days with every free person taking the most urgent job they can: six
+people on the floor on working days, **nobody on Friday or Saturday**, and 44 jobs carried over a
+night. The backlog grows from 7 to 81 over the fortnight — 186 hours of work offered against 240
+rostered hours, with the shortfall going into walking between machines and into jobs waiting for
+reassignment after a handover. Whether that gap is a genuine finding about the lab or an artefact of
+assignment is exactly what A7's load audit is for, and it is not worth guessing at before then.
+
+### A small fix from review
+
+The Work Queue's hover highlight lit up everyone qualified, including people off sick or off the rota.
+`qualifiedStaffForWorkType` now returns two lists and the panel marks them differently — solid for
+those who could take the work now, dashed and faded for those who could not. "Three people can do this
+and two of them are out" is a more useful sentence than "three people can do this", and it is the one
+that makes a hire or a training worth considering.

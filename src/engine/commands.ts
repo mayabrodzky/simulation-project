@@ -13,6 +13,7 @@
 import type { EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 import type { EngineEvent, RejectionReason } from './events';
 import { assignJob, releaseJobOf } from './jobs';
+import { applyShiftWindow } from './shifts';
 import { isQualified } from './rules';
 import { failTask } from './tick';
 import { findEquipment, findEquipmentByName, findStaff, type WorldState } from './world';
@@ -228,6 +229,9 @@ function setStatus(
   releaseJobOf(world, person);
 
   person.state = sick ? 'sick' : 'idle';
+  // Clearing "sick" at 02:00 must not put someone on the floor, so where they
+  // actually land is the clock's decision, not this command's.
+  if (!sick) applyShiftWindow(world, events);
   events.push({
     type: 'staff-status-changed',
     staffId: person.id,
@@ -236,23 +240,32 @@ function setStatus(
   });
 }
 
+/**
+ * Puts someone on the rota or takes them off it.
+ *
+ * Changes `rostered`, not `state` — the clock owns `state`. Taking someone off
+ * the rota sends them home now; putting them on brings them in if the lab is
+ * open and leaves them at home until morning if it is not. Before the calendar
+ * drove shifts this command set `state` directly, which is why clearing
+ * "sick" used to put an off-duty person back on the floor.
+ */
 function toggleShift(world: WorldState, staffId: StaffId, events: EngineEvent[]): void {
   const person = findStaff(world, staffId);
   if (!person) return;
 
-  if (person.state === 'off') {
-    person.state = 'idle';
-    person.energy = 100;
-  } else {
-    if (person.activeTask) failTask(world, person, person.activeTask, events);
-    person.state = 'off';
+  person.rostered = !person.rostered;
+  if (!person.rostered && person.activeTask) {
+    failTask(world, person, person.activeTask, events);
   }
+  // Lets the clock decide what the roster change means right now, rather than
+  // writing `state` here and getting it wrong at 02:00.
+  applyShiftWindow(world, events);
 
   events.push({
     type: 'shift-toggled',
     staffId: person.id,
     staffName: person.name,
-    onShift: person.state !== 'off',
+    onShift: person.rostered,
   });
 }
 

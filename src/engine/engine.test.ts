@@ -136,8 +136,15 @@ describe('isQualified', () => {
     const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
     // isQualified reads `equipmentSequence`, which a work type does not have;
     // the job path asks `canOperate` instead, over the steps still to do.
-    expect(qualifiedStaffForWorkType(world, bloodPanel.id)).toContain(hadas.id);
-    expect(qualifiedStaffForWorkType(world, bloodPanel.id)).not.toContain(amir.id);
+    const qualified = qualifiedStaffForWorkType(world, bloodPanel.id);
+    expect([...qualified.available, ...qualified.unavailable]).toContain(hadas.id);
+    expect([...qualified.available, ...qualified.unavailable]).not.toContain(amir.id);
+    // Off-duty people are qualified but not available, which the panel shows
+    // differently: "three can do this and two are out" is the useful sentence.
+    const nina = world.staff.find((p) => p.name === 'Nina Zur')!;
+    expect(nina.state).toBe('off');
+    expect(qualified.unavailable).toContain(nina.id);
+    expect(qualified.available).not.toContain(nina.id);
   });
 });
 
