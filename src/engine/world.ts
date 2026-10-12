@@ -86,6 +86,23 @@ export interface WorldState {
   weeksGenerated: number;
   /** Source of job ids, so they read in arrival order. */
   nextJobNumber: number;
+  /**
+   * When block reasons were last worked out.
+   *
+   * They are derived state, recomputed at most once per simulated minute. The
+   * slice loop can run a million times for four simulated hours, and anything
+   * that walks every job against every person on every slice makes a fast run
+   * slower than the real-time one it is supposed to replace.
+   */
+  blockReasonsAtMinute: number;
+  /**
+   * The next instant somebody's shift starts or ends.
+   *
+   * Cached because working it out walks the calendar day by day, per person,
+   * and the slice loop asks on every slice. Recomputed only once the clock
+   * reaches it.
+   */
+  nextShiftBoundaryAtMinute: number;
   emergencies: Emergency[];
   /** What the lab sells. Scenario data; the simulation never changes it. */
   workTypes: WorkType[];
@@ -186,6 +203,8 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     arrivalQueue: [],
     weeksGenerated: 0,
     nextJobNumber: 1,
+    blockReasonsAtMinute: -Infinity,
+    nextShiftBoundaryAtMinute: -Infinity,
     emergencies: [],
     workTypes: scenario.workTypes.map((w) => ({
       ...w,

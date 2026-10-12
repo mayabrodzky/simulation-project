@@ -19,6 +19,7 @@ import {
   applyCommand,
   backlogView,
   cloneWorld,
+  holdUps,
   countTraining,
   createWorld,
   describeAssignment,
@@ -891,6 +892,10 @@ const Lab = {
     if (!panel) return;
     const summary = backlogView(this.world);
     const lines = queueByWorkType(this.world);
+    // Why the queue is not moving. The point of the whole phase, in one line:
+    // a manager can act on "11 waiting for an instrument in use" and cannot act
+    // on a backlog number.
+    const blocked = holdUps(this.world);
 
     setHtml(
       panel,
@@ -907,6 +912,13 @@ const Lab = {
                   }`
           }
         </div>
+        ${
+          blocked.length > 0
+            ? html`<div class="queue-holdups">
+                ${blocked.map((h) => html`<div class="queue-holdup">${h.text}</div>`)}
+              </div>`
+            : ''
+        }
         ${lines.map(
           (line) =>
             html`<div class="task-def-card" data-hover-task="${line.workTypeId}">

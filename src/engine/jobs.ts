@@ -19,12 +19,12 @@
  *     where the asymmetry that makes a missed rush expensive lives.
  *   - **Nothing chooses who works on what.** Assignment is a command from the
  *     interface. The dispatcher is B3.
- *   - **`blocked` is never set.** A job that wants a busy machine waits as
- *     `in-progress` with its operator standing there. A3c makes that visible,
- *     which is what turns a stalled queue into a stated reason.
  */
-import type { Equipment, Job, JobStep, Staff, StaffId } from '../domain/types';
+import type { BlockReason, Equipment, Job, JobStep, Staff, StaffId } from '../domain/types';
 import type { EngineEvent } from './events';
+// Straight from the calendar rather than through shifts.ts, which imports
+// this module: a cycle would resolve at runtime and is not worth relying on.
+import { isWithinShift } from './calendar';
 import { EPSILON, hasArrivedAt, hasReached } from './geometry';
 import { findEquipmentByName, findStaff, type WorldState } from './world';
 
@@ -367,4 +367,145 @@ export function assignJob(
 
   attach(world, person, job, pinned);
   return { ok: true, job };
+}
+
+/* --- Why work is not moving ----------------------------------------------- */
+
+/**
+ * Recomputes `blockReason` for everything waiting.
+ *
+ * Advisory and recomputed from scratch every pass. It is **never an absorbing
+ * state**: a blocked job is still `waiting` as far as every other rule is
+ * concerned, still assignable, still expirable. Treating "blocked" as a real
+ * state a job moves *into* is the likeliest way to ship a simulation that
+ * deadlocks by doing nothing — the Phase 1 failure shape, where the system
+ * fails silently rather than loudly.
+ *
+ * The point of it is not the status but the *reason*. Counted by reason over a
+ * run, this is the "what is holding the lab back" sentence obtained directly
+ * rather than inferred from utilisation figures. A week of this lab spends
+ * roughly sixty hours with people standing at instruments somebody else is
+ * using; without a reason recorded, that is invisible in every output.
+ *
+ * Reasons are ordered by how actionable they are, not by how likely: a job that
+ * nobody in the building could do is a training or hiring decision, which is
+ * worth more to know than that the lab is shut.
+ */
+export function recomputeBlockReasons(world: WorldState, events: EngineEvent[]): void {
+  // At most once a simulated minute. This walks every open job against every
+  // person, and the slice loop runs it hundreds of thousands of times for a
+  // simulated week — unthrottled it took the step-size invariance test from two
+  // seconds to over twelve, which is the second time in this phase that
+  // something cheap-looking per slice has been the expensive thing.
+  //
+  // The cost is that a reason, and therefore a stall report, can be up to a
+  // minute behind. Acceptable precisely because nothing *decides* anything from
+  // it: it reports. Every quantity a metric is built from is still exact.
+  if (world.simMinutes - world.blockReasonsAtMinute < 1) return;
+  world.blockReasonsAtMinute = world.simMinutes;
+
+  const open = world.staff.some((person) => isWithinShift(person.shift, world.simMinutes));
+
+  for (const job of world.jobs) {
+    if (!isOpen(job)) {
+      setBlock(world, job, null, events);
+      continue;
+    }
+
+    const step = job.steps[job.stepIndex];
+    if (!step) {
+      setBlock(world, job, null, events);
+      continue;
+    }
+
+    // Nobody employed here holds the skill. A training or a hire, and true
+    // whether or not the lab happens to be open.
+    const capable = world.staff.filter((person) => canDoStep(person, step));
+    if (capable.length === 0) {
+      setBlock(world, job, 'no-qualified-operator', events);
+      continue;
+    }
+
+    const machine = findEquipmentByName(world, step.name);
+    if (!machine) {
+      setBlock(world, job, 'no-such-resource', events);
+      continue;
+    }
+
+    if (!open) {
+      setBlock(world, job, 'outside-working-hours', events);
+      continue;
+    }
+
+    // Somebody could do it, so what is in the way is either the instrument or
+    // the people being busy elsewhere. Distinguishing the two is the whole
+    // point: one is answered by leasing an instrument and the other by hiring.
+    if (machine.inUse) {
+      setBlock(world, job, 'resource-busy', events);
+      continue;
+    }
+
+    const free = capable.some(
+      (person) => person.state === 'idle' && person.jobId === null && person.activeTask === null,
+    );
+    setBlock(world, job, free ? null : 'everyone-busy', events);
+  }
+}
+
+/**
+ * Records why a job is held up, and how long it has been.
+ *
+ * The only writer of `blockReason`, which is what lets the duration be tracked
+ * without every branch above remembering to. A *change* of reason restarts the
+ * clock: waiting for an instrument and then waiting for a person are two
+ * separate waits, and reporting them as one long stall would name the wrong
+ * cause.
+ */
+function setBlock(
+  world: WorldState,
+  job: Job,
+  reason: BlockReason | null,
+  events: EngineEvent[],
+): void {
+  if (reason === null) {
+    job.blockReason = null;
+    job.blockedSinceMinute = null;
+    job.stallReported = false;
+    return;
+  }
+
+  if (job.blockReason !== reason) {
+    job.blockReason = reason;
+    job.blockedSinceMinute = world.simMinutes;
+    job.stallReported = false;
+    return;
+  }
+
+  const since = job.blockedSinceMinute ?? world.simMinutes;
+  const blockedFor = world.simMinutes - since;
+  if (!job.stallReported && blockedFor >= world.tuning.stalledAfterHours * 60) {
+    job.stallReported = true;
+    events.push({
+      type: 'job-stalled',
+      jobId: job.id,
+      name: job.name,
+      reason,
+      blockedForMinutes: blockedFor,
+    });
+  }
+}
+
+/** How long each reason has held work up, in job-minutes. For the audit. */
+export function blockedMinutesByReason(world: WorldState): Record<BlockReason, number> {
+  const totals: Record<BlockReason, number> = {
+    'no-qualified-operator': 0,
+    'everyone-busy': 0,
+    'resource-busy': 0,
+    'outside-working-hours': 0,
+    'no-such-resource': 0,
+  };
+  for (const job of world.jobs) {
+    if (job.blockReason !== null) totals[job.blockReason] += 1;
+  }
+  return totals;
 }

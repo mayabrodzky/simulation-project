@@ -15,6 +15,7 @@ export { createWorld, cloneWorld, findStaff, findEquipment, type WorldState } fr
 export { tick, advance, failTask, type TickOptions } from './tick';
 export {
   assignJob,
+  blockedMinutesByReason,
   canOperate,
   findJob,
   isFinished,
@@ -43,6 +44,7 @@ export {
  */
 export {
   backlogView,
+  holdUps,
   countTraining,
   describeAssignment,
   clockView,
@@ -59,6 +61,7 @@ export {
   type ActiveWorkView,
   type AssignableJobView,
   type BacklogView,
+  type HoldUpView,
   type AssignmentView,
   type ClockView,
   type QueueLineView,

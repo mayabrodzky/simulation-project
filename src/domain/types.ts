@@ -218,6 +218,16 @@ export interface Job {
   /** What was actually paid. A6 makes this differ from basePrice. */
   settledRevenue: number;
   blockReason: BlockReason | null;
+  /**
+   * When the current block began, or null if nothing is in the way.
+   *
+   * Reset the moment the reason clears, so it measures one continuous wait
+   * rather than a total. A job that is blocked, freed and blocked again has not
+   * stalled; a job blocked for two days has.
+   */
+  blockedSinceMinute: number | null;
+  /** Set once when the block has lasted long enough to be worth reporting. */
+  stallReported: boolean;
 }
 
 export interface EmergencyTemplate {
@@ -323,6 +333,15 @@ export interface Tuning {
    * number should be arguable with rather than buried.
    */
   abandonAfterWorkingDays: number;
+
+  /**
+   * Hours of continuous blocking before a job is reported as stalled.
+   *
+   * A warning, not a rule: nothing changes when it fires. It exists because a
+   * simulation that fails by quietly doing nothing is the worst failure shape
+   * available — it looks like a working run with a disappointing result.
+   */
+  stalledAfterHours: number;
 }
 
 /**

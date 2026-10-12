@@ -17,7 +17,7 @@
  * into the world, so a caller cannot accidentally mutate the simulation by
  * holding on to one.
  */
-import type { Job, Staff, StaffId } from '../domain/types';
+import type { BlockReason, Job, Staff, StaffId } from '../domain/types';
 import { clockLabel as formatClock, dayLabel, minuteOfDay } from './calendar';
 import type { WorldState } from './world';
 
@@ -94,6 +94,15 @@ export interface QualifiedStaffView {
   unavailable: StaffId[];
 }
 
+/** What is holding work up, in plain language, commonest first. */
+export interface HoldUpView {
+  reason: BlockReason;
+  /** How many waiting jobs are held up by this. */
+  jobs: number;
+  /** A sentence a lab manager would recognise. */
+  text: string;
+}
+
 /** Headline numbers about the backlog, for one line at the top of a panel. */
 export interface BacklogView {
   waiting: number;
@@ -128,6 +137,47 @@ export function queueByWorkType(world: WorldState): QueueLineView[] {
       priceEach: workType.basePrice,
     };
   });
+}
+
+/**
+ * Why the queue is not moving, counted and phrased.
+ *
+ * This is the "what is holding the lab back" sentence the whole phase is aimed
+ * at, and it is a count rather than an inference from utilisation figures.
+ * Ordered by how many jobs each reason is holding up, because the manager's
+ * question is which one to fix first.
+ *
+ * Phrasing lives here rather than in the engine for the usual reason: the
+ * engine reports a `BlockReason` and the words are a display decision. It lives
+ * *here* rather than in the panel so that the batch runner's verdict and the
+ * live lab cannot describe the same state differently.
+ */
+export function holdUps(world: WorldState): HoldUpView[] {
+  const counts = new Map<BlockReason, number>();
+  for (const job of world.jobs) {
+    if (job.blockReason === null) continue;
+    counts.set(job.blockReason, (counts.get(job.blockReason) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([reason, jobs]) => ({ reason, jobs, text: phrase(reason, jobs) }));
+}
+
+function phrase(reason: BlockReason, jobs: number): string {
+  const n = String(jobs);
+  switch (reason) {
+    case 'no-qualified-operator':
+      return `${n} waiting for a skill nobody here has`;
+    case 'everyone-busy':
+      return `${n} waiting for someone to be free`;
+    case 'resource-busy':
+      return `${n} waiting for an instrument in use`;
+    case 'outside-working-hours':
+      return `${n} waiting for the lab to open`;
+    case 'no-such-resource':
+      return `${n} needing equipment the lab does not have`;
+  }
 }
 
 export function backlogView(world: WorldState): BacklogView {

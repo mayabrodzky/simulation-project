@@ -1601,3 +1601,79 @@ much had been resting on the drifted data:
 
 Two tests added: a part-timer goes home at noon while the full-timers work on, and a part-timer is
 excluded from the free list once their shorter shift ends.
+
+---
+
+## 26. Naming what is holding the lab back
+
+**Context.** The previous entries could measure that work was waiting; they could not say what for. The
+week's measurement showed roughly sixty hours of people standing at instruments somebody else was
+using, and that figure was only visible by instrumenting a throwaway script.
+
+**Decision.** Every waiting job carries a `blockReason`, recomputed from scratch and never stored as a
+decision. Five reasons, ordered by how *actionable* they are rather than how likely: a skill nobody in
+the building holds, equipment the lab does not own, the lab being shut, the instrument being in use,
+and everyone being busy.
+
+The distinction that matters is the last two. Both look like "the job is not moving", one is answered
+by leasing an instrument and the other by hiring, and they are two of the four decisions the product
+exists to compare. Reported as one number they would be useless.
+
+**`blocked` is advisory and never absorbing.** A blocked job is still `waiting` to every other rule:
+assignable, expirable, countable. Treating it as a state a job moves *into* is the likeliest way to
+ship a simulation that deadlocks by quietly doing nothing — which is the worst failure shape
+available, because it looks like a working run with a disappointing result. Four tests exist only to
+catch that: a blocked job can still be assigned with no unblocking step anywhere, the reason clears
+the instant the obstacle goes, a blocked job can still be abandoned by its client, and a finished job
+never carries a reason.
+
+**A stall reports itself once.** `blockedSinceMinute` measures one continuous wait, and a *change* of
+reason restarts it, because waiting for an instrument and then waiting for a person are two separate
+waits and reporting them as one would name the wrong cause. Past `tuning.stalledAfterHours` (48) a
+`job-stalled` event fires once. It changes nothing; it exists so a run that fails by doing nothing
+says so.
+
+Phrasing lives in `queries.ts`, not the engine and not the panel — the engine reports a reason and the
+words are a display decision, but putting them in the panel would let the batch runner's verdict and
+the live lab describe the same state differently.
+
+Observed, with the naive assignment rule:
+
+```
+Sun 11:00 — 4 waiting for an instrument in use
+Mon 11:00 — 5 waiting for an instrument in use · 3 waiting for someone to be free
+Sat 11:00 — 39 waiting for the lab to open
+```
+
+A note on that observation: the first attempt at it reported "9 waiting for the lab to open" at what
+the script labelled 11:00 on a working day, which looked like a clear defect. The script was wrong —
+its loop counter started at the opening minute, so the label said 11:00 and the clock said 19:01, and
+the engine had been right. Second time in three entries that a measurement harness, rather than the
+thing measured, produced the alarming number.
+
+### Two ordering problems, both already-known shapes
+
+**Derived state belongs after every change, not among them.** Computed before the shift window, the
+reason read "everyone is busy" at eight in the morning — true of the state at that instant, because
+nobody had been brought in yet, and useless as a description. Moved to the end of the slice. The
+general rule now has two halves: *charge for the slice before changing state, and derive from state
+only once it has settled.*
+
+**Anything per slice must cost nothing.** Recomputing every open job against every person on every
+slice took the step-size invariance test from two seconds to over twelve. Throttled to once a
+simulated minute, with the cost stated: a reason, and therefore a stall report, can be up to a minute
+behind. Acceptable precisely because nothing decides anything from it. Separately, `nextShiftEventIn`
+was walking the calendar day by day per person per slice — `nextOpen` contains a loop — and now caches
+the next boundary until the clock reaches it.
+
+That is the third performance regression in this phase from the same cause, after the arrival queue's
+sort. The invariance test is doing double duty as a performance guard, because it is the only test
+that runs the engine at its finest step size; it now has an explicit thirty-second budget rather than
+being quietly shortened, since a sixtieth of a second is the live view's real frame interval and
+shortening the span would lose the finest step the engine is ever asked for.
+
+**Verification.** 15 new tests, 229 in total. Reason correctness for each of the five, the four
+non-absorbing properties, stall reporting once rather than per pass, an ordinary overnight pause not
+counting as a stall, and three no-stall properties over five simulated weeks: nothing waits past the
+abandonment rule, no job is left in progress without an operator, and no machine is claimed by a job
+that is not running.

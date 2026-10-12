@@ -13,7 +13,7 @@
  * metrics and Phase 4's verdict card are new consumers of this stream, not new
  * branches inside the simulation.
  */
-import type { EquipmentId, JobId, Skill, StaffId } from '../domain/types';
+import type { BlockReason, EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 
 export type RejectionReason =
   | 'not-idle'
@@ -73,6 +73,20 @@ export type EngineEvent =
       staffId: StaffId;
       staffName: string;
       nextStep: string;
+    }
+  /**
+   * Nothing has moved this job for a long time, and here is what is in the way.
+   *
+   * Reported once per continuous block. Changes nothing — it exists so that a
+   * run which fails by doing nothing says so, rather than looking like a
+   * working run with a disappointing result.
+   */
+  | {
+      type: 'job-stalled';
+      jobId: JobId;
+      name: string;
+      reason: BlockReason;
+      blockedForMinutes: number;
     }
   /** The client gave up. Nothing is charged; the work is simply not paid for. */
   | { type: 'job-expired'; jobId: JobId; name: string; workingDaysLate: number }

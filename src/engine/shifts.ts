@@ -25,6 +25,7 @@
 import type { Staff } from '../domain/types';
 import { isWithinShift, nextCalendarBoundary } from './calendar';
 import type { EngineEvent } from './events';
+import { EPSILON } from './geometry';
 import { releaseJobOf } from './jobs';
 import type { WorldState } from './world';
 
@@ -97,14 +98,21 @@ function sendHome(world: WorldState, person: Staff, events: EngineEvent[]): void
  * time, which is eight hours of work nobody did.
  */
 export function nextShiftEventIn(world: WorldState): number {
-  let soonest = Infinity;
-  // Every distinct shift, because a part-timer leaving at noon is an instant
-  // the loop has to land on just as much as the lab closing at four.
-  for (const person of world.staff) {
-    const next = nextCalendarBoundary(person.shift, world.simMinutes) - world.simMinutes;
-    if (next > 0 && next < soonest) soonest = next;
+  // Cached until the clock reaches it. Working this out walks the calendar day
+  // by day — `nextOpen` has a loop — once per person, and the slice loop asks
+  // on every slice: a million times for four simulated hours. Unthrottled it
+  // took the step-size invariance test from two seconds to over seven.
+  if (world.simMinutes >= world.nextShiftBoundaryAtMinute - EPSILON) {
+    let soonest = Infinity;
+    // Every distinct shift, because a part-timer leaving at noon is an instant
+    // the loop has to land on just as much as the lab closing at four.
+    for (const person of world.staff) {
+      const at = nextCalendarBoundary(person.shift, world.simMinutes);
+      if (at > world.simMinutes + EPSILON && at < soonest) soonest = at;
+    }
+    world.nextShiftBoundaryAtMinute = soonest;
   }
-  return soonest;
+  return world.nextShiftBoundaryAtMinute - world.simMinutes;
 }
 
 /** Whether the building is open at all. Individual shifts may be shorter. */

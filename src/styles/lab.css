@@ -688,3 +688,19 @@ body.sandbox-mode {
   white-space: nowrap;
   align-self: center;
 }
+
+/* Why the queue is not moving. Deliberately plain sentences rather than a
+   chart: the manager's question is which one to fix first. */
+.queue-holdups {
+  margin: 0.5rem 0 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.queue-holdup {
+  font-size: 0.8rem;
+  color: #92400e;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+}

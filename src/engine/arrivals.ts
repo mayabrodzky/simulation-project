@@ -143,5 +143,7 @@ function makeJob(
     completedAtMinute: null,
     settledRevenue: 0,
     blockReason: null,
+    blockedSinceMinute: null,
+    stallReported: false,
   };
 }

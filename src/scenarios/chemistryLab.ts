@@ -89,6 +89,11 @@ const tuning: Tuning = {
   // assumption to put to the lab manager, not a fact — see
   // docs/product-spec.md section 7.
   abandonAfterWorkingDays: 3,
+
+  // Two full days of nothing happening to a job. Long enough that an ordinary
+  // overnight pause or a wait for a busy instrument does not trip it, short
+  // enough to notice within a simulated week.
+  stalledAfterHours: 48,
 };
 
 /**

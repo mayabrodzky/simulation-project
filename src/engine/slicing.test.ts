@@ -121,9 +121,16 @@ function run(totalMinutes: number, stepMinutes: number, assignWork = false): Wor
 describe('a coarse step agrees with a fine one', () => {
   const TOTAL = 240; // four simulated hours
 
+  // A longer budget than the default five seconds, on purpose. A sixtieth of a
+  // second is the live view's actual frame interval, so this runs the engine
+  // 864,000 times — four simulated hours of somebody watching. Each pass now
+  // walks the jobs, the staff and the equipment, which it did not have to do
+  // when this test was written, and the honest response to it taking eight
+  // seconds is to allow eight seconds rather than to shorten the span and lose
+  // the finest step size the engine is ever asked for.
   it('at a sixtieth of a second against a minute', () => {
     expectAgrees(run(TOTAL, 1 / 3600), run(TOTAL, 1));
-  });
+  }, 30_000);
 
   it('at a minute against a quarter of an hour', () => {
     expectAgrees(run(TOTAL, 1), run(TOTAL, 15));

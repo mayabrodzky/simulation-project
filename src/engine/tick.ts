@@ -11,7 +11,7 @@
 import type { ActiveEmergency, Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
 import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './geometry';
-import { expireAbandonedJobs, nextJobEventIn, tickJobs } from './jobs';
+import { expireAbandonedJobs, nextJobEventIn, recomputeBlockReasons, tickJobs } from './jobs';
 import { applyShiftWindow, nextShiftEventIn } from './shifts';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
@@ -258,8 +258,8 @@ function applySlice(
   // the whole point of the change.
   tickJobs(world, dt, events);
 
-  // People arrive and leave *last*, after the slice they were present for has
-  // been paid for.
+  // People arrive and leave after the slice they were present for has been
+  // paid for.
   //
   // This was the other way round and it lost work. A slice clamped to end at
   // 16:00 lies entirely inside working hours, so every minute of it counts —
@@ -271,6 +271,16 @@ function applySlice(
   // Same rule as A2: whatever was true during a slice is charged for that
   // slice before anything changes.
   if (!options.freezeClock) applyShiftWindow(world, events);
+
+  // Why anything is not moving, computed from scratch once everything else has
+  // settled — it is derived state, so it goes after every change rather than
+  // among them. Computed before the shift window, it reported "everyone is
+  // busy" at eight in the morning, when in fact nobody had arrived yet.
+  //
+  // Advisory only: a blocked job is still `waiting` to every other rule, which
+  // is what stops it being an absorbing state and the simulation deadlocking
+  // quietly.
+  recomputeBlockReasons(world, events);
 }
 
 function raiseEmergency(world: WorldState, events: EngineEvent[]): void {
