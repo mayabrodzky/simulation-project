@@ -75,6 +75,22 @@ export type EngineEvent =
       nextStep: string;
     }
   /**
+   * The operator has finished their part and the instrument is now running
+   * alone. They are free from this instant, which is the point of reporting it:
+   * an instrument being the constraint is a different sentence from its
+   * scientist being the constraint.
+   */
+  | {
+      type: 'job-unattended';
+      jobId: JobId;
+      name: string;
+      staffId: StaffId;
+      staffName: string;
+      minutes: number;
+    }
+  /** An unattended run finished and the instrument is free again. */
+  | { type: 'job-off-instrument'; jobId: JobId; name: string; stepsLeft: number }
+  /**
    * Nothing has moved this job for a long time, and here is what is in the way.
    *
    * Reported once per continuous block. Changes nothing — it exists so that a

@@ -1677,3 +1677,118 @@ non-absorbing properties, stall reporting once rather than per pass, an ordinary
 counting as a stall, and three no-stall properties over five simulated weeks: nothing waits past the
 abandonment rule, no job is left in progress without an operator, and no machine is claimed by a job
 that is not running.
+
+---
+
+## 27. Instrument time, operator time, and capacity as a count
+
+Two planned steps in one commit, because instrument time only means anything once instruments have
+counts.
+
+**A step now asks for a capability, not a machine by name.** This retires the most consequential
+limitation carried out of Phase 1: matching by name made capacity a *name* rather than a count, so the
+shop sold "Microscope B" that no step asked for and buying a second instrument could never relieve
+anything. A step asks for `microscopy`; any instrument offering it will do. The catalogue now sells a
+second of something the lab actually uses, and a purchase is numbered after the instruments already
+there rather than duplicating a name.
+
+Three ideas that are easy to conflate and are now distinct:
+
+- **Capability** — what an instrument can do, and what a step asks for.
+- **Count** — how many the lab owns. *This is the decision.*
+- **Capacity** — how many jobs one instrument holds at once. *This is physics.* Without it the model
+  **jams** rather than queueing: twelve cell cultures at 48 hours each is 576 instrument-hours a week
+  against 168 calendar hours, which no count can satisfy if each instrument takes one job. An
+  incubator holds eight; a PCR block holds two; a centrifuge holds one.
+
+**A step has an attended phase and an unattended one.** Mass spectrometry is 60 minutes of preparation
+and then 90 minutes of the instrument running alone, and `resourceHeldDuring` says which phases hold
+the instrument. Mass-spec preparation holds nothing, which is what makes the specification's own
+arithmetic possible: 30 jobs x 90 min is 45 instrument-hours a week, where holding it during
+preparation too would be 75 and the lab would be structurally broken rather than tight.
+
+At the handover the operator is **released in the same slice** and is immediately dispatchable. That
+is the whole point: an instrument can be the lab's constraint without its scientist being one.
+
+**Unattended time ignores the calendar**, and needs no code to do so — only the absence of a shift
+check. A 48-hour incubation started on Thursday afternoon finishes on Saturday with nobody in the
+building. `tickUnattended` runs before everything else in a slice and is not conditioned on anybody
+being present.
+
+### The bug this introduced, and why it was invisible
+
+After the change, throughput fell to **zero over four simulated days** while the backlog filled.
+
+`tickUnattended` advanced `stepIndex` past the end of a job's step list and set the job back to
+`waiting` instead of settling it. The last step of a job can be completed by an *instrument*, with
+nobody attached — and mass spectrometry is a single step whose final phase is unattended, so every one
+of the thirty a week reached the end of its work and was never finished.
+
+What made it bad was not the leak but the camouflage. A job with no current step:
+
+- had **no block reason**, because the reason computation skips a job with no step — so nothing
+  reported it;
+- reported itself **qualified for everybody**, because a missing step requires no skill;
+- **sorted to the front** of the queue, having the oldest deadline;
+- and then had every assignment attempt **refused**, because `canOperate` correctly says nobody can do
+  a step that does not exist.
+
+So the queue filled with work that could not be done, could not be finished, and could not be seen,
+and it crowded out everything that could. Every individual rule was behaving exactly as specified.
+
+Two fixes, deliberately both: `settle` now takes an optional operator so an instrument can finish a
+job, and `listAssignableJobs` refuses to offer a job with no current step. Either alone would have hidden
+the other.
+
+**This is the third aggregate-only defect in this phase**, and the second found by a throwaway script
+rather than a test. All 229 tests passed throughout. The pattern is consistent enough to state: these
+bugs live in the *interaction* between a lifecycle and a queue, they present as a trend rather than a
+wrong value, and nothing that examines one job can see them.
+
+### What the lab looks like now
+
+Four simulated weeks, naive assignment, against 186 hours of work offered and 280 contracted:
+
+```
+completed 119/wk of ~162 arriving, 0 expired, backlog 164
+hands-on  137.0 h/wk
+```
+
+Instrument busy time, with the denominator that matters:
+
+| Instrument | Busy | vs ~40 h attended availability |
+|---|---|---|
+| Centrifuge | 37.9 h/wk | **95%** |
+| Microscope | 34.4 h/wk | **86%** |
+| Biosafety Cabinet | 22.3 h/wk | 56% |
+| Spectrophotometer | 20.4 h/wk | 51% |
+| Mass Spectrometer | 24.3 h/wk | 14% of 168 h |
+| PCR Machine | 40.2 h/wk | 12% of 336 slot-h |
+| Incubator | 143.6 h/wk | 11% of 1344 slot-h |
+
+**The centrifuge and the microscope bind. The mass spectrometer does not.** And the reason is worth
+stating precisely, because it is a disagreement with the specification rather than an error in
+transcribing it.
+
+The spec's bottleneck claim is 30 jobs x 90 minutes = 45 instrument-hours a week. Whether that binds
+depends entirely on the denominator. Against a 40-hour working week it is 112% and the instrument is
+the lab's hard limit. Against 168 calendar hours — which is what the model now gives it, because an
+unattended run continues overnight — it is 27% and the instrument is barely warm.
+
+Blood panels, meanwhile, are 80 a week and both their steps are attended-only, so they compete for a
+single centrifuge and a single microscope inside the working week: 80 x 25 min is 33 hours against
+roughly 40 available.
+
+So there is a real modelling question, and it is not one to settle unilaterally: **does a mass-spec run
+left in the instrument overnight keep the instrument occupied until somebody unloads it?** If it does,
+availability is the working week and the spec is right. If it does not, the spec's bottleneck is not a
+bottleneck, which is a finding worth more than the assumption. Recorded in `docs/product-spec.md` as an
+open question, and A7's audit reports utilisation against both denominators rather than picking one.
+
+**Verification.** 13 new tests, 242 in total: the scientist released at handover, the instrument not
+held during preparation, a second job preparing while the first instrument runs, an incubation
+finishing over a weekend with an empty building, attended work not advancing out of hours, the
+instrument freed when the run ends rather than when someone returns, a count expanding into separate
+instruments with separate wear, one instrument serialising two jobs where two overlap them, shelves
+letting several jobs share one instrument, the catalogue selling capability the work asks for, a bought
+instrument numbered after the existing ones, and no instrument ever holding a job that has finished.

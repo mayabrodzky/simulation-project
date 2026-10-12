@@ -70,6 +70,9 @@ export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario 
             x: f.x + 3 + (i % 5) * 2.5,
             y: f.y + 2 + Math.floor(i / 5) * 4,
             skill: null,
+            capabilities: ['general'],
+            count: 1,
+            capacity: 1,
           }))
         : chemistryLab.equipment,
 
@@ -88,15 +91,47 @@ export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario 
               variation: DEFAULT_VARIATION,
               basePrice: t.reward ?? DEFAULT_REWARD,
               dueWorkingDays: DEFAULT_DUE_WORKING_DAYS,
-              steps: [{ name: 'Workstation', duration, skillRequired: null }],
+              steps: [
+                {
+                  capability: 'general',
+                  skillRequired: null,
+                  attended: duration,
+                  unattended: 0,
+                  resourceHeldDuring: 'both' as const,
+                },
+              ],
             };
           })
         : chemistryLab.workTypes,
 
     catalog: [
-      { id: 'cat001', name: 'Workstation', icon: '💼', cost: 1000, skill: null },
-      { id: 'cat002', name: 'Meeting Room', icon: '🪑', cost: 2000, skill: null },
-      { id: 'cat003', name: 'Storage Unit', icon: '🗄️', cost: 500, skill: null },
+      {
+        id: 'cat001',
+        name: 'Workstation',
+        capabilities: ['general'],
+        capacity: 1,
+        icon: '💼',
+        cost: 1000,
+        skill: null,
+      },
+      {
+        id: 'cat002',
+        name: 'Meeting Room',
+        capabilities: ['meeting'],
+        capacity: 1,
+        icon: '🪑',
+        cost: 2000,
+        skill: null,
+      },
+      {
+        id: 'cat003',
+        name: 'Storage Unit',
+        capabilities: ['storage'],
+        capacity: 1,
+        icon: '🗄️',
+        cost: 500,
+        skill: null,
+      },
     ],
   };
 }

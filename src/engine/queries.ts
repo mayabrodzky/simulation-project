@@ -133,7 +133,11 @@ export function queueByWorkType(world: WorldState): QueueLineView[] {
       waiting: waiting.length,
       overdue: waiting.filter((job) => job.dueAtMinute < world.simMinutes).length,
       soonestDueInMinutes: soonest === null ? null : soonest - world.simMinutes,
-      minutesEach: workType.steps.reduce((total, step) => total + step.duration, 0),
+      // Hands-on minutes only. The instrument may hold a job for far longer -
+      // a cell culture is three hours of work and two days of incubation - and
+      // conflating them would make the queue look five times heavier than the
+      // people time it actually needs.
+      minutesEach: workType.steps.reduce((total, step) => total + step.attended, 0),
       priceEach: workType.basePrice,
     };
   });
@@ -303,34 +307,40 @@ export function listActiveWork(world: WorldState): ActiveWorkView[] {
  * buying, and a shorter list would hide the reason the lab is stuck.
  */
 export function listAssignableJobs(world: WorldState, person: Staff): AssignableJobView[] {
-  return world.jobs
-    .filter((job) => isWaiting(job.status))
-    .slice()
-    .sort((a, b) => a.dueAtMinute - b.dueAtMinute || a.id.localeCompare(b.id))
-    .map((job) => {
-      const remaining = job.steps.slice(job.stepIndex);
-      // Against the *current* step only: a job moves between specialists at
-      // each step boundary, so being able to start it is the question.
-      const step = job.steps[job.stepIndex];
-      const needed = step?.skillRequired ?? null;
-      const missing = needed !== null && !person.skills.includes(needed) ? [needed] : [];
-      return {
-        id: job.id,
-        name: job.name,
-        dueInMinutes: job.dueAtMinute - world.simMinutes,
-        minutesOfWork: remaining.reduce((sum, s) => sum + s.remaining, 0),
-        nextStep: step?.name ?? '',
-        price: job.basePrice,
-        qualified: missing.length === 0,
-        missingSkills: missing,
-        // Any work at all, not just a completed step. This was `stepIndex > 0`,
-        // which detects progress only across a step *boundary* — so a
-        // single-step job 86% finished reported itself as untouched, and mass
-        // spectrometry is a quarter of what the lab sells. The one signal for
-        // "has anyone worked on this?" was wrong for all of it.
-        partlyDone: hasBeenStarted(job),
-      };
-    });
+  return (
+    world.jobs
+      // A job with no current step has nothing anybody can do to it, and should
+      // never have been offered. Listing one reported it as *qualified* for
+      // everybody - a missing step requires no skill - so it sorted to the front
+      // of the queue on age and every attempt to take it was refused.
+      .filter((job) => isWaiting(job.status) && job.stepIndex < job.steps.length)
+      .slice()
+      .sort((a, b) => a.dueAtMinute - b.dueAtMinute || a.id.localeCompare(b.id))
+      .map((job) => {
+        const remaining = job.steps.slice(job.stepIndex);
+        // Against the *current* step only: a job moves between specialists at
+        // each step boundary, so being able to start it is the question.
+        const step = job.steps[job.stepIndex];
+        const needed = step?.skillRequired ?? null;
+        const missing = needed !== null && !person.skills.includes(needed) ? [needed] : [];
+        return {
+          id: job.id,
+          name: job.name,
+          dueInMinutes: job.dueAtMinute - world.simMinutes,
+          minutesOfWork: remaining.reduce((sum, s) => sum + s.remaining, 0),
+          nextStep: step?.capability ?? '',
+          price: job.basePrice,
+          qualified: missing.length === 0,
+          missingSkills: missing,
+          // Any work at all, not just a completed step. This was `stepIndex > 0`,
+          // which detects progress only across a step *boundary* — so a
+          // single-step job 86% finished reported itself as untouched, and mass
+          // spectrometry is a quarter of what the lab sells. The one signal for
+          // "has anyone worked on this?" was wrong for all of it.
+          partlyDone: hasBeenStarted(job),
+        };
+      })
+  );
 }
 
 /**

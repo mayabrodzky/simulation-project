@@ -152,7 +152,7 @@ Keep the engine domain-agnostic (resources, capabilities, work types, events); e
 
 ### Added while building the model (Phase 2)
 
-Four modelling assumptions that this spec does not settle, where a reading had to be chosen to
+Five modelling assumptions that this spec does not settle, where a reading had to be chosen to
 write the code. Each is a `Tuning` value or a scenario field, so a different answer is a data change
 rather than a rewrite.
 
@@ -183,7 +183,24 @@ rather than a rewrite.
    Worth confirming, because it shifts every deadline in the simulation by a day and so changes how
    much work is late.
 
-10. **How are the hands-on minutes split across the steps of a job?** The spec gives a total per work
+10. **Does an instrument stay occupied until someone unloads it?** This decides whether the mass
+   spectrometer is the bottleneck this spec says it is, and the answer is not in the document.
+
+   The claim is 30 jobs x 90 minutes = 45 instrument-hours a week. Against a 40-hour working week
+   that is 112% and the instrument is the lab's hard limit. Against 168 calendar hours — which is
+   what the model gives it, since an unattended run continues overnight — it is 27% and the
+   instrument is barely warm. Modelled as **the instrument is free the moment its run ends**, which
+   is the generous reading.
+
+   Simulated four weeks under that reading, the centrifuge (95% of attended availability) and the
+   microscope (86%) bind instead, because blood panels are 80 a week and both their steps need a
+   person present. If a finished run instead sits in the instrument until morning, availability
+   becomes the working week and the spec is right.
+
+   The most valuable question in this list, because the answer either confirms the premise the
+   scenario is built on or replaces it with a different and more actionable one.
+
+11. **How are the hands-on minutes split across the steps of a job?** The spec gives a total per work
    type, not a per-step breakdown — but the split decides which instrument is the bottleneck. The
    numbers chosen reproduce this spec's own claim that mass spec binds first; a different split makes
    the microscope bind instead. This is the single assumption most worth checking, because it

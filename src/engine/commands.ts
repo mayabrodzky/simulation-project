@@ -319,14 +319,26 @@ function buyEquipment(world: WorldState, catalogId: string, events: EngineEvent[
 
   // A fresh id rather than the array length, which collides after a removal.
   const id = world.equipment.reduce((max, e) => Math.max(max, e.id), -1) + 1;
+  // Numbered by how many of this kind the lab already has, so a second
+  // microscope is "Microscope 2" rather than a duplicate of the first name.
+  // Buying one in the sandbox used to produce two entries called "Microscope B"
+  // of which only the first was ever selected.
+  const sameKind = world.equipment.filter((e) =>
+    item.capabilities.every((c) => e.capabilities.includes(c)),
+  );
   world.equipment.push({
     id,
-    name: item.name,
+    name: `${item.name} ${sameKind.length + 1}`,
+    instance: sameKind.length + 1,
     icon: item.icon,
     skill: item.skill,
+    capabilities: [...item.capabilities],
+    count: 1,
+    capacity: item.capacity,
     x: spot.x,
     y: spot.y,
     condition: 100,
+    heldBy: [],
     inUse: false,
     assignedTo: null,
     totalWorkTime: 0,

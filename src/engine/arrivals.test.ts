@@ -180,7 +180,7 @@ describe('the volume matches the scenario', () => {
     // strongest available check that the calibration was transcribed rather
     // than invented: a wrong duration anywhere shows up here.
     const minutes = chemistryLab.workTypes.reduce(
-      (total, w) => total + w.perWeek * w.steps.reduce((t, step) => t + step.duration, 0),
+      (total, w) => total + w.perWeek * w.steps.reduce((t, step) => t + step.attended, 0),
       0,
     );
     expect(minutes / 60).toBeCloseTo(186, 1);
@@ -189,8 +189,8 @@ describe('the volume matches the scenario', () => {
   it('asks for the mass spectrometer, which no work used to', () => {
     // Phase 1 recorded that bought equipment could never relieve a bottleneck,
     // because no task named a machine the shop sold. This is the fix.
-    const names = chemistryLab.workTypes.flatMap((w) => w.steps.map((s) => s.name));
-    expect(names).toContain('Mass Spectrometer');
+    const names = chemistryLab.workTypes.flatMap((w) => w.steps.map((s) => s.capability));
+    expect(names).toContain('mass-spec');
   });
 });
 

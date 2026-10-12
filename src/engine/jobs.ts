@@ -26,7 +26,16 @@ import type { EngineEvent } from './events';
 // this module: a cycle would resolve at runtime and is not worth relying on.
 import { isWithinShift } from './calendar';
 import { EPSILON, hasArrivedAt, hasReached } from './geometry';
-import { findEquipmentByName, findStaff, type WorldState } from './world';
+import {
+  allBusyFor,
+  allocate,
+  claim,
+  existsFor,
+  hasFreeSlot,
+  instrumentsFor,
+  releaseSlots,
+} from './resources';
+import { findStaff, type WorldState } from './world';
 
 /** Statuses from which a job can still be picked up. */
 export function isOpen(job: Job): boolean {
@@ -67,6 +76,9 @@ export function jobOf(world: WorldState, person: Staff): Job | undefined {
  * step, and a job changes hands when it has to.
  */
 export function canDoStep(person: Staff, step: JobStep | undefined): boolean {
+  // No step means nothing to do, which is not the same as anybody being able
+  // to do it. Both callers depend on that: one refuses the assignment and the
+  // other decides whether to offer it.
   if (!step) return false;
   return step.skillRequired === null || person.skills.includes(step.skillRequired);
 }
@@ -131,18 +143,26 @@ export function releaseJobOf(world: WorldState, person: Staff): Job | undefined 
 }
 
 function releaseMachine(world: WorldState, job: Job): void {
-  if (job.equipmentId === null) return;
-  const machine = world.equipment.find((e) => e.id === job.equipmentId);
-  if (machine) {
-    machine.inUse = false;
-    machine.assignedTo = null;
-  }
+  releaseSlots(world, job.id);
   job.equipmentId = null;
 }
 
+/**
+ * Where the current step would be done.
+ *
+ * The instrument this job already holds if it holds one, otherwise any free
+ * instrument offering the capability, otherwise the first that offers it at all
+ * - so somebody walks to a busy instrument and waits there, which makes
+ * contention visible on the floor rather than only in a number.
+ */
 function currentStepMachine(world: WorldState, job: Job): Equipment | undefined {
   const step = job.steps[job.stepIndex];
-  return step ? findEquipmentByName(world, step.name) : undefined;
+  if (!step) return undefined;
+  if (job.equipmentId !== null) {
+    const held = world.equipment.find((e) => e.id === job.equipmentId);
+    if (held) return held;
+  }
+  return allocate(world, step.capability) ?? instrumentsFor(world, step.capability)[0];
 }
 
 function walkToCurrentStep(world: WorldState, person: Staff, job: Job): void {
@@ -151,8 +171,8 @@ function walkToCurrentStep(world: WorldState, person: Staff, job: Job): void {
     person.targetX = machine.x;
     person.targetY = machine.y;
   } else {
-    // A step naming a machine that does not exist is done on the spot, which is
-    // how the original behaved. It keeps a mis-specified scenario from
+    // A step asking for a capability the lab does not have is done on the spot,
+    // which is how the original behaved. It keeps a mis-specified scenario from
     // deadlocking; A7 reports it as a scenario error instead of hiding it.
     person.targetX = null;
     person.targetY = null;
@@ -237,7 +257,7 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
   }
 
   if (operator.state !== 'working') {
-    startStep(world, job, operator, step.name);
+    startStep(world, job, operator, step);
     return;
   }
 
@@ -247,6 +267,17 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
   // Clamped to zero rather than left at float dust, so a step that is finished
   // reads as finished everywhere, including in a progress bar.
   step.remaining = 0;
+
+  // The attended phase is over. If the instrument still has work to do alone,
+  // the operator is released *now* and is dispatchable in the same slice, while
+  // the job stays alive with its instrument running. This is the whole point of
+  // the split: a mass spectrometer can be the lab's bottleneck without its
+  // scientist being one.
+  if (step.unattendedRemaining > EPSILON) {
+    handOverToInstrument(world, job, operator, step, events);
+    return;
+  }
+
   releaseMachine(world, job);
   job.stepIndex += 1;
 
@@ -266,7 +297,7 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
       name: job.name,
       staffId: operator.id,
       staffName: operator.name,
-      nextStep: job.steps[job.stepIndex]?.name ?? '',
+      nextStep: job.steps[job.stepIndex]?.capability ?? '',
     });
     release(world, job);
     return;
@@ -282,15 +313,21 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
  * Returns without starting when the operator is still walking, or when the
  * machine is busy — in which case they stand and wait. A3c names that wait.
  */
-function startStep(world: WorldState, job: Job, operator: Staff, machineName: string): void {
-  const machine = findEquipmentByName(world, machineName);
+function startStep(world: WorldState, job: Job, operator: Staff, step: JobStep): void {
+  // A step that holds its instrument only while running unattended needs none
+  // during preparation - mass-spec prep is sixty minutes at a bench, and
+  // charging the instrument for it would make the spec's own numbers infeasible.
+  const needsInstrumentNow = step.resourceHeldDuring !== 'unattended';
 
-  if (machine) {
+  if (existsFor(world, step.capability)) {
+    const machine = currentStepMachine(world, job);
+    if (!machine) return;
     if (!hasArrivedAt(operator, machine)) return;
-    if (machine.inUse && machine.assignedTo !== operator.id) return;
-    machine.inUse = true;
-    machine.assignedTo = operator.id;
-    job.equipmentId = machine.id;
+
+    if (needsInstrumentNow && job.equipmentId !== machine.id) {
+      if (!hasFreeSlot(machine)) return; // stand and wait; A3c names why
+      claim(world, machine, job);
+    }
   }
 
   operator.targetX = null;
@@ -298,7 +335,156 @@ function startStep(world: WorldState, job: Job, operator: Staff, machineName: st
   operator.state = 'working';
 }
 
-function settle(world: WorldState, job: Job, operator: Staff, events: EngineEvent[]): void {
+/**
+ * Hands the step over to the instrument and gives the person back.
+ *
+ * The job becomes `unattended`: alive, holding its instrument, with nobody
+ * attached. Its unattended minutes then run on the instrument's clock, which is
+ * not a person's - through nights and weekends, with no overnight special case
+ * anywhere.
+ */
+function handOverToInstrument(
+  world: WorldState,
+  job: Job,
+  operator: Staff,
+  step: JobStep,
+  events: EngineEvent[],
+): void {
+  // A step that only holds its instrument unattended claims it at this moment,
+  // not before. If none is free the job waits here with the work prepped and
+  // the operator already released - and *that queue is the bottleneck*, the one
+  // state in the machine that represents it.
+  if (step.resourceHeldDuring !== 'attended' && existsFor(world, step.capability)) {
+    if (job.equipmentId === null) {
+      const machine = allocate(world, step.capability);
+      if (!machine) {
+        // Prepped and waiting for an instrument. The operator goes free anyway:
+        // keeping them standing over finished preparation is exactly the
+        // confusion between people and instruments this step removes.
+        detachOperator(job, operator);
+        job.status = 'waiting';
+        return;
+      }
+      claim(world, machine, job);
+    }
+  } else {
+    releaseMachine(world, job);
+  }
+
+  detachOperator(job, operator);
+  job.status = 'unattended';
+  events.push({
+    type: 'job-unattended',
+    jobId: job.id,
+    name: job.name,
+    staffId: operator.id,
+    staffName: operator.name,
+    minutes: step.unattendedRemaining,
+  });
+}
+
+/** Frees the person without touching the job's instrument or its counters. */
+function detachOperator(job: Job, operator: Staff): void {
+  job.operatorId = null;
+  operator.jobId = null;
+  operator.state = 'idle';
+  operator.targetX = null;
+  operator.targetY = null;
+}
+
+/**
+ * Advances every instrument running on its own.
+ *
+ * The one clock in the simulation that no shift bounds. A 48-hour incubation
+ * started on Thursday afternoon finishes on Saturday whether or not anybody is
+ * in the building, and that needs no overnight code - only the absence of a
+ * shift check.
+ */
+export function tickUnattended(world: WorldState, dt: number, events: EngineEvent[]): void {
+  for (const job of world.jobs) {
+    if (job.status !== 'unattended') continue;
+
+    const step = job.steps[job.stepIndex];
+    if (!step) {
+      job.status = 'waiting';
+      continue;
+    }
+
+    // Still waiting for a free instrument rather than running on one.
+    if (step.resourceHeldDuring !== 'attended' && job.equipmentId === null) {
+      if (!existsFor(world, step.capability)) {
+        job.status = 'waiting';
+        continue;
+      }
+      const machine = allocate(world, step.capability);
+      if (!machine) continue;
+      claim(world, machine, job);
+    }
+
+    step.unattendedRemaining -= dt;
+    if (step.unattendedRemaining > EPSILON) continue;
+
+    step.unattendedRemaining = 0;
+    releaseMachine(world, job);
+    job.stepIndex += 1;
+
+    events.push({
+      type: 'job-off-instrument',
+      jobId: job.id,
+      name: job.name,
+      stepsLeft: job.steps.length - job.stepIndex,
+    });
+
+    // The instrument may have finished the *last* step, in which case the job
+    // is done and nobody is attached to it. Parking it as `waiting` instead
+    // left it permanently unfinishable - see settle.
+    if (job.stepIndex >= job.steps.length) {
+      settle(world, job, undefined, events);
+      continue;
+    }
+
+    job.status = 'waiting';
+  }
+}
+
+/** Minutes until the soonest unattended run finishes. */
+export function nextUnattendedEventIn(world: WorldState): number {
+  let soonest = Infinity;
+  for (const job of world.jobs) {
+    if (job.status !== 'unattended') continue;
+    const step = job.steps[job.stepIndex];
+    if (!step || job.equipmentId === null) continue;
+    if (step.unattendedRemaining > EPSILON && step.unattendedRemaining < soonest) {
+      soonest = step.unattendedRemaining;
+    }
+  }
+  return soonest;
+}
+
+/**
+ * Finishes and pays for a job.
+ *
+ * The operator is optional, and that is the whole of a bug worth recording: the
+ * last step of a job can be completed by an *instrument*, with nobody attached.
+ * Mass spectrometry is a single step whose final phase runs unattended, so
+ * every one of the thirty a week reached the end of its work and was never
+ * settled - it went back to `waiting` with `stepIndex` past the end of its own
+ * step list.
+ *
+ * Those jobs were invisible in the worst way. With no current step they had no
+ * block reason, so nothing reported them; they reported themselves as
+ * *qualified* for everybody, because a missing step requires no skill; they
+ * sorted to the front of the queue by having the oldest deadline; and every
+ * assignment attempt was then refused. Throughput fell to zero over four
+ * simulated days while the backlog filled with work that could not be done,
+ * finished, or seen.
+ */
+function settle(
+  world: WorldState,
+  job: Job,
+  operator: Staff | undefined,
+  events: EngineEvent[],
+): void {
   // Tolerant the other way: finishing at the deadline is on time.
   const onTime = !hasReached(world.simMinutes, job.dueAtMinute + EPSILON);
 
@@ -315,10 +501,12 @@ function settle(world: WorldState, job: Job, operator: Staff, events: EngineEven
 
   releaseMachine(world, job);
   job.operatorId = null;
-  operator.jobId = null;
-  operator.state = 'idle';
-  operator.targetX = null;
-  operator.targetY = null;
+  if (operator) {
+    operator.jobId = null;
+    operator.state = 'idle';
+    operator.targetX = null;
+    operator.targetY = null;
+  }
 
   events.push({
     type: 'job-completed',
@@ -426,8 +614,7 @@ export function recomputeBlockReasons(world: WorldState, events: EngineEvent[]):
       continue;
     }
 
-    const machine = findEquipmentByName(world, step.name);
-    if (!machine) {
+    if (!existsFor(world, step.capability)) {
       setBlock(world, job, 'no-such-resource', events);
       continue;
     }
@@ -440,7 +627,9 @@ export function recomputeBlockReasons(world: WorldState, events: EngineEvent[]):
     // Somebody could do it, so what is in the way is either the instrument or
     // the people being busy elsewhere. Distinguishing the two is the whole
     // point: one is answered by leasing an instrument and the other by hiring.
-    if (machine.inUse) {
+    // Every instrument offering this capability is full. Distinct from the
+    // people being busy, and answered by a different decision.
+    if (allBusyFor(world, step.capability)) {
       setBlock(world, job, 'resource-busy', events);
       continue;
     }

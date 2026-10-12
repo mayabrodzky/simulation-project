@@ -11,7 +11,14 @@
 import type { ActiveEmergency, Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
 import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './geometry';
-import { expireAbandonedJobs, nextJobEventIn, recomputeBlockReasons, tickJobs } from './jobs';
+import {
+  expireAbandonedJobs,
+  nextJobEventIn,
+  nextUnattendedEventIn,
+  recomputeBlockReasons,
+  tickJobs,
+  tickUnattended,
+} from './jobs';
 import { applyShiftWindow, nextShiftEventIn } from './shifts';
 import type { EngineEvent } from './events';
 import type { Rng } from './rng';
@@ -139,6 +146,10 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
     // A step finishing, or a client giving up.
     inMinutes(nextJobEventIn(world));
 
+    // An instrument finishing a run on its own. Clamped like everything else,
+    // but deliberately not conditioned on the lab being open.
+    inMinutes(nextUnattendedEventIn(world));
+
     // The lab opening or closing. Stepping over a close means a shift that
     // ends at 16:00 ends at midnight in a batch run that steps a day at a
     // time, which is eight hours of work nobody did.
@@ -235,6 +246,11 @@ function applySlice(
 
     expireAbandonedJobs(world, events);
   }
+
+  // Instruments running on their own advance first, and are not conditioned on
+  // anybody being present: this is the one clock no shift bounds. A 48-hour
+  // incubation started on Thursday afternoon finishes on Saturday.
+  if (!options.freezeClock) tickUnattended(world, dt, events);
 
   // Machines are charged for the slice before people act in it. A slice is
   // clamped so that nothing starts or stops partway through, so whatever was

@@ -161,7 +161,7 @@ describe('cancelling a task mid-flight', () => {
    */
   function startTraining(world: WorldState) {
     const trainee = world.staff.find((p) => p.name === 'Amir Barzilay')!;
-    const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
+    const microscope = world.equipment.find((e) => e.name === 'Microscope')!;
     expect(trainee.skills).not.toContain('Microscopy');
     applyCommand(world, {
       type: 'START_TRAINING',
@@ -194,7 +194,7 @@ describe('cancelling a task mid-flight', () => {
   it('releases the machine the trainee was holding', () => {
     const world = createWorld(chemistryLab, SEED, 480);
     const trainee = startTraining(world);
-    const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
+    const microscope = world.equipment.find((e) => e.name === 'Microscope')!;
     // Walk her to the machine so the training actually starts.
     for (let i = 0; i < 400; i++) tick(world, 1 / 30);
     expect(microscope.inUse).toBe(true);

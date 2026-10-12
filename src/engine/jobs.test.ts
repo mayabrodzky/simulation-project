@@ -270,7 +270,7 @@ describe('an interruption costs nothing', () => {
     expect(job.steps[1]!.remaining).toBe(job.steps[1]!.total);
 
     const handover = events.find((e) => e.type === 'job-handed-over');
-    expect(handover).toMatchObject({ jobId: job.id, nextStep: 'Microscope A' });
+    expect(handover).toMatchObject({ jobId: job.id, nextStep: 'microscopy' });
 
     // And someone who cannot use a centrifuge finishes it.
     const finisher = available(world, 'Dr. Amit Katz');
@@ -313,7 +313,7 @@ describe('every kind of work the lab sells can actually be done', () => {
         );
         expect(
           canDo.length,
-          `${workType.name} / ${step.name} (${step.skillRequired})`,
+          `${workType.name} / ${step.capability} (${step.skillRequired})`,
         ).toBeGreaterThan(0);
       }
     }
@@ -354,12 +354,12 @@ describe('finishing', () => {
     for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) {
       advance(world, 0.5);
       const step = job.steps[job.stepIndex];
-      if (operator.state === 'working' && step && visited.at(-1) !== step.name) {
-        visited.push(step.name);
+      if (operator.state === 'working' && step && visited.at(-1) !== step.capability) {
+        visited.push(step.capability);
       }
     }
 
-    expect(visited).toEqual(['Centrifuge', 'Microscope A']);
+    expect(visited).toEqual(['centrifuge', 'microscopy']);
   });
 
   it('knows it was late when it finishes past its deadline', () => {

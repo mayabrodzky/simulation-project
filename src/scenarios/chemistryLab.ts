@@ -129,8 +129,20 @@ export const workTypes: WorkType[] = [
     basePrice: 180,
     dueWorkingDays: 2,
     steps: [
-      { name: 'Centrifuge', duration: 25, skillRequired: 'Centrifuge Usage' },
-      { name: 'Microscope A', duration: 20, skillRequired: 'Microscopy' },
+      {
+        capability: 'centrifuge',
+        skillRequired: 'Centrifuge Usage',
+        attended: 25,
+        unattended: 0,
+        resourceHeldDuring: 'both',
+      },
+      {
+        capability: 'microscopy',
+        skillRequired: 'Microscopy',
+        attended: 20,
+        unattended: 0,
+        resourceHeldDuring: 'both',
+      },
     ],
   },
   {
@@ -141,8 +153,22 @@ export const workTypes: WorkType[] = [
     basePrice: 650,
     dueWorkingDays: 5,
     steps: [
-      { name: 'PCR Machine', duration: 45, skillRequired: 'PCR Operation' },
-      { name: 'Spectrophotometer', duration: 45, skillRequired: 'Spectrophotometry' },
+      {
+        capability: 'pcr',
+        skillRequired: 'PCR Operation',
+        attended: 45,
+        // The cycler runs two hours on its own, and holds the block while it
+        // does, so the operator is free and the machine is not.
+        unattended: 120,
+        resourceHeldDuring: 'both',
+      },
+      {
+        capability: 'spectrophotometry',
+        skillRequired: 'Spectrophotometry',
+        attended: 45,
+        unattended: 0,
+        resourceHeldDuring: 'both',
+      },
     ],
   },
   {
@@ -153,9 +179,30 @@ export const workTypes: WorkType[] = [
     basePrice: 1400,
     dueWorkingDays: 7,
     steps: [
-      { name: 'Biosafety Cabinet', duration: 120, skillRequired: 'Biosafety Protocols' },
-      { name: 'Incubator', duration: 15, skillRequired: 'Incubator Handling' },
-      { name: 'Microscope A', duration: 45, skillRequired: 'Microscopy' },
+      {
+        capability: 'biosafety',
+        skillRequired: 'Biosafety Protocols',
+        attended: 120,
+        unattended: 0,
+        resourceHeldDuring: 'both',
+      },
+      {
+        capability: 'incubator',
+        skillRequired: 'Incubator Handling',
+        attended: 15,
+        // Forty-eight hours, running through nights and weekends. The one place
+        // the calendar must *not* apply, and it needs no special case: the
+        // instrument's clock is simply not a person's.
+        unattended: 2880,
+        resourceHeldDuring: 'both',
+      },
+      {
+        capability: 'microscopy',
+        skillRequired: 'Microscopy',
+        attended: 45,
+        unattended: 0,
+        resourceHeldDuring: 'both',
+      },
     ],
   },
   {
@@ -165,7 +212,20 @@ export const workTypes: WorkType[] = [
     variation: 0.2,
     basePrice: 900,
     dueWorkingDays: 5,
-    steps: [{ name: 'Mass Spectrometer', duration: 60, skillRequired: 'Mass Spectrometry' }],
+    steps: [
+      {
+        capability: 'mass-spec',
+        skillRequired: 'Mass Spectrometry',
+        // An hour of preparation that holds nobody's instrument, then ninety
+        // minutes of the instrument running alone. This single field is what
+        // makes the spec's bottleneck claim arithmetically possible: 30 jobs x
+        // 90 min is 45 instrument-hours a week. Held during preparation too it
+        // would be 75, and the lab would be broken rather than tight.
+        attended: 60,
+        unattended: 90,
+        resourceHeldDuring: 'unattended',
+      },
+    ],
   },
 ];
 
@@ -237,21 +297,108 @@ export const chemistryLab: Scenario = {
     },
   ],
 
+  // Counts from docs/product-spec.md section 3.3: one of everything. Capacity
+  // is separate and is physics rather than a decision — an incubator holds many
+  // plates at once, a centrifuge holds one run. Without it the model jams
+  // instead of queueing: twelve cell cultures at 48 hours each is 576
+  // instrument-hours a week against 168 calendar hours, infeasible at any
+  // *count* if each instrument takes one job.
   equipment: [
-    { name: 'Microscope A', icon: '🔬', x: f.x + 5, y: f.y + 2, skill: 'Microscopy' },
-    { name: 'Centrifuge', icon: '🌀', x: f.x + 7, y: f.y + 2, skill: 'Centrifuge Usage' },
-    { name: 'PCR Machine', icon: '🧬', x: f.x + 9, y: f.y + 2, skill: 'PCR Operation' },
-    { name: 'Incubator', icon: '🌡️', x: f.x + 11, y: f.y + 2, skill: 'Incubator Handling' },
-    { name: 'Spectrophotometer', icon: '📊', x: f.x + 5, y: f.y + 6, skill: 'Spectrophotometry' },
-    { name: 'Mass Spectrometer', icon: '⚗️', x: f.x + 7, y: f.y + 6, skill: 'Mass Spectrometry' },
-    { name: 'Flow Cytometer', icon: '💠', x: f.x + 9, y: f.y + 6, skill: 'Flow Cytometry' },
-    { name: 'Freezer -80°C', icon: '❄️', x: f.x + 1, y: f.y + 1.5, skill: 'Cryo Storage' },
+    {
+      name: 'Microscope',
+      icon: '🔬',
+      x: f.x + 5,
+      y: f.y + 2,
+      skill: 'Microscopy',
+      capabilities: ['microscopy'],
+      count: 1,
+      capacity: 1,
+    },
+    {
+      name: 'Centrifuge',
+      icon: '🌀',
+      x: f.x + 7,
+      y: f.y + 2,
+      skill: 'Centrifuge Usage',
+      capabilities: ['centrifuge'],
+      count: 1,
+      capacity: 1,
+    },
+    {
+      name: 'PCR Machine',
+      icon: '🧬',
+      x: f.x + 9,
+      y: f.y + 2,
+      skill: 'PCR Operation',
+      capabilities: ['pcr'],
+      count: 1,
+      // A thermal cycler runs a block of samples, so two jobs can share one.
+      capacity: 2,
+    },
+    {
+      name: 'Incubator',
+      icon: '🌡️',
+      x: f.x + 11,
+      y: f.y + 2,
+      skill: 'Incubator Handling',
+      capabilities: ['incubator'],
+      count: 1,
+      // Shelves. This is the number that makes a 48-hour incubation possible at
+      // all; see the arithmetic above.
+      capacity: 8,
+    },
+    {
+      name: 'Spectrophotometer',
+      icon: '📊',
+      x: f.x + 5,
+      y: f.y + 6,
+      skill: 'Spectrophotometry',
+      capabilities: ['spectrophotometry'],
+      count: 1,
+      capacity: 1,
+    },
+    {
+      name: 'Mass Spectrometer',
+      icon: '⚗️',
+      x: f.x + 7,
+      y: f.y + 6,
+      skill: 'Mass Spectrometry',
+      capabilities: ['mass-spec'],
+      count: 1,
+      capacity: 1,
+    },
     {
       name: 'Biosafety Cabinet',
       icon: '🛡️',
       x: f.x + 1,
       y: f.y + 3.5,
       skill: 'Biosafety Protocols',
+      capabilities: ['biosafety'],
+      count: 1,
+      capacity: 1,
+    },
+    // Neither of these is asked for by any work type. Kept because they are on
+    // the floor of the real lab and the renderer draws them; a scenario check
+    // reports unused instruments rather than treating them as an error.
+    {
+      name: 'Flow Cytometer',
+      icon: '💠',
+      x: f.x + 9,
+      y: f.y + 6,
+      skill: 'Flow Cytometry',
+      capabilities: ['flow-cytometry'],
+      count: 1,
+      capacity: 1,
+    },
+    {
+      name: 'Freezer -80°C',
+      icon: '❄️',
+      x: f.x + 1,
+      y: f.y + 1.5,
+      skill: 'Cryo Storage',
+      capabilities: ['cryo-storage'],
+      count: 1,
+      capacity: 4,
     },
   ],
 
@@ -268,10 +415,37 @@ export const chemistryLab: Scenario = {
     },
   ],
 
+  // What the shop sells is now a second *of* something the lab already uses,
+  // priced roughly as the spec's repair costs imply. Previously it sold three
+  // names no work type asked for, so a purchase added a sprite and no capacity.
   catalog: [
-    { id: 'cat001', name: 'Microscope B', icon: '🔬', cost: 1500, skill: 'Microscopy' },
-    { id: 'cat002', name: 'PCR Machine II', icon: '🧬', cost: 3000, skill: 'PCR Operation' },
-    { id: 'cat003', name: 'Auto-Sampler', icon: '🤖', cost: 5000, skill: 'Spectrophotometry' },
+    {
+      id: 'cat001',
+      name: 'Microscope',
+      icon: '🔬',
+      cost: 15000,
+      skill: 'Microscopy',
+      capabilities: ['microscopy'],
+      capacity: 1,
+    },
+    {
+      id: 'cat002',
+      name: 'Mass Spectrometer',
+      icon: '⚗️',
+      cost: 180000,
+      skill: 'Mass Spectrometry',
+      capabilities: ['mass-spec'],
+      capacity: 1,
+    },
+    {
+      id: 'cat003',
+      name: 'Centrifuge',
+      icon: '🌀',
+      cost: 12000,
+      skill: 'Centrifuge Usage',
+      capabilities: ['centrifuge'],
+      capacity: 1,
+    },
   ],
 
   props: [

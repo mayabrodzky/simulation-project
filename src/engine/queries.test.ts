@@ -96,7 +96,7 @@ describe('describeAssignment', () => {
     // the command would be refused as already-known and this would assert
     // nothing.
     const trainee = world.staff.find((p) => p.name === 'Amir Barzilay')!;
-    const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
+    const microscope = world.equipment.find((e) => e.name === 'Microscope')!;
     applyCommand(world, {
       type: 'START_TRAINING',
       staffId: trainee.id,

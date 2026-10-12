@@ -173,16 +173,35 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     };
   });
 
-  const equipment: Equipment[] = scenario.equipment.map((template, i) => ({
-    ...template,
-    id: i,
-    condition:
-      t.initialConditionMin +
-      createRng(deriveSeed(seed, `equipment:${i}`)).next() * t.initialConditionRange,
-    inUse: false,
-    assignedTo: null,
-    totalWorkTime: 0,
-  }));
+  // Counts expand into instances. Two mass spectrometers are two things that
+  // can run at once, each with its own id, wear and position — not one sprite
+  // drawn twice, which is what "capacity is a name" produced before.
+  //
+  // Condition is still derived per instance from its own stream, so adding a
+  // second instrument cannot change the first one's starting condition.
+  const equipment: Equipment[] = [];
+  scenario.equipment.forEach((template, typeIndex) => {
+    for (let instance = 0; instance < Math.max(1, template.count); instance++) {
+      const id = equipment.length;
+      const own = createRng(deriveSeed(seed, `equipment:${typeIndex}:${instance}`));
+      equipment.push({
+        ...template,
+        capabilities: [...template.capabilities],
+        id,
+        instance: instance + 1,
+        // Spread sideways so two of the same instrument are both visible. A
+        // real layout for multiple instruments is Phase 2.5's problem.
+        x: template.x + instance * 1.2,
+        y: template.y,
+        name: template.count > 1 ? `${template.name} ${instance + 1}` : template.name,
+        condition: t.initialConditionMin + own.next() * t.initialConditionRange,
+        heldBy: [],
+        inUse: false,
+        assignedTo: null,
+        totalWorkTime: 0,
+      });
+    }
+  });
 
   const world: WorldState = {
     scenarioId: scenario.id,
