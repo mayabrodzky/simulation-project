@@ -1878,3 +1878,128 @@ late job still paid full price, with a comment saying partial credit was coming 
 missed rush being worse than ordinary lateness, the 4:1 swing ratio, the premium paid in a running
 lab, nothing charged for work nobody reached, no finished job left unpriced, and three asserting that
 rush orders are ordinary jobs with no separate entity, queue or person-held state. 256 tests in total.
+
+---
+
+## 29. The load audit, and the first answer
+
+**Context.** Three defects in this phase have been visible only as a property of the whole lab over a
+week, and all three were found by a throwaway script rather than a test. The audit is the formal
+version of that script: load computed in closed form from the scenario alone, with no simulation, no
+randomness and no clock.
+
+It does two jobs. It refuses a scenario that cannot work before fifty runs are spent on it. And it
+gives an independent check on the engine — the arithmetic and the simulation should agree, and where
+they do not, one of them is wrong in a way neither could reveal alone.
+
+### Utilisation is reported against two denominators, on purpose
+
+This is the only honest way to handle the question the specification leaves open. An instrument doing
+attended work can only be used while somebody is in the building, about 40 hours a week. One running
+unattended continues through the night, so its availability is 168. Picking one denominator would
+settle by assumption the thing that most needs asking.
+
+```
+capability          inst-h/wk  slots   of working wk   of calendar wk
+  incubator            579.0      8           181%             43%
+  pcr                  110.0      2           138%             33%
+  mass-spec             45.0      1           113%             27%
+  microscopy            35.7      1            89%             21%
+  centrifuge            33.3      1            83%             20%
+  spectrophotometry     30.0      1            75%             18%
+  biosafety             24.0      1            60%             14%
+
+binding skill: PCR Operation at 38%
+```
+
+**No fatal errors.** Three capabilities read above 100% of the working week and all three are feasible
+*because* most of their time is unattended — which is exactly the distinction A4 introduced, now
+independently confirmed. Had `resourceHeldDuring` been wrong, the incubator at 181% would have been
+reported as impossible.
+
+**Among the instruments somebody has to stand next to, microscopy binds at 89%** — 80 blood panels at
+20 minutes plus 12 cell cultures at 45, against roughly 40 available hours. The simulation measured
+86% independently. That agreement between closed-form arithmetic and a run is the check this step
+exists for.
+
+**Skills top out at 38%.** People are no longer the constraint, which confirms the roster alignment
+was the fix and not a coincidence.
+
+The audit also warns rather than failing on things that are merely odd: the Flow Cytometer and the
+freezer are never used by any work type. They are on the floor of the real lab and the renderer draws
+them, so reporting beats treating silence as approval.
+
+### `npm run compare` — the first question answered
+
+Fifty runs, four simulated weeks, two cases, **the same fifty demand seeds for both**. Entirely
+headless, which is the return on the Phase 1 lint rule forbidding `window`, `Date` and `Math.random`
+under `src/engine`: the batch runner exists because that rule was enforced rather than remembered.
+Built for Node with a second small Vite config, so no new dependency was needed.
+
+```
+                            as is                 cross-trained x2      change
+  jobs completed            475  (462–489)        441  (429–451)        -34
+  jobs late                 96  (79–140)          194  (143–219)        +98
+  rush orders missed        18  (13–23)           25  (18–30)           +7
+  jobs abandoned            7  (0–28)             0  (0–3)              -7
+  average backlog           97.4  (81.1–112.3)    112.3  (94.5–129.6)   +14.9
+  mass-spec utilisation %   15.1  (13.3–16.4)     17.0  (15.3–18.2)     +2.0
+```
+
+**Cross-training two technicians on mass spectrometry makes the lab worse**, and the reason is printed
+above the table rather than left to be inferred: microscopy binds, mass spectrometry does not. Dana
+and Hadas are two of the three people who can use a microscope. Giving them a fourth skill means the
+naive assignment rule sends them to mass-spec work, which was not the constraint, and the microscope
+queue grows.
+
+Two things about that result are worth separating.
+
+**It is a real effect and a genuinely useful kind of answer.** "Training the wrong people makes a tight
+lab worse by diverting scarce capacity" is counter-intuitive, actionable, and precisely the sort of
+thing a manager cannot work out by looking at a spreadsheet. The one metric that moved the right way —
+abandoned jobs, 7 down to 0 — is consistent with it: more hands on mass spec means fewer mass-spec jobs
+sitting until a client cancels, bought at the cost of everything else.
+
+**It is also partly an artefact of the assignment rule, and that must not be glossed.** The rule here
+is "take the most urgent job you are qualified for", so a new skill can only ever *divert* somebody.
+B3's dispatcher specifies a *least-versatile-first* operator policy for exactly this reason — don't
+burn the only mass-spec scientist on a centrifuge — and under that policy the result could plausibly
+reverse. The comparison must be re-run then, and the number above should not be quoted as a finding
+about the lab until it has been.
+
+### The batch runner cannot step coarsely yet, and why that matters
+
+The plan assumed the batch runner would step an hour or a day at a time, with A2's slicing invariance
+guaranteeing the same answer. The first version did, and the invariance test on it **failed**: the same
+seed completed 97 jobs at a 15-minute step and 102 at a 1-minute step.
+
+The engine is not at fault. Assignment happens *between* `advance` calls, from the runner, so a coarse
+step also hands work out less often — people stood idle for up to a quarter of an hour beside work they
+could have started. A2's guarantee covers events inside the engine; a command issued from outside it
+is not one of those.
+
+So the runner fixes its cadence at one simulated minute and offers no step-size option. It is
+currently as slow per simulated minute as the live view, which is the price of the comparison meaning
+anything, and the test that would have asserted invariance is replaced by one that records the
+measurement and names what will fix it.
+
+This is a constraint on B3 rather than a defect here: **the dispatcher has to live inside the slice
+loop**, running at event boundaries like everything else, or no batch run is step-size independent. The
+plan had the dispatcher as a policy question; it is also a placement question, and the placement is the
+part that matters for trustworthiness.
+
+**Verification.** 13 audit tests — the shipped scenario is possible, the 186/280 figures, people are
+not the constraint, microscopy binds among attended-only capabilities, the mass-spec figure is 112% of
+a working week and 27% of a calendar week, unused instruments are warned about, and five kinds of
+impossible scenario are refused (missing instrument, missing skill, more hands-on work than contracted
+hours, an instrument that could not keep up running continuously, and tight-versus-impossible kept
+distinct). Plus two agreement tests: no instrument is used for longer than the work demands, and
+hands-on minutes spent equal hands-on minutes the work called for, bounded by the sampling
+granularity rather than by a tolerance picked to pass.
+
+10 batch-runner tests, mostly about fairness rather than arithmetic: reproducible from a seed, both
+options given the identical seed list, one assignment rule for every option, percentiles by nearest
+rank so every reported figure is one that actually happened, the median unmoved by a single
+catastrophic run, and an impossible scenario refused before fifty runs are spent on it.
+
+279 tests in total.

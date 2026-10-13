@@ -14,7 +14,8 @@
     "lint": "eslint . && eslint --no-config-lookup --config eslint.legacy.js src/legacy",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "compare": "vite build --config vite.batch.config.ts --logLevel warn && node dist-batch/compare.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
