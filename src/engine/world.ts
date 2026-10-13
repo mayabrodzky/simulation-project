@@ -15,8 +15,6 @@ import type {
   Job,
   WorkType,
   CatalogItem,
-  Emergency,
-  EmergencyTemplate,
   Equipment,
   Layout,
   Metrics,
@@ -103,11 +101,8 @@ export interface WorldState {
    * reaches it.
    */
   nextShiftBoundaryAtMinute: number;
-  emergencies: Emergency[];
   /** What the lab sells. Scenario data; the simulation never changes it. */
   workTypes: WorkType[];
-  /** Templates new emergencies are raised from. */
-  emergencyTemplates: EmergencyTemplate[];
   catalog: CatalogItem[];
   props: Prop[];
   walls: Wall[];
@@ -115,14 +110,6 @@ export interface WorldState {
   layout: Layout;
   tuning: Tuning;
 
-  /**
-   * When the next emergency is due, as an absolute minute.
-   *
-   * Scheduled once and waited for, rather than rolled for on every tick. A
-   * per-tick roll makes the outcome depend on how finely time is stepped,
-   * which would mean a fast batch run and the run being watched disagreeing.
-   */
-  nextEmergencyAtMinute: number;
   /** The generator's position. Stored so a run can be cloned or resumed. */
   rngState: number;
   /** Source of unique ids. Replaces Date.now(), which is not deterministic. */
@@ -224,14 +211,9 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     nextJobNumber: 1,
     blockReasonsAtMinute: -Infinity,
     nextShiftBoundaryAtMinute: -Infinity,
-    emergencies: [],
     workTypes: scenario.workTypes.map((w) => ({
       ...w,
       steps: w.steps.map((step) => ({ ...step })),
-    })),
-    emergencyTemplates: scenario.emergencies.map((e) => ({
-      ...e,
-      equipmentSequence: e.equipmentSequence.map((step) => ({ ...step })),
     })),
     catalog: scenario.catalog.map((item) => ({ ...item })),
     props: scenario.props.map((prop) => ({ ...prop })),
@@ -240,7 +222,6 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     layout: scenario.layout,
     tuning: scenario.tuning,
 
-    nextEmergencyAtMinute: start + rng.nextInterval(t.emergencyRatePerMinute),
     rngState: rng.getState(),
     nextId: 1,
 

@@ -20,6 +20,7 @@ export {
   findJob,
   isFinished,
   isOpen,
+  settlementFor,
   jobOf,
   missingSkillsFor,
 } from './jobs';

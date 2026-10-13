@@ -43,15 +43,8 @@ function discrete(world: WorldState) {
     rngState: world.rngState,
     nextId: world.nextId,
     metrics: world.metrics,
-    staff: world.staff.map((p) => [
-      p.id,
-      p.state,
-      p.taskStep,
-      p.activeTask?.name ?? null,
-      p.targetX === null,
-    ]),
+    staff: world.staff.map((p) => [p.id, p.state, p.activeTask?.name ?? null, p.targetX === null]),
     equipment: world.equipment.map((e) => [e.id, e.inUse, e.assignedTo]),
-    emergencies: world.emergencies.map((e) => [e.id, e.status]),
     // Which samples have arrived, in what order, and what they are due. An
     // arrival stepped over rather than landed on would show up here as a job
     // present in one run and still queued in the other.
@@ -83,7 +76,9 @@ function continuous(world: WorldState) {
     // person, so the thing most likely to have become step-size dependent.
     jobRemaining: world.jobs.flatMap((j) => j.steps.map((step) => step.remaining)),
     jobRevenue: world.jobs.map((j) => j.settledRevenue),
-    deadlines: world.emergencies.map((e) => e.timeLimit),
+    // Rush deadlines are absolute instants set once at arrival, so they cannot
+    // drift; what can is how much of a job is left.
+    jobDue: world.jobs.map((j) => j.dueAtMinute),
   };
 }
 

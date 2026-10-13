@@ -40,7 +40,7 @@
           <div class="stat">
             <span>💰</span>
             <div>
-              <div style="font-weight: 700">$<span id="money">—</span></div>
+              <div style="font-weight: 700">₪<span id="money">—</span></div>
               <div style="font-size: 0.75rem; color: #64748b">Budget</div>
             </div>
           </div>
@@ -108,7 +108,7 @@
       <aside class="sidebar">
         <div class="panel">
           <div class="panel-header" id="emergencyPanelHeader" data-action="toggle-panel">
-            <h3>🚨 Active Emergencies</h3>
+            <h3>🚨 Rush Orders</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
           <div class="panel-content emergency-list" id="emergencyListPanel"></div>
@@ -186,18 +186,6 @@
       <h3>Assign work to <span id="selectedStaffName"></span></h3>
       <div class="task-options" id="taskOptions"></div>
       <button class="btn" data-action="close-modals">Cancel</button>
-    </div>
-    <div class="modal" id="emergencyModal">
-      <h3>🚨 EMERGENCY ALERT 🚨</h3>
-      <div class="emergency-details">
-        <div id="emergencyTaskName"><strong>Task:</strong></div>
-        <div id="emergencyTaskReward"><strong>Reward:</strong></div>
-        <div id="emergencyTaskPenalty"><strong>Penalty:</strong></div>
-        <div id="emergencyTaskDeadline"><strong>Deadline:</strong></div>
-      </div>
-      <h4>Assign Available Qualified Staff:</h4>
-      <div id="emergencyStaffList"></div>
-      <button class="btn" style="margin-top: 1rem" data-action="close-modals">Dismiss</button>
     </div>
     <div class="modal" id="buyEquipmentModal">
       <h3>Buy New Equipment</h3>

@@ -69,8 +69,6 @@ const tuning: Tuning = {
 
   // Rates per simulated minute. The numbers are unchanged from when they
   // were per simulated second, which preserves the real-time spacing,
-  // because one real second is now one simulated minute.
-  emergencyRatePerMinute: 0.03,
   wanderRatePerMinute: 0.3,
 
   // 1.2 grid units a minute. Previously 0.02 multiplied by a hard-coded 60
@@ -94,6 +92,16 @@ const tuning: Tuning = {
   // overnight pause or a wait for a busy instrument does not trip it, short
   // enough to notice within a simulated week.
   stalledAfterHours: 48,
+
+  // From the spec: a tenth of arrivals are rush, quoted at 1.5x, and lateness
+  // is partial credit rather than a flat penalty. The old emergencies charged
+  // 4,000 shekels for work nobody could have reached, which is how a budget
+  // reached minus a quarter of a million in a simulated fortnight.
+  rushDeadlineHours: 24,
+  rushFraction: 0.1,
+  rushPriceMultiplier: 1.5,
+  latePriceFraction: 0.8,
+  rushFailRefundFraction: 0.3,
 };
 
 /**
@@ -399,19 +407,6 @@ export const chemistryLab: Scenario = {
       capabilities: ['cryo-storage'],
       count: 1,
       capacity: 4,
-    },
-  ],
-
-  emergencies: [
-    {
-      name: 'Critical Sample Analysis',
-      reward: 2500,
-      penalty: 4000,
-      timeLimit: 120,
-      equipmentSequence: [
-        { name: 'Mass Spectrometer', duration: 30, skillRequired: 'Mass Spectrometry' },
-        { name: 'Biosafety Cabinet', duration: 30, skillRequired: 'Biosafety Protocols' },
-      ],
     },
   ],
 

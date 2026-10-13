@@ -50,9 +50,6 @@ interface Breakdown {
  */
 function measureWeek(): Breakdown {
   const world: WorldState = createWorld(chemistryLab, SEED, SUNDAY_0800);
-  // Emergencies are the pre-job path, deleted in A6. See jobs.test.ts.
-  world.tuning = { ...world.tuning, emergencyRatePerMinute: 0 };
-  world.nextEmergencyAtMinute = Infinity;
 
   const b: Breakdown = {
     working: 0,

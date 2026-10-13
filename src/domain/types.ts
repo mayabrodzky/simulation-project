@@ -33,8 +33,6 @@ export type Capability = string;
 
 export type StaffState = 'idle' | 'working' | 'break' | 'off' | 'sick' | 'vacation';
 
-export type EmergencyStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
-
 /* --- Time ------------------------------------------------------------------
  *
  * Simulated time is one monotonic count of minutes since the start of the run,
@@ -275,7 +273,18 @@ export interface Job {
    * every slice — hundreds of thousands of times a simulated week.
    */
   expiresAtMinute: number;
+  /** The work type's ordinary price, before any rush premium or lateness. */
   basePrice: number;
+  /**
+   * A client who needs it tomorrow.
+   *
+   * A flag on an ordinary job, not a separate entity. The emergencies it
+   * replaces were a parallel kind of work with their own templates, their own
+   * progress fields on the person, their own events and a flat penalty - and
+   * none of that was needed, because what makes a rush order matter is
+   * arithmetic rather than mechanism. See settlement in jobs.ts.
+   */
+  rush: boolean;
   steps: JobStep[];
   stepIndex: number;
   /** Who is on it, when anyone is. */
@@ -298,14 +307,6 @@ export interface Job {
   blockedSinceMinute: number | null;
   /** Set once when the block has lasted long enough to be worth reporting. */
   stallReported: boolean;
-}
-
-export interface EmergencyTemplate {
-  name: string;
-  reward: number;
-  penalty: number;
-  timeLimit: number;
-  equipmentSequence: TaskStep[];
 }
 
 export interface CatalogItem {
@@ -387,12 +388,7 @@ export interface Tuning {
   energyRecoveredThreshold: number;
   conditionWearPerMinute: number;
 
-  /**
-   * Average occurrences per simulated second. Previously these were
-   * probabilities rolled once per animation frame, which made the whole
-   * simulation run faster on a high-refresh-rate monitor.
-   */
-  emergencyRatePerMinute: number;
+  /** Average idle wanders per simulated minute. Cosmetic. */
   wanderRatePerMinute: number;
 
   /** Grid units covered per simulated minute. */
@@ -423,6 +419,32 @@ export interface Tuning {
    * available — it looks like a working run with a disappointing result.
    */
   stalledAfterHours: number;
+
+  /* --- What work is worth, and what lateness costs --------------------------
+   *
+   * The asymmetry here is the whole reason a rush order is a decision rather
+   * than a bonus. A 900 shekel job quoted as a rush is worth 1,350 on time and
+   * 630 missed - against materials already spent - so the same job swings by
+   * 720 shekels on whether it lands. An ordinary job swings by 180.
+   */
+
+  /** Share of arrivals a client needs tomorrow. */
+  /** How long a client gives a rush order, in wall-clock hours. */
+  rushDeadlineHours: number;
+  /** Share of arrivals a client needs tomorrow. */
+  rushFraction: number;
+  /** What a client pays for a rush. */
+  rushPriceMultiplier: number;
+  /** What an ordinary job is worth if it misses its deadline. */
+  latePriceFraction: number;
+  /**
+   * What a missed rush refunds, as a share of the ordinary price.
+   *
+   * Applied *after* the premium is lost, so a missed rush pays 0.7 of the
+   * ordinary price - less than an ordinary late job, because the client was
+   * promised something and planned around it.
+   */
+  rushFailRefundFraction: number;
 }
 
 /**
@@ -453,7 +475,6 @@ export interface Scenario {
   catalog: CatalogItem[];
   props: Prop[];
   walls: Wall[];
-  emergencies: EmergencyTemplate[];
 }
 
 /* --- Runtime entities ----------------------------------------------------- */
@@ -465,29 +486,14 @@ export interface Scenario {
  * Treating them as one loose shape is what lets failTask reach for
  * `task.equipmentSequence[...]` on a training and crash.
  */
-export type ActiveTask = ActiveEmergency | ActiveTraining;
-
 /**
- * An emergency someone has taken on.
+ * The only thing still kept on a person rather than on the work.
  *
- * Was `ActiveJob`, and used to carry ordinary work too. Ordinary work is now a
- * `Job` with its own progress, so this shape serves emergencies alone — which
- * is why `isEmergency` is gone, being always true. A6 deletes emergencies in
- * favour of a `rush` flag on a normal job and this type goes with them; until
- * then two work paths coexist, deliberately and visibly.
+ * Training is genuinely a property of the person - it changes what they can do
+ * and belongs to nobody else - so it has no job and no queue. Everything else
+ * that used to live here moved onto the job.
  */
-export interface ActiveEmergency {
-  type?: undefined;
-  id: TaskId;
-  name: string;
-  reward: number;
-  penalty: number;
-  /** Counts down; absent on tasks with no deadline. */
-  timeLimit?: number;
-  equipmentSequence: TaskStep[];
-  status?: EmergencyStatus;
-  assignedTo?: StaffId | null;
-}
+export type ActiveTask = ActiveTraining;
 
 export interface ActiveTraining {
   type: 'training';
@@ -536,15 +542,9 @@ export interface Staff extends StaffTemplate {
    * together.
    */
   jobId: JobId | null;
-  /**
-   * An emergency or a training in progress, with its own step and timer.
-   *
-   * Only these two still live on the person. Ordinary work moved onto the job,
-   * which is what makes an interruption free; these three fields are what that
-   * looked like before, kept until A6 removes the last user of them.
-   */
+  /** A training in progress. The last thing held on a person rather than work. */
   activeTask: ActiveTask | null;
-  taskStep: number;
+  /** Minutes of training left. Trainings have one phase and no queue. */
   taskTimer: number;
   /** When this person next wanders, if idle. An absolute minute. */
   nextWanderAtMinute: number;
@@ -581,11 +581,4 @@ export interface Equipment extends EquipmentTemplate {
   /** The operator of the first holding job, for the panel's "in use by" text. */
   assignedTo: StaffId | null;
   totalWorkTime: number;
-}
-
-export interface Emergency extends EmergencyTemplate {
-  id: string;
-  status: EmergencyStatus;
-  /** Set when someone takes it on, so an expiry can fail their task. */
-  assignedTo?: StaffId | null;
 }

@@ -2,7 +2,7 @@
  * What the engine reports back after a tick or a command.
  *
  * Events carry facts, never formatted sentences. The engine says
- * `{ type: 'task-completed', staffName: 'Dana Cohen', reward: 500 }`; the UI
+ * `{ type: 'job-completed', name: 'Blood panel', revenue: 180 }`; the UI
  * decides that this reads "Task completed by Dana Cohen. +$500" and that it is
  * green. That separation is the reason the engine can run with no browser
  * attached — previously the assignment code called showNotification directly
@@ -28,21 +28,6 @@ export type RejectionReason =
   | 'job-not-open';
 
 export type EngineEvent =
-  | { type: 'task-assigned'; staffId: StaffId; staffName: string; taskName: string }
-  | {
-      type: 'task-completed';
-      staffId: StaffId;
-      staffName: string;
-      taskName: string;
-      reward: number;
-    }
-  | {
-      type: 'task-failed';
-      staffId: StaffId;
-      staffName: string;
-      taskName: string;
-      penalty: number;
-    }
   | { type: 'training-started'; staffId: StaffId; staffName: string; skill: Skill; cost: number }
   | { type: 'training-completed'; staffId: StaffId; staffName: string; skill: Skill }
   /**
@@ -106,9 +91,6 @@ export type EngineEvent =
     }
   /** The client gave up. Nothing is charged; the work is simply not paid for. */
   | { type: 'job-expired'; jobId: JobId; name: string; workingDaysLate: number }
-  | { type: 'emergency-raised'; emergencyId: string; name: string }
-  | { type: 'emergency-expired'; emergencyId: string; name: string; penalty: number }
-  | { type: 'emergency-resolved'; emergencyId: string; name: string }
   | {
       type: 'equipment-serviced';
       equipmentId: EquipmentId;

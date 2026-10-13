@@ -31,9 +31,9 @@ function fingerprint(world: WorldState) {
     minutes: world.minutes,
     rngState: world.rngState,
     metrics: world.metrics,
-    staff: world.staff.map((p) => [p.id, p.state, p.x, p.y, p.energy, p.taskStep]),
+    staff: world.staff.map((p) => [p.id, p.state, p.x, p.y, p.energy, p.jobId]),
     equipment: world.equipment.map((e) => [e.id, e.inUse, e.condition, e.assignedTo]),
-    emergencies: world.emergencies.map((e) => [e.id, e.status, e.timeLimit]),
+    jobs: world.jobs.map((j) => [j.id, j.status, j.stepIndex, j.rush]),
   };
 }
 
@@ -84,7 +84,10 @@ describe('speed', () => {
 
     expect(fast.simMinutes).toBeCloseTo(normal.simMinutes, 6);
     expect(fast.jobs.map((j) => j.id)).toEqual(normal.jobs.map((j) => j.id));
-    expect(fast.nextEmergencyAtMinute).toBeCloseTo(normal.nextEmergencyAtMinute, 6);
+    expect(fast.arrivalQueue[0]?.arrivedAtMinute).toBeCloseTo(
+      normal.arrivalQueue[0]?.arrivedAtMinute ?? 0,
+      6,
+    );
   });
 
   it('leaves the clock still when stopped', () => {
@@ -219,23 +222,16 @@ describe('cancelling a task mid-flight', () => {
 });
 
 describe('the engine reports rather than renders', () => {
-  it('raises an emergency as an event, with no side effects outside the world', () => {
-    // The emergency path crossed into the DOM before the extraction, which is
-    // why it could not be tested at all.
-    //
-    // The due instant is brought forward rather than the rate raised: the
-    // schedule is drawn once at creation, so a higher rate cannot move an
-    // event already on the books. This test used to raise the rate and pass
-    // only because that one seed happened to schedule an emergency two minutes
-    // in — luck, not a test.
+  it('reports arriving work as an event, with no side effects outside the world', () => {
+    // Was an emergency test. Emergencies crossed into the DOM before the
+    // extraction, which is why they could not be tested at all; they are now
+    // a flag on an ordinary job and the arrival is the event.
     const world = createWorld(chemistryLab, SEED, 480);
-    world.nextEmergencyAtMinute = world.simMinutes + 5;
-    const events = advance(world, 10);
+    const events = advance(world, 240);
 
-    const raised = events.find((e) => e.type === 'emergency-raised');
-    expect(raised).toBeDefined();
-    expect(world.emergencies).toHaveLength(1);
-    expect(world.emergencies[0]!.status).toBe('pending');
+    const arrived = events.filter((e) => e.type === 'job-arrived');
+    expect(arrived.length).toBeGreaterThan(0);
+    expect(world.jobs.length).toBe(arrived.length);
   });
 
   it('gives refusals a reason instead of a sentence', () => {

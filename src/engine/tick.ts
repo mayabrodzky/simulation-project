@@ -8,7 +8,7 @@
  * depends only on (world, dt), which is guaranteed here by having no access to
  * Math.random, Date, or the DOM. ESLint enforces all three for this directory.
  */
-import type { ActiveEmergency, Equipment, Staff } from '../domain/types';
+import type { Equipment, Staff } from '../domain/types';
 import { minuteOfDay } from './calendar';
 import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './geometry';
 import {
@@ -21,15 +21,7 @@ import {
 } from './jobs';
 import { applyShiftWindow, nextShiftEventIn } from './shifts';
 import type { EngineEvent } from './events';
-import type { Rng } from './rng';
-import {
-  admitArrivals,
-  ensureArrivalsThrough,
-  findEquipmentByName,
-  rngFor,
-  rngForStaff,
-  type WorldState,
-} from './world';
+import { admitArrivals, ensureArrivalsThrough, rngForStaff, type WorldState } from './world';
 
 export interface TickOptions {
   /**
@@ -81,7 +73,6 @@ export function advance(
   options: TickOptions = {},
 ): EngineEvent[] {
   const events: EngineEvent[] = [];
-  const rng = rngFor(world);
 
   // Demand for the whole span, before the first slice. Asking for the end of
   // the span rather than for each slice is what keeps this step-size
@@ -103,11 +94,10 @@ export function advance(
       throw new Error('advance: too many slices — an event is firing at zero length');
     }
     const slice = Math.min(remaining, Math.max(nextEventIn(world, options), EPSILON));
-    applySlice(world, slice, options, rng, events);
+    applySlice(world, slice, options, events);
     remaining -= slice;
   }
 
-  world.rngState = rng.getState();
   return events;
 }
 
@@ -154,10 +144,6 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
     // ends at 16:00 ends at midnight in a batch run that steps a day at a
     // time, which is eight hours of work nobody did.
     inMinutes(nextShiftEventIn(world));
-    at(world.nextEmergencyAtMinute);
-    for (const e of world.emergencies) {
-      if (e.status === 'pending' || e.status === 'in-progress') inMinutes(e.timeLimit);
-    }
   }
 
   for (const person of world.staff) {
@@ -165,10 +151,6 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
 
     // A step finishing.
     if (person.state === 'working') inMinutes(person.taskTimer);
-
-    // A deadline falling due.
-    const task = person.activeTask;
-    if (task && !isTraining(task) && task.timeLimit !== undefined) inMinutes(task.timeLimit);
 
     // Energy crossing the threshold that forces a break, or clears one.
     if (person.state === 'working' && t.energyDrainPerMinute > 0) {
@@ -209,7 +191,6 @@ function applySlice(
   world: WorldState,
   dt: number,
   options: TickOptions,
-  rng: Rng,
   events: EngineEvent[],
 ): void {
   const t = world.tuning;
@@ -217,19 +198,6 @@ function applySlice(
   if (!options.freezeClock) {
     world.simMinutes += dt;
     world.minutes = minuteOfDay(world.simMinutes);
-
-    // Existing work is charged for this slice before anything new appears, so
-    // a deadline raised at the end of a slice is not immediately billed for a
-    // slice it did not exist during. Getting this order wrong makes the
-    // countdown depend on step size.
-    tickEmergencies(world, dt, events);
-
-    if (hasReached(world.simMinutes, world.nextEmergencyAtMinute)) {
-      if (!world.emergencies.some((e) => e.status === 'pending')) {
-        raiseEmergency(world, events);
-      }
-      world.nextEmergencyAtMinute = world.simMinutes + rng.nextInterval(t.emergencyRatePerMinute);
-    }
 
     // New work appears after existing work has been charged for the slice, for
     // the same reason the emergency is raised here rather than at the top: a
@@ -299,64 +267,13 @@ function applySlice(
   recomputeBlockReasons(world, events);
 }
 
-function raiseEmergency(world: WorldState, events: EngineEvent[]): void {
-  const template = world.emergencyTemplates[0];
-  if (!template) return;
-  const id = `EMG${world.nextId++}`;
-  world.emergencies.push({
-    ...template,
-    equipmentSequence: template.equipmentSequence.map((step) => ({ ...step })),
-    id,
-    status: 'pending',
-  });
-  events.push({ type: 'emergency-raised', emergencyId: id, name: template.name });
-}
-
-function tickEmergencies(world: WorldState, dt: number, events: EngineEvent[]): void {
-  for (const e of world.emergencies) {
-    if (e.status !== 'pending' && e.status !== 'in-progress') continue;
-    e.timeLimit -= dt;
-    if (e.timeLimit > EPSILON) continue;
-
-    if (e.status === 'pending') {
-      e.status = 'failed';
-      world.money -= e.penalty;
-      world.metrics.penalties += e.penalty;
-      events.push({
-        type: 'emergency-expired',
-        emergencyId: e.id,
-        name: e.name,
-        penalty: e.penalty,
-      });
-    } else {
-      const assignee = world.staff.find((s) => s.id === e.assignedTo);
-      if (
-        assignee?.activeTask &&
-        !isTraining(assignee.activeTask) &&
-        assignee.activeTask.id === e.id
-      ) {
-        failTask(world, assignee, assignee.activeTask, events);
-      }
-    }
-  }
-  world.emergencies = world.emergencies.filter(
-    (e) => e.status === 'pending' || e.status === 'in-progress',
-  );
-}
-
-function isTraining(
-  task: NonNullable<Staff['activeTask']>,
-): task is Extract<NonNullable<Staff['activeTask']>, { type: 'training' }> {
-  return task.type === 'training';
-}
-
 /**
- * Cancels a task and charges its penalty.
+ * Abandons a training part-way through.
  *
- * Exported because a command can cancel a task too — marking someone sick while
- * they are mid-job. That path used to crash: it called this unconditionally,
- * including on a training, which has neither a penalty nor an equipment
- * sequence, so the budget became NaN and indexing the sequence threw.
+ * Only trainings reach here now. It used to serve the emergency path too, where
+ * it charged a flat penalty and indexed a step list - the source of the Phase 1
+ * crash where a cancelled training produced a NaN budget. With one kind of
+ * work to undo there is nothing left to get wrong.
  */
 export function failTask(
   world: WorldState,
@@ -364,34 +281,10 @@ export function failTask(
   task: NonNullable<Staff['activeTask']>,
   events: EngineEvent[],
 ): void {
-  if (isTraining(task)) {
-    // A training has no penalty and no steps: release the machine and stop.
-    const equipment = world.equipment.find((e) => e.id === task.equipmentId);
-    releaseEquipment(equipment, person);
-    resetStaffTask(person);
-    return;
-  }
-
-  world.money -= task.penalty;
-  world.metrics.penalties += task.penalty;
-  world.metrics.tasksFailed += 1;
-
-  const currentStep = task.equipmentSequence[person.taskStep];
-  if (currentStep) releaseEquipment(findEquipmentByName(world, currentStep.name), person);
-
-  {
-    const emergency = world.emergencies.find((e) => e.id === task.id);
-    if (emergency) emergency.status = 'failed';
-  }
-
+  void events;
+  const equipment = world.equipment.find((e) => e.id === task.equipmentId);
+  releaseEquipment(equipment, person);
   resetStaffTask(person);
-  events.push({
-    type: 'task-failed',
-    staffId: person.id,
-    staffName: person.name,
-    taskName: task.name,
-    penalty: task.penalty,
-  });
 }
 
 function releaseEquipment(equipment: Equipment | undefined, person: Staff): void {
@@ -403,7 +296,6 @@ function releaseEquipment(equipment: Equipment | undefined, person: Staff): void
 
 function resetStaffTask(person: Staff): void {
   person.activeTask = null;
-  person.taskStep = 0;
   person.state = 'idle';
 }
 
@@ -428,18 +320,9 @@ function tickStaff(
   // would make the start time depend on how finely the simulation is stepped.
   moveStaff(world, person, dt, options);
 
-  if (person.activeTask) {
-    const task = person.activeTask;
-    if (!isTraining(task) && task.timeLimit !== undefined) {
-      task.timeLimit -= dt;
-      if (task.timeLimit <= EPSILON) {
-        failTask(world, person, task, events);
-        return;
-      }
-    }
-    if (isTraining(task)) tickTraining(world, person, task, dt, events);
-    else tickJob(world, person, task, dt, events);
-  }
+  // Training is the only thing still ticked on a person. Everything else is
+  // ticked on the job, which is what let the queue exist at all.
+  if (person.activeTask) tickTraining(world, person, person.activeTask, dt, events);
 }
 
 function tickTraining(
@@ -476,87 +359,6 @@ function tickTraining(
     staffName: person.name,
     skill: task.skillToLearn,
   });
-}
-
-function tickJob(
-  world: WorldState,
-  person: Staff,
-  task: ActiveEmergency,
-  dt: number,
-  events: EngineEvent[],
-): void {
-  const currentStep = task.equipmentSequence[person.taskStep];
-  if (!currentStep) {
-    person.activeTask = null;
-    return;
-  }
-  const equipment = findEquipmentByName(world, currentStep.name);
-
-  if (person.state === 'working') {
-    person.taskTimer -= dt;
-    if (person.taskTimer > EPSILON) return;
-
-    releaseEquipment(equipment, person);
-    person.taskStep++;
-
-    if (person.taskStep >= task.equipmentSequence.length) {
-      world.money += task.reward;
-      world.metrics.revenue += task.reward;
-      world.metrics.tasksCompleted += 1;
-      {
-        const emergency = world.emergencies.find((e) => e.id === task.id);
-        if (emergency) {
-          emergency.status = 'completed';
-          events.push({
-            type: 'emergency-resolved',
-            emergencyId: emergency.id,
-            name: emergency.name,
-          });
-        }
-      }
-      resetStaffTask(person);
-      events.push({
-        type: 'task-completed',
-        staffId: person.id,
-        staffName: person.name,
-        taskName: task.name,
-        reward: task.reward,
-      });
-      return;
-    }
-
-    const nextStep = task.equipmentSequence[person.taskStep];
-    const nextEquipment = nextStep ? findEquipmentByName(world, nextStep.name) : undefined;
-    if (nextEquipment) {
-      person.targetX = nextEquipment.x;
-      person.targetY = nextEquipment.y;
-    }
-    person.state = 'idle';
-    return;
-  }
-
-  if (!equipment) {
-    // A step whose machine does not exist completes on the spot, which is how
-    // the original behaved; it keeps a mis-specified scenario from deadlocking.
-    person.targetX = null;
-    person.targetY = null;
-    person.state = 'working';
-    person.taskTimer = currentStep.duration;
-    return;
-  }
-
-  if (hasArrivedAt(person, equipment)) {
-    if (equipment.inUse) {
-      person.state = 'idle';
-      return;
-    }
-    person.targetX = null;
-    person.targetY = null;
-    person.state = 'working';
-    person.taskTimer = currentStep.duration;
-    equipment.inUse = true;
-    equipment.assignedTo = person.id;
-  }
 }
 
 function moveStaff(world: WorldState, person: Staff, dt: number, options: TickOptions): void {

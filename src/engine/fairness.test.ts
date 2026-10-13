@@ -76,7 +76,9 @@ describe('a decision does not disturb the rest of the lab', () => {
     const base = createWorld(fullShift(), SEED, MONDAY_0800);
     const hired = createWorld(withExtraStaff(), SEED, MONDAY_0800);
 
-    expect(hired.nextEmergencyAtMinute).toBe(base.nextEmergencyAtMinute);
+    expect(hired.arrivalQueue.map((j) => j.arrivedAtMinute)).toEqual(
+      base.arrivalQueue.map((j) => j.arrivedAtMinute),
+    );
   });
 
   it('hiring someone leaves the incident schedule identical over a fortnight', () => {
@@ -88,7 +90,9 @@ describe('a decision does not disturb the rest of the lab', () => {
     advance(base, 14 * 24 * 60);
     advance(hired, 14 * 24 * 60);
 
-    expect(hired.nextEmergencyAtMinute).toBe(base.nextEmergencyAtMinute);
+    expect(hired.arrivalQueue.map((j) => j.arrivedAtMinute)).toEqual(
+      base.arrivalQueue.map((j) => j.arrivedAtMinute),
+    );
     expect(hired.rngState).toBe(base.rngState);
   });
 
@@ -111,7 +115,9 @@ describe('a decision does not disturb the rest of the lab', () => {
     expect(leased.staff.map((p) => [p.energy, p.nextWanderAtMinute])).toEqual(
       base.staff.map((p) => [p.energy, p.nextWanderAtMinute]),
     );
-    expect(leased.nextEmergencyAtMinute).toBe(base.nextEmergencyAtMinute);
+    expect(leased.arrivalQueue.map((j) => j.arrivedAtMinute)).toEqual(
+      base.arrivalQueue.map((j) => j.arrivedAtMinute),
+    );
   });
 
   it('leasing another instrument leaves the existing machines unchanged', () => {
@@ -147,7 +153,9 @@ describe('the streams are still streams', () => {
 
     expect(b.staff.map((p) => p.energy)).not.toEqual(a.staff.map((p) => p.energy));
     expect(b.equipment.map((e) => e.condition)).not.toEqual(a.equipment.map((e) => e.condition));
-    expect(b.nextEmergencyAtMinute).not.toBe(a.nextEmergencyAtMinute);
+    expect(b.arrivalQueue.map((j) => j.arrivedAtMinute)).not.toEqual(
+      a.arrivalQueue.map((j) => j.arrivedAtMinute),
+    );
   });
 });
 

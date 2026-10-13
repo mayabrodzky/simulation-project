@@ -220,10 +220,11 @@ const NIGHT_END_HOUR = 6;
 /**
  * What one person is doing.
  *
- * Three sources now, and the caller knows about none of them: an ordinary job
- * (looked up from the world by id), an emergency, or a training. The panels
- * asked this question through here before any of that was true, which is why
- * this change is one function rather than six call sites.
+ * Two sources, and the caller knows about neither: a job looked up from the
+ * world by id, or a training held on the person. The panels asked this question
+ * through here before either was true, which is why introducing jobs, and then
+ * deleting emergencies, was one function rather than six call sites each
+ * time.
  */
 export function describeAssignment(world: WorldState, person: Staff): AssignmentView | null {
   const job = person.jobId === null ? undefined : world.jobs.find((j) => j.id === person.jobId);
@@ -236,30 +237,14 @@ export function describeAssignment(world: WorldState, person: Staff): Assignment
     };
   }
 
-  const task = person.activeTask;
-  if (!task) return null;
-
-  if (task.type === 'training') {
-    const progress = task.duration > 0 ? clamp01(1 - person.taskTimer / task.duration) : 0;
-    return {
-      label: task.name,
-      statusText: person.state === 'working' ? 'Training in progress' : 'Moving to equipment',
-      progress,
-      isTraining: true,
-    };
-  }
-
-  const step = task.equipmentSequence[person.taskStep];
-  const progress =
-    person.state === 'working' && step && step.duration > 0
-      ? clamp01(1 - person.taskTimer / step.duration)
-      : 0;
+  const training = person.activeTask;
+  if (!training) return null;
 
   return {
-    label: task.name,
-    statusText: person.state === 'working' ? 'Processing' : 'Moving to equipment',
-    progress,
-    isTraining: false,
+    label: training.name,
+    statusText: person.state === 'working' ? 'Training in progress' : 'Moving to equipment',
+    progress: training.duration > 0 ? clamp01(1 - person.taskTimer / training.duration) : 0,
+    isTraining: true,
   };
 }
 
@@ -379,25 +364,54 @@ export function countTraining(world: WorldState): number {
   return world.staff.filter((p) => p.activeTask?.type === 'training').length;
 }
 
-/** Work under time pressure, soonest deadline first. */
+/**
+ * Rush orders still live, soonest deadline first.
+ *
+ * Replaces the emergency list. The panel it feeds was written against a
+ * separate kind of work with its own entity, its own progress fields and its
+ * own events; it now reads ordinary jobs that happen to carry a flag, and the
+ * shape it receives is unchanged.
+ *
+ * Time left can be negative. A rush order quoted in wall-clock hours and
+ * arriving on a Thursday afternoon may simply be impossible, and showing it as
+ * overdue is more honest than clamping it to zero.
+ */
 export function listUrgentWork(world: WorldState): UrgentWorkView[] {
-  return world.emergencies
-    .filter((e) => e.status === 'pending' || e.status === 'in-progress')
+  return world.jobs
+    .filter((job) => job.rush && !isFinished(job.status))
     .slice()
-    .sort((a, b) => a.timeLimit - b.timeLimit)
-    .map((e) => ({
-      id: e.id,
-      name: e.name,
-      status: e.status === 'pending' ? 'Waiting' : 'In Progress',
-      timeLeft: e.timeLimit,
+    .sort((a, b) => a.dueAtMinute - b.dueAtMinute || a.id.localeCompare(b.id))
+    .map((job) => ({
+      id: job.id,
+      name: job.name,
+      status: statusText(job.status),
+      timeLeft: job.dueAtMinute - world.simMinutes,
       urgent: true,
     }));
 }
 
-/** Time remaining on one urgent item, or null if it is no longer live. */
+function isFinished(status: Job['status']): boolean {
+  return status === 'done-on-time' || status === 'done-late' || status === 'expired';
+}
+
+function statusText(status: Job['status']): string {
+  switch (status) {
+    case 'in-progress':
+      return 'In Progress';
+    case 'unattended':
+      return 'On the instrument';
+    case 'blocked':
+      return 'Held up';
+    default:
+      return 'Waiting';
+  }
+}
+
+/** Time remaining on one rush order, or null if it is no longer live. */
 export function urgentTimeLeft(world: WorldState, id: string): number | null {
-  const found = world.emergencies.find((e) => e.id === id);
-  return found ? found.timeLimit : null;
+  const job = world.jobs.find((j) => j.id === id);
+  if (!job || isFinished(job.status)) return null;
+  return job.dueAtMinute - world.simMinutes;
 }
 
 export function clockView(world: WorldState): ClockView {

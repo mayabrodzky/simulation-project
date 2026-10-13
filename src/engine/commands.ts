@@ -14,9 +14,8 @@ import type { EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 import type { EngineEvent, RejectionReason } from './events';
 import { assignJob, releaseJobOf } from './jobs';
 import { applyShiftWindow } from './shifts';
-import { isQualified } from './rules';
 import { failTask } from './tick';
-import { findEquipment, findEquipmentByName, findStaff, type WorldState } from './world';
+import { findEquipment, findStaff, type WorldState } from './world';
 
 export type Command =
   /**
@@ -26,7 +25,6 @@ export type Command =
    * and is waiting.
    */
   | { type: 'ASSIGN_JOB'; staffId: StaffId; jobId: JobId }
-  | { type: 'ASSIGN_EMERGENCY'; staffId: StaffId; emergencyId: string }
   | { type: 'START_TRAINING'; staffId: StaffId; equipmentId: EquipmentId; skill: Skill }
   | { type: 'SET_STATUS'; staffId: StaffId; sick: boolean }
   | { type: 'TOGGLE_SHIFT'; staffId: StaffId }
@@ -38,9 +36,6 @@ export function applyCommand(world: WorldState, command: Command): EngineEvent[]
   switch (command.type) {
     case 'ASSIGN_JOB':
       assignJobCommand(world, command.staffId, command.jobId, events);
-      break;
-    case 'ASSIGN_EMERGENCY':
-      assignEmergency(world, command.staffId, command.emergencyId, events);
       break;
     case 'START_TRAINING':
       startTraining(world, command, events);
@@ -84,72 +79,6 @@ function assignJobCommand(
     name: outcome.job.name,
     staffId: person.id,
     staffName: person.name,
-  });
-}
-
-/**
- * Hands an emergency to a person.
- *
- * The last user of the old shape: progress lives on the person as
- * `taskStep`/`taskTimer`, work is copied out of a template rather than existing
- * in its own right, and lateness is a flat penalty. A6 replaces emergencies
- * with a `rush` flag on a normal job and this function goes with them.
- *
- * Was `assignTask`, which also served ordinary work. Ordinary work is now
- * assigned through `assignJobCommand`, which does none of this copying because
- * the job is already there.
- */
-function assignEmergency(
-  world: WorldState,
-  staffId: StaffId,
-  emergencyId: string,
-  events: EngineEvent[],
-): void {
-  const person = findStaff(world, staffId);
-  if (!person) return;
-  if (person.state !== 'idle' || person.activeTask || person.jobId !== null) {
-    reject(events, 'not-idle', person.name);
-    return;
-  }
-
-  const source = world.emergencies.find((e) => e.id === emergencyId);
-  if (!source) return;
-
-  if (!isQualified(person, source)) {
-    reject(events, 'unqualified', person.name);
-    return;
-  }
-
-  const firstStep = source.equipmentSequence[0];
-  const firstEquipment = firstStep ? findEquipmentByName(world, firstStep.name) : undefined;
-  if (firstEquipment?.inUse) {
-    const user = world.staff.find((s) => s.id === firstEquipment.assignedTo);
-    reject(
-      events,
-      'equipment-in-use',
-      user ? `${firstEquipment.name}|${user.name}` : firstEquipment.name,
-    );
-    return;
-  }
-
-  person.activeTask = { ...structuredClone(source), id: emergencyId };
-  person.taskStep = 0;
-  person.taskTimer = 0;
-  person.state = 'idle';
-
-  source.status = 'in-progress';
-  source.assignedTo = person.id;
-
-  if (firstEquipment) {
-    person.targetX = firstEquipment.x;
-    person.targetY = firstEquipment.y;
-  }
-
-  events.push({
-    type: 'task-assigned',
-    staffId: person.id,
-    staffName: person.name,
-    taskName: source.name,
   });
 }
 

@@ -1792,3 +1792,89 @@ instrument freed when the run ends rather than when someone returns, a count exp
 instruments with separate wear, one instrument serialising two jobs where two overlap them, shelves
 letting several jobs share one instrument, the catalogue selling capability the work asks for, a bought
 instrument numbered after the existing ones, and no instrument ever holding a job that has finished.
+
+---
+
+## 28. Rush orders replace emergencies
+
+**Context.** Emergencies were a second kind of work with their own templates, their own entity, their
+own progress fields on a person (`activeTask`, `taskStep`, `taskTimer`), their own three events, their
+own modal, and a flat `penalty`. None of it was necessary. What makes an urgent job matter is
+arithmetic, not mechanism.
+
+The flat penalty was also actively wrong. It charged ₪4,000 for an emergency nobody had been assigned
+to — work that, at any speed above ×1, no human could have reached — which is how a simulated
+fortnight reached **minus a quarter of a million shekels**. Review hit exactly that while verifying
+A3b.
+
+**Decision.** `Job.rush: boolean`. A tenth of arrivals, 24 **wall-clock** hours rather than working
+days, quoted at 1.5×. Settlement is four cases and no invented number:
+
+| | on time | late |
+|---|---|---|
+| ordinary | price | 80% |
+| rush | 150% | 70% |
+
+A ₪900 job quoted as a rush is worth ₪1,350 landed and ₪630 missed — a swing of ₪720 against roughly
+₪225 of materials already spent. The same job taken normally swings by ₪180, four times less. That
+ratio is why a manager cares which rush orders she accepts, and it comes out of the prices.
+
+A missed rush pays **less than an ordinary late job**, not merely less than its own quote. The client
+was promised something and planned around it. Without that a rush order would be a free option.
+
+A rush deadline is quoted in wall-clock hours on purpose, so one arriving on a Thursday afternoon may
+be impossible before anybody touches it. That is a finding worth showing rather than a case to design
+away, and it is configurable as `calendar.rushDeadlineMode`.
+
+### The teardown
+
+170 references across 11 files. Deleted: `EmergencyStatus`, `EmergencyTemplate`, `Emergency`,
+`ActiveEmergency`, `scenario.emergencies`, `world.emergencies`, `world.emergencyTemplates`,
+`world.nextEmergencyAtMinute`, `tuning.emergencyRatePerMinute`, `Staff.taskStep`, `ASSIGN_EMERGENCY`,
+`assignEmergency`, `raiseEmergency`, `tickEmergencies`, the person-based `tickJob`, `isTraining`, six
+events (`task-assigned`, `task-completed`, `task-failed`, `emergency-raised`, `emergency-expired`,
+`emergency-resolved`), five view methods, the emergency modal, and `isQualified`'s last caller.
+
+`failTask` survives for trainings alone, and with one kind of work to undo there is nothing left in it
+to get wrong — it was the source of the Phase 1 crash where cancelling a training produced a `NaN`
+budget.
+
+`Staff.activeTask` is now `ActiveTraining | null`, and training is the only thing still held on a
+person rather than on the work. That is right: training changes what somebody can do and belongs to
+nobody else, so it has no job and no queue.
+
+The lab-wide operations stream is gone too — the emergency schedule was its only consumer. Everything
+random now comes from a named derived stream: demand per week, per person, per instrument.
+
+**The panel did not need rewriting, only repointing.** It has always asked `listUrgentWork()` rather
+than reaching into the simulation, so swapping the source from a separate entity to ordinary jobs
+carrying a flag left the shape it receives unchanged. That seam was built in A0 as a sixty-line step
+that changed no behaviour; this is the second time it has absorbed a model change for free.
+
+Currency switched to ₪ at the remaining seven sites.
+
+### What the teardown cost in tests, and what that says
+
+Fourteen tests needed changing, and the pattern is worth recording: **eleven of them had been
+silencing emergencies** — setting the rate to zero and the next one to infinity — because the old ones
+fired every half hour, went unassigned, and buried whatever was being measured under a quarter of a
+million shekels of penalties. That workaround had spread through five test files before anybody
+questioned the thing it was working around.
+
+One of them was load-bearing in an awkward way. The float-dust regression test from A3b-1 found its
+bug *because* silencing emergencies changed the slice pattern; with emergencies gone that lever is
+gone too, so the test now varies the step size directly instead — 1, 37 and 1,440 minutes to the same
+instant. Same property, no dependence on a feature that no longer exists.
+
+Two tests also had to stop using `nextEmergencyAtMinute` as the fairness fingerprint; they compare
+arrival instants now, which is a better fingerprint anyway, because arrivals are precisely what a
+comparison between two options must hold fixed.
+
+**One test asserted the old behaviour and had to be corrected rather than fixed.** It checked that a
+late job still paid full price, with a comment saying partial credit was coming in A6. It is now
+`basePrice × 0.8`, and the arithmetic lives in `settlement.test.ts` where it belongs.
+
+**Verification.** 12 new tests on settlement — the four cases, the specification's ₪630 example, a
+missed rush being worse than ordinary lateness, the 4:1 swing ratio, the premium paid in a running
+lab, nothing charged for work nobody reached, no finished job left unpriced, and three asserting that
+rush orders are ordinary jobs with no separate entity, queue or person-held state. 256 tests in total.

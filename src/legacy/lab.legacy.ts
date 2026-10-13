@@ -69,7 +69,6 @@ const Lab = {
   isSandboxMode: false,
   liveWorldBackup: null,
   selectedStaff: null,
-  activeEmergencyTask: null,
   hoveredEntity: null,
   highlightedStaffIds: [],
   dimmedStaffIds: [],
@@ -84,9 +83,6 @@ const Lab = {
   },
   get equipment() {
     return this.world.equipment;
-  },
-  get emergencyQueue() {
-    return this.world.emergencies;
   },
   get equipmentCatalog() {
     return this.world.catalog;
@@ -232,9 +228,7 @@ const Lab = {
       'open-task-modal': (el) => this.openTaskModal(staffId(el)),
       'toggle-shift': (el) => this.toggleShift(staffId(el)),
       'toggle-sick': (el) => this.setStaffStatus(staffId(el), 'sick'),
-      'open-emergency': (el) => this.openEmergencyModalById(el.dataset.emergencyId),
       'assign-job': (el) => this.assignJob(el.dataset.jobId),
-      'assign-emergency': (el) => this.assignEmergencyTask(staffId(el)),
       'start-training': (el) => this.assignTraining(el.dataset.skill, equipmentId(el)),
       repair: (el) => this.repairEquipment(equipmentId(el)),
       calibrate: (el) => this.calibrateEquipment(equipmentId(el)),
@@ -495,12 +489,6 @@ const Lab = {
     if (events.some(isPanelAffecting)) this.updateAllPanels();
     for (const e of events) {
       switch (e.type) {
-        case 'task-assigned':
-          this.announce(`${e.staffName} assigned to "${e.taskName}"`, 'info');
-          break;
-        // Arrivals are not announced. Over a hundred and sixty a week would
-        // bury everything else; the Work Queue panel is where they belong, and
-        // the event still rebuilds it.
         case 'job-arrived':
           break;
         case 'job-assigned':
@@ -525,43 +513,21 @@ const Lab = {
             'error',
           );
           break;
-        case 'task-completed':
-          this.showNotification(
-            `Task "${e.taskName}" completed by ${e.staffName}. +$${e.reward}`,
-            'success',
-          );
-          break;
-        case 'task-failed':
-          this.announce(`Task "${e.taskName}" failed! Penalty: $${e.penalty}`, 'error');
-          break;
         case 'training-started':
-          this.announce(`${e.staffName} started training on ${e.skill}. (-$${e.cost})`, 'info');
+          this.announce(`${e.staffName} started training on ${e.skill}. (-₪${e.cost})`, 'info');
           break;
         case 'training-completed':
           this.showNotification(`${e.staffName} is now certified for ${e.skill}!`, 'success');
           break;
-        case 'emergency-raised':
-          this.flashEmergencyPanel();
-          this.openEmergencyModalById(e.emergencyId);
-          break;
-        case 'emergency-expired':
-          this.showNotification(
-            `Unassigned emergency task failed! Penalty: $${e.penalty}!`,
-            'error',
-          );
-          if (this.activeEmergencyTask && this.activeEmergencyTask.id === e.emergencyId) {
-            this.closeAllModals();
-          }
-          break;
         case 'equipment-serviced':
           this.announce(
-            `${e.equipmentName} ${e.kind === 'repair' ? 'repaired' : 'calibrated'} for $${e.cost}.`,
+            `${e.equipmentName} ${e.kind === 'repair' ? 'repaired' : 'calibrated'} for ₪${e.cost}.`,
             'info',
           );
           break;
         case 'equipment-purchased':
           this.announce(
-            `${e.equipmentName} purchased for $${e.cost} and placed in the lab.`,
+            `${e.equipmentName} purchased for ₪${e.cost} and placed in the lab.`,
             'info',
           );
           break;
@@ -611,7 +577,7 @@ const Lab = {
         return `${name} is currently in use${user ? ` by ${user}` : ''}.`;
       }
       case 'no-funds':
-        return `Insufficient funds (cost: $${e.detail}, budget: $${this.world.money.toFixed(0)}).`;
+        return `Insufficient funds (cost: ₪${e.detail}, budget: ₪${this.world.money.toFixed(0)}).`;
       case 'already-known':
         return `Already certified for ${e.detail}.`;
       case 'off-shift':
@@ -641,18 +607,6 @@ const Lab = {
       staffId: this.selectedStaff.id,
       equipmentId,
       skill: skillToLearn,
-    });
-    this.closeAllModals();
-  },
-
-  assignEmergencyTask(staffId) {
-    const person = this.staff.find((p) => p.id === staffId);
-    if (!person || !this.activeEmergencyTask) return;
-    this.selectedStaff = person;
-    this.dispatch({
-      type: 'ASSIGN_EMERGENCY',
-      staffId,
-      emergencyId: this.activeEmergencyTask.id,
     });
     this.closeAllModals();
   },
@@ -716,25 +670,10 @@ const Lab = {
       this.updateStaffPanel();
       this.updateEmergencyListPanel();
       this.updateOngoingTasksPanel();
-      this.updateEmergencyModalDeadline();
     }
 
     this.renderer.render(this.buildRenderView());
     requestAnimationFrame(() => this.gameLoop());
-  },
-  /**
-   * Keeps the open emergency modal's countdown moving. This used to live
-   * inside the emergency update loop, which now runs in the engine and cannot
-   * touch the DOM, so it moved here with the rest of the view work.
-   */
-  updateEmergencyModalDeadline() {
-    if (!this.activeEmergencyTask) return;
-    const live = this.emergencyQueue.find((t) => t.id === this.activeEmergencyTask.id);
-    if (!live) return;
-    setHtmlById(
-      'emergencyTaskDeadline',
-      html`<strong>Deadline:</strong> ${formatMinutes(live.timeLimit)}`,
-    );
   },
   updateUI() {
     document.getElementById('money').textContent = this.world.money.toFixed(0);
@@ -843,38 +782,60 @@ const Lab = {
             </div>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
               <button class="btn" data-action="repair" data-equipment-id="${eq.id}">
-                Repair ($${this.world.tuning.repairCost})</button
+                Repair (₪${this.world.tuning.repairCost})</button
               ><button class="btn" data-action="calibrate" data-equipment-id="${eq.id}">
-                Calibrate ($${this.world.tuning.calibrateCost})
+                Calibrate (₪${this.world.tuning.calibrateCost})
               </button>
             </div>
           </div>`,
       )}`,
     );
   },
+  /**
+   * Rush orders: ordinary jobs a client needs tomorrow.
+   *
+   * This panel used to list emergencies, which were a separate kind of work
+   * with their own entity, their own progress fields on a person and their own
+   * events. It reads jobs now and the shape it receives is unchanged, because
+   * it has always asked through `listUrgentWork` rather than reaching into the
+   * simulation.
+   *
+   * Time left can be negative. A rush order is quoted in wall-clock hours, so
+   * one arriving on a Thursday afternoon may simply be impossible, and saying
+   * so is more useful than showing a zero.
+   */
   updateEmergencyListPanel() {
     const p = document.getElementById('emergencyListPanel');
     if (!p) return;
     p.replaceChildren();
-    const a = this.emergencyQueue.filter(
-      (t) => t.status === 'pending' || t.status === 'in-progress',
-    );
-    if (a.length === 0) {
+
+    const urgent = listUrgentWork(this.world);
+    if (urgent.length === 0) {
       setHtml(
         p,
         html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
-          No active emergencies.
+          No rush orders waiting.
         </div>`,
       );
       return;
     }
-    a.forEach((t) => {
-      const s = t.status === 'pending' ? 'Waiting' : 'In Progress';
+
+    urgent.forEach((item) => {
+      const late = item.timeLeft < 0;
       appendHtml(
         p,
-        html`<div class="emergency-card" data-action="open-emergency" data-emergency-id="${t.id}">
-          <strong>${t.name}</strong>
-          <div><span>${s}</span><span>Time Left: ${formatMinutes(t.timeLimit)}</span></div>
+        html`<div class="emergency-card ${late ? 'overdue' : ''}">
+          <strong>${item.name} ${item.id}</strong>
+          <div>
+            <span>${item.status}</span
+            ><span
+              >${
+                late
+                  ? html`Overdue by ${formatMinutes(-item.timeLeft)}`
+                  : html`Due in ${formatMinutes(item.timeLeft)}`
+              }</span
+            >
+          </div>
         </div>`,
       );
     });
@@ -1063,65 +1024,6 @@ const Lab = {
       .querySelectorAll('.modal.active, .modal-overlay.active')
       .forEach((el) => el.classList.remove('active'));
     this.selectedStaff = null;
-    this.activeEmergencyTask = null;
-  },
-  openEmergencyModalById(id) {
-    const task = this.emergencyQueue.find((t) => t.id === id);
-    if (task) this.openEmergencyModal(task);
-  },
-  openEmergencyModal(task) {
-    this.activeEmergencyTask = task;
-    setHtml(
-      document.getElementById('emergencyTaskName'),
-      html`<strong>Task:</strong> ${task.name}`,
-    );
-    setHtmlById('emergencyTaskReward', html`<strong>Reward:</strong> $${task.reward}`);
-    setHtmlById('emergencyTaskPenalty', html`<strong>Penalty:</strong> $${task.penalty}`);
-    setHtmlById(
-      'emergencyTaskDeadline',
-      html`<strong>Deadline:</strong> ${formatMinutes(task.timeLimit)}`,
-    );
-    const staffListEl = document.getElementById('emergencyStaffList');
-    staffListEl.replaceChildren();
-    const availableStaff = this.staff.filter(
-      (p) => isUnoccupied(this.world, p) && isQualified(p, task),
-    );
-    if (availableStaff.length > 0) {
-      availableStaff.forEach((p) => {
-        appendHtml(
-          staffListEl,
-          html`<div
-            class="staff-assign-option"
-            data-action="assign-emergency"
-            data-staff-id="${p.id}"
-          >
-            <span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small>
-          </div>`,
-        );
-      });
-    } else {
-      setHtml(
-        staffListEl,
-        html`<div style="color: #b91c1c; text-align: center; font-weight: 600;">
-          No qualified and available staff found!
-        </div>`,
-      );
-    }
-    document.getElementById('modalOverlay').className = 'modal-overlay active';
-    document.getElementById('emergencyModal').className = 'modal active';
-  },
-  flashEmergencyPanel() {
-    const header = document.getElementById('emergencyPanelHeader');
-    if (!header) return;
-    // Removing the class and reading offsetWidth forces a reflow, so the
-    // animation restarts if a second emergency arrives while the first flash
-    // is still playing. Without it the browser sees no change and does nothing.
-    header.classList.remove('emergency-alert');
-    void header.offsetWidth;
-    header.classList.add('emergency-alert');
-    header.addEventListener('animationend', () => header.classList.remove('emergency-alert'), {
-      once: true,
-    });
   },
   resetCamera() {
     // Previously duplicated the initial camera literals, so the two could
@@ -1173,7 +1075,7 @@ const Lab = {
                 Requires Skill: ${item.skill}
               </div>
             </div>
-            <div class="cost">$${item.cost}</div>
+            <div class="cost">₪${item.cost}</div>
             <button
               class="btn btn-primary"
               data-action="buy-equipment"

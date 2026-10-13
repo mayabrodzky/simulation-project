@@ -224,10 +224,31 @@ describe('samples arrive while the lab is open', () => {
 });
 
 describe('deadlines are absolute instants, set once at arrival', () => {
-  it('falls at close of business', () => {
-    for (const job of week(0)) {
+  it('falls at close of business for ordinary work', () => {
+    // Rush orders are excluded on purpose: theirs are quoted in wall-clock
+    // hours, so a rush arriving at 13:52 is due at 13:52 tomorrow. That is what
+    // makes one hard, and it is tested separately below.
+    for (const job of week(0).filter((j) => !j.rush)) {
       expect(minuteOfDay(job.dueAtMinute)).toBe(shift.endMinute);
     }
+  });
+
+  it('gives a rush order twenty-four wall-clock hours, overnight included', () => {
+    const rushJobs = Array.from({ length: 4 }, (_, w) => week(w))
+      .flat()
+      .filter((j) => j.rush);
+    expect(rushJobs.length).toBeGreaterThan(0);
+
+    for (const job of rushJobs) {
+      expect(job.dueAtMinute - job.arrivedAtMinute).toBeCloseTo(24 * 60, 6);
+    }
+  });
+
+  it('makes roughly a tenth of arrivals urgent', () => {
+    const all = Array.from({ length: 8 }, (_, w) => week(w)).flat();
+    const share = all.filter((j) => j.rush).length / all.length;
+    expect(share).toBeGreaterThan(0.05);
+    expect(share).toBeLessThan(0.16);
   });
 
   it('sets every deadline from its own arrival instant', () => {
@@ -235,7 +256,7 @@ describe('deadlines are absolute instants, set once at arrival', () => {
     // week or the time the world was created. Checked against the calendar,
     // which has its own tests, so this asserts the wiring rather than
     // re-deriving the arithmetic.
-    for (const job of week(0)) {
+    for (const job of week(0).filter((j) => !j.rush)) {
       const workType = chemistryLab.workTypes.find((w) => w.id === job.workTypeId)!;
       expect(job.dueAtMinute).toBe(
         addWorkingDays(chemistryLab.calendar, job.arrivedAtMinute, workType.dueWorkingDays),

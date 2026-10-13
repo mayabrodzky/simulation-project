@@ -704,3 +704,10 @@ body.sandbox-mode {
   border-radius: 6px;
   padding: 0.35rem 0.6rem;
 }
+
+/* A rush order past its deadline. Quoted in wall-clock hours, so one arriving
+   on a Thursday afternoon can be impossible before anybody touches it. */
+.emergency-card.overdue {
+  border-left-color: var(--danger-color);
+  background: #fef2f2;
+}

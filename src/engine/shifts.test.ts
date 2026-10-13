@@ -29,10 +29,6 @@ const { shift } = chemistryLab.calendar;
 
 function newWorld(startMinutes = SUNDAY_0800): WorldState {
   const world = createWorld(chemistryLab, SEED, startMinutes);
-  // Emergencies are the pre-job path, deleted in A6; left running they bury
-  // the figures being measured. See jobs.test.ts.
-  world.tuning = { ...world.tuning, emergencyRatePerMinute: 0 };
-  world.nextEmergencyAtMinute = Infinity;
   return world;
 }
 

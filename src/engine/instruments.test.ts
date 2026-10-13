@@ -32,8 +32,6 @@ const SUNDAY_0800 = 480;
 
 function newWorld(scenario: Scenario = chemistryLab, startMinutes = SUNDAY_0800) {
   const world = createWorld(scenario, SEED, startMinutes);
-  world.tuning = { ...world.tuning, emergencyRatePerMinute: 0 };
-  world.nextEmergencyAtMinute = Infinity;
   return world;
 }
 

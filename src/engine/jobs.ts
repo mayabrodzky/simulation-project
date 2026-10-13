@@ -490,10 +490,7 @@ function settle(
 
   job.status = onTime ? 'done-on-time' : 'done-late';
   job.completedAtMinute = world.simMinutes;
-  // Full price either way for now. A6 makes a late job pay 80% and a missed
-  // rush order lose its premium and refund part of the base, which is the
-  // asymmetry that makes lateness something to decide about.
-  job.settledRevenue = job.basePrice;
+  job.settledRevenue = settlementFor(world, job, onTime);
 
   world.money += job.settledRevenue;
   world.metrics.revenue += job.settledRevenue;
@@ -516,6 +513,35 @@ function settle(
     revenue: job.settledRevenue,
     minutesLate: onTime ? 0 : world.simMinutes - job.dueAtMinute,
   });
+}
+
+/**
+ * What a finished job actually pays.
+ *
+ * Four cases, and the asymmetry between them is the whole reason a rush order
+ * is a decision rather than a bonus:
+ *
+ * | | on time | late |
+ * |---|---|---|
+ * | ordinary | price | 80% of price |
+ * | rush | 150% of price | 70% of price |
+ *
+ * A 900 shekel job quoted as a rush is worth 1,350 landed and 630 missed, a
+ * swing of 720 against roughly 225 of materials already spent. The same job
+ * ordinary swings by 180. Nothing invented a penalty: a missed rush is
+ * expensive because the premium is lost *and* part of the ordinary price is
+ * refunded, and it pays less than an ordinary late job because the client was
+ * promised something and planned around it.
+ *
+ * This replaces `penalty`, a flat charge that could be levied on work nobody
+ * could have reached - the mechanism by which a simulated fortnight reached
+ * minus a quarter of a million shekels.
+ */
+export function settlementFor(world: WorldState, job: Job, onTime: boolean): number {
+  const t = world.tuning;
+  if (onTime) return job.rush ? job.basePrice * t.rushPriceMultiplier : job.basePrice;
+  if (!job.rush) return job.basePrice * t.latePriceFraction;
+  return job.basePrice * (1 - t.rushFailRefundFraction);
 }
 
 /* --- Assignment ----------------------------------------------------------- */

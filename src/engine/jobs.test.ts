@@ -25,20 +25,8 @@ import { createWorld, type WorldState } from './world';
 const SEED = 42;
 const SUNDAY_0800 = 480;
 
-/**
- * A world with the old emergencies silenced.
- *
- * Emergencies are the pre-job code path, still alive until A6 replaces them
- * with rush orders. Left running they fire every half hour, go unassigned, and
- * charge a flat penalty — which moved the budget by a quarter of a million over
- * the few simulated weeks these tests span and drowned out the figures being
- * measured. Silenced here rather than worked around, so an assertion about
- * money is an assertion about jobs.
- */
 function newWorld(startMinutes = SUNDAY_0800): WorldState {
   const world = createWorld(chemistryLab, SEED, startMinutes);
-  world.tuning = { ...world.tuning, emergencyRatePerMinute: 0 };
-  world.nextEmergencyAtMinute = Infinity;
   return world;
 }
 
@@ -374,8 +362,9 @@ describe('finishing', () => {
 
     expect(job.status).toBe('done-late');
     expect(operator.jobId).toBeNull();
-    // Still paid in full: partial credit arrives with the rush orders in A6.
-    expect(job.settledRevenue).toBe(job.basePrice);
+    // Four fifths of the price. This asserted full payment while partial credit
+    // was still to come; settlement.test.ts now owns the arithmetic.
+    expect(job.settledRevenue).toBeCloseTo(job.basePrice * 0.8, 6);
   });
 });
 
@@ -479,19 +468,19 @@ describe('a scheduled instant is never missed by a hair', () => {
     // step-size dependence the whole slice loop exists to remove, reappearing
     // two ulps below the threshold.
     //
-    // Silencing emergencies is what changed the slice pattern and exposed it,
-    // so this test runs both ways and requires the same outcome.
-    for (const silenceEmergencies of [false, true]) {
+    // Originally exposed by silencing the old emergencies, which changed the
+    // slice pattern. Emergencies are gone, so the pattern is varied directly:
+    // the same instant reached in one step and in many.
+    for (const step of [1, 37, 1440]) {
       const world = createWorld(chemistryLab, SEED, SUNDAY_0800);
-      if (silenceEmergencies) {
-        world.tuning = { ...world.tuning, emergencyRatePerMinute: 0 };
-        world.nextEmergencyAtMinute = Infinity;
+      const job = waitForJob(world, 'blood-panel');
+
+      const target = job.expiresAtMinute;
+      while (world.simMinutes < target - 1e-9) {
+        advance(world, Math.min(step, target - world.simMinutes));
       }
 
-      const job = waitForJob(world, 'blood-panel');
-      advance(world, job.expiresAtMinute - world.simMinutes);
-
-      expect(job.status).toBe('expired');
+      expect(job.status, `step ${step}`).toBe('expired');
     }
   });
 
@@ -516,22 +505,34 @@ describe('a part-finished job says so', () => {
     // step *boundary*. Mass spectrometry has one step, so a job 86% finished
     // reported itself as untouched. The one signal available for "has anyone
     // worked on this?" was wrong for a quarter of the work the lab sells.
-    const world = newWorld(4 * MINUTES_PER_DAY + 14 * 60); // Thursday 14:00
-    const job = waitForJob(world, 'mass-spec');
+    // Opened on Thursday morning and walked to twenty minutes before closing,
+    // rather than created at 15:40 — a fresh world has no arrivals yet, and
+    // `waitForJob` would then advance past four o'clock looking for one, which
+    // made the later advance negative and silently did nothing.
+    //
+    // Twenty minutes is deliberate: mass-spec preparation is a full hour, so it
+    // cannot finish. Given longer it would hand over to the instrument and keep
+    // running overnight, which is a different thing with its own tests.
+    const closing = 4 * MINUTES_PER_DAY + 16 * 60;
+    const world = newWorld(4 * MINUTES_PER_DAY + 8 * 60);
+    advance(world, closing - 20 - world.simMinutes);
+
+    const job = world.jobs.find((j) => j.workTypeId === 'mass-spec' && j.status === 'waiting');
+    expect(job, 'no mass-spec job waiting by Thursday afternoon').toBeDefined();
     const amit = available(world, 'Dr. Amit Katz');
-    applyCommand(world, { type: 'ASSIGN_JOB', staffId: amit.id, jobId: job.id });
+    applyCommand(world, { type: 'ASSIGN_JOB', staffId: amit.id, jobId: job!.id });
 
     // Up to closing time, which sets the job down mid-step.
-    advance(world, 4 * MINUTES_PER_DAY + 16 * 60 - world.simMinutes);
+    advance(world, closing - world.simMinutes);
 
-    expect(job.stepIndex).toBe(0);
-    expect(job.status).toBe('waiting');
-    const step = job.steps[0]!;
+    expect(job!.stepIndex).toBe(0);
+    expect(job!.status).toBe('waiting');
+    const step = job!.steps[0]!;
     expect(step.remaining).toBeGreaterThan(0);
     expect(step.remaining).toBeLessThan(step.total);
 
     const lihi = world.staff.find((p) => p.name === 'Dr. Lihi Dayan')!;
-    const row = listAssignableJobs(world, lihi).find((r) => r.id === job.id)!;
+    const row = listAssignableJobs(world, lihi).find((r) => r.id === job!.id)!;
     expect(row.minutesOfWork).toBeCloseTo(step.remaining, 6);
     expect(row.partlyDone).toBe(true);
   });

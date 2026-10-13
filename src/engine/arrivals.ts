@@ -27,7 +27,14 @@
  * same fairness guarantee with no edge.
  */
 import type { Calendar, Job, Tuning, WorkType } from '../domain/types';
-import { addWorkingDays, dayOfWeekOf, dayStart, DAYS_PER_WEEK } from './calendar';
+import {
+  addCalendarHours,
+  addWorkingDays,
+  addWorkingMinutes,
+  dayOfWeekOf,
+  dayStart,
+  DAYS_PER_WEEK,
+} from './calendar';
 import { createRng, deriveSeed } from './rng';
 
 /**
@@ -53,7 +60,12 @@ export function generateWeekArrivals(
   for (const workType of workTypes) {
     const count = drawWeeklyCount(rng.next(), workType);
     for (let i = 0; i < count; i++) {
-      jobs.push(makeJob(workType, calendar, tuning, openingMinuteIn(calendar, week, rng.next())));
+      // Two draws per job, in a fixed order: when it arrives, then whether it
+      // is urgent. Fixed so that changing the rush share cannot shift arrival
+      // times, which keeps a run's demand comparable across tunings.
+      const at = openingMinuteIn(calendar, week, rng.next());
+      const rush = rng.next() < tuning.rushFraction;
+      jobs.push(makeJob(workType, calendar, tuning, at, rush));
     }
   }
 
@@ -115,7 +127,18 @@ function makeJob(
   calendar: Calendar,
   tuning: Tuning,
   arrivedAtMinute: number,
+  rush: boolean,
 ): Job {
+  // A rush deadline is quoted in wall-clock hours, not working ones: "24 hours"
+  // means tomorrow, including the night. That is what makes it hard, and it is
+  // also why one arriving on a Thursday afternoon may be impossible to meet -
+  // a finding worth showing rather than a case to design away.
+  const dueAtMinute = rush
+    ? calendar.rushDeadlineMode === 'calendar'
+      ? addCalendarHours(arrivedAtMinute, tuning.rushDeadlineHours)
+      : addWorkingMinutes(calendar.shift, arrivedAtMinute, tuning.rushDeadlineHours * 60)
+    : addWorkingDays(calendar, arrivedAtMinute, workType.dueWorkingDays);
+
   return {
     // Replaced by the caller once the week is sorted.
     id: '',
@@ -123,13 +146,12 @@ function makeJob(
     name: workType.name,
     status: 'waiting',
     arrivedAtMinute,
-    dueAtMinute: addWorkingDays(calendar, arrivedAtMinute, workType.dueWorkingDays),
-    expiresAtMinute: addWorkingDays(
-      calendar,
-      arrivedAtMinute,
-      workType.dueWorkingDays + tuning.abandonAfterWorkingDays,
-    ),
+    dueAtMinute,
+    // Counted from the deadline rather than from arrival, so a rush order that
+    // is already late is abandoned three working days later like anything else.
+    expiresAtMinute: addWorkingDays(calendar, dueAtMinute, tuning.abandonAfterWorkingDays),
     basePrice: workType.basePrice,
+    rush,
     steps: workType.steps.map((step) => ({
       capability: step.capability,
       skillRequired: step.skillRequired,
