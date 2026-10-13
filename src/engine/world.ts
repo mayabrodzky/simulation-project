@@ -118,7 +118,32 @@ export interface WorldState {
   metrics: Metrics;
 }
 
+/**
+ * Refuses to simulate an assumption the engine does not implement.
+ *
+ * `instrumentFreedWhenRunEnds` changes what the audit judges feasible — under
+ * the strict reading this scenario is impossible in three places — but the
+ * simulation itself always behaves as though a finished run frees its
+ * instrument. Modelling the alternative means a sample sitting in an instrument
+ * until somebody comes to take it out, which is an unload step the engine does
+ * not have.
+ *
+ * So setting it to false throws rather than running. A parameter that silently
+ * governs one half of the system and not the other is worse than no parameter:
+ * it produces a confident answer to a question it did not actually ask.
+ */
+function assertTuningIsImplemented(scenario: Scenario): void {
+  if (!scenario.tuning.instrumentFreedWhenRunEnds) {
+    throw new Error(
+      'instrumentFreedWhenRunEnds: false is not implemented in the simulation. ' +
+        'It changes what the audit judges feasible, and the engine would still ' +
+        'behave as though a run frees its instrument. See docs/product-spec.md §7.',
+    );
+  }
+}
+
 export function createWorld(scenario: Scenario, seed: number, startMinutes?: number): WorldState {
+  assertTuningIsImplemented(scenario);
   const rng = createRng(deriveSeed(seed, 'operations'));
   const t = scenario.tuning;
   const f = scenario.layout.labFloor;

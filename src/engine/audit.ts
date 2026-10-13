@@ -174,20 +174,32 @@ export function auditScenario(scenario: Scenario): ScenarioAudit {
     );
   }
 
+  // Which denominator decides *feasibility* is itself an assumption, and it is
+  // `instrumentFreedWhenRunEnds`. If a finished run frees its instrument, an
+  // instrument can work round the clock and the calendar week is the limit. If
+  // the sample sits in it until somebody unloads it, the working week is.
+  //
+  // The difference is not academic. At six shelves the incubator needs 579
+  // instrument-hours a week: 57% of a calendar week and 241% of a working one.
+  // The same scenario is comfortable under one reading and impossible under the
+  // other, which is why both are reported and why this flag exists.
+  const freedOnRunEnd = scenario.tuning.instrumentFreedWhenRunEnds;
+
   for (const load of byCapability) {
-    // Infeasible only if it cannot be done even using the whole calendar: an
-    // instrument over 100% of the working week may still cope if most of its
-    // time is unattended and continues overnight.
-    if (load.utilisationInCalendarHours > 1) {
+    const limit = freedOnRunEnd ? load.utilisationInCalendarHours : load.utilisationInWorkingHours;
+
+    if (limit > 1) {
+      const available = freedOnRunEnd
+        ? `${hours(load.slots * MINUTES_PER_WEEK)} running continuously`
+        : `${hours(load.slots * openMinutesPerWeek)} inside working hours`;
       errors.push(
         `"${load.capability}" needs ${hours(load.minutesPerWeek)} instrument-hours a week ` +
-          `and ${load.slots} slot(s) offer ${hours(load.slots * MINUTES_PER_WEEK)} even running ` +
-          `continuously.`,
+          `and ${load.slots} slot(s) offer ${available}.`,
       );
-    } else if (load.utilisationInWorkingHours > 1 && load.attendedMinutesPerWeek > 0) {
+    } else if (load.utilisationInWorkingHours > 1) {
       warnings.push(
-        `"${load.capability}" is at ${pct(load.utilisationInWorkingHours)} of working hours. ` +
-          `Feasible only if its unattended time runs outside them.`,
+        `"${load.capability}" is at ${pct(load.utilisationInWorkingHours)} of working hours, ` +
+          `and possible only because a finished run frees its instrument overnight.`,
       );
     } else if (load.utilisationInWorkingHours > 0.85) {
       warnings.push(

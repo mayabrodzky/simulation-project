@@ -243,15 +243,15 @@ describe('capacity is a count, not a name', () => {
   });
 
   it('lets several jobs share one instrument when it has shelves', () => {
-    // An incubator holds eight. Without capacity the model jams rather than
-    // queueing: twelve cell cultures at 48 hours each is 576 instrument-hours a
-    // week against 168 calendar hours, impossible at any count if each
+    // Six cultures at once, from `tuning.incubatorCapacity`. Without capacity
+    // the model jams rather than queueing: twelve cell cultures at 48 hours
+    // each is 576 instrument-hours a week, impossible at any *count* if each
     // instrument takes one job.
     const world = newWorld();
     const incubator = instrumentsFor(world, 'incubator')[0]!;
-    expect(incubator.capacity).toBe(8);
+    expect(incubator.capacity).toBe(chemistryLab.tuning.incubatorCapacity);
 
-    for (let i = 0; i < 8; i++) incubator.heldBy.push(`fake-${i}`);
+    for (let i = 0; i < incubator.capacity; i++) incubator.heldBy.push(`fake-${i}`);
     expect(allocate(world, 'incubator')).toBeUndefined();
 
     incubator.heldBy.pop();

@@ -202,3 +202,54 @@ describe('the arithmetic agrees with the simulation', () => {
     expect(Math.abs(workedMinutes - accounted) / workedMinutes).toBeLessThan(0.01);
   });
 });
+
+describe('the occupancy assumptions are consequential', () => {
+  it('judges feasibility against the calendar week when a run frees its instrument', () => {
+    const audit = auditScenario(chemistryLab);
+    expect(chemistryLab.tuning.instrumentFreedWhenRunEnds).toBe(true);
+    expect(audit.errors).toEqual([]);
+  });
+
+  it('makes the same scenario impossible in three places under the strict reading', () => {
+    // The two readings are not a matter of taste. If a sample sits in an
+    // instrument until somebody unloads it, availability is the working week —
+    // and the incubator needs 579 instrument-hours a week against 240.
+    //
+    // This is the strongest argument for putting the question to the lab
+    // manager: the answer decides whether the lab as described can function.
+    const strict: Scenario = {
+      ...chemistryLab,
+      tuning: { ...chemistryLab.tuning, instrumentFreedWhenRunEnds: false },
+    };
+    const audit = auditScenario(strict);
+
+    expect(audit.errors).toHaveLength(3);
+    expect(audit.errors.join(' ')).toContain('incubator');
+    expect(audit.errors.join(' ')).toContain('pcr');
+    expect(audit.errors.join(' ')).toContain('mass-spec');
+    expect(audit.errors.join(' ')).toContain('inside working hours');
+  });
+
+  it('refuses to simulate the reading it does not implement', () => {
+    // The audit responds to the flag; the engine does not. Rather than let a
+    // run silently behave as though the flag were true, creating the world
+    // throws. A parameter that governs half a system is worse than none.
+    const strict: Scenario = {
+      ...chemistryLab,
+      tuning: { ...chemistryLab.tuning, instrumentFreedWhenRunEnds: false },
+    };
+    expect(() => createWorld(strict, SEED, SUNDAY_0800)).toThrow(/not implemented/);
+  });
+
+  it('turns the incubator capacity into the thing that decides possibility', () => {
+    const oneShelf: Scenario = {
+      ...chemistryLab,
+      tuning: { ...chemistryLab.tuning, incubatorCapacity: 1 },
+      equipment: chemistryLab.equipment.map((e) =>
+        e.capabilities.includes('incubator') ? { ...e, capacity: 1 } : e,
+      ),
+    };
+    expect(auditScenario(oneShelf).errors.join(' ')).toContain('incubator');
+    expect(auditScenario(chemistryLab).errors).toEqual([]);
+  });
+});

@@ -429,6 +429,40 @@ export interface Tuning {
    */
 
   /** Share of arrivals a client needs tomorrow. */
+  /* --- Instrument occupancy ------------------------------------------------
+   *
+   * Two assumptions about what an instrument is doing when nobody is watching
+   * it. Both decide which instrument limits the lab, so both are here rather
+   * than inline, and both are written up as open questions in
+   * docs/product-spec.md rather than settled quietly.
+   */
+
+  /**
+   * Whether a finished run frees its instrument immediately.
+   *
+   * True: the moment a 90-minute run ends, the instrument is available, so its
+   * availability is the whole calendar week. False: the sample sits in it until
+   * somebody comes to take it out, so availability is the working week and the
+   * instrument is occupied overnight.
+   *
+   * The difference is the whole of the specification's bottleneck claim. Mass
+   * spectrometry needs 45 instrument-hours a week, which is 27% of a calendar
+   * week and 112% of a working one — barely warm under the first reading and
+   * the lab's hard limit under the second.
+   */
+  instrumentFreedWhenRunEnds: boolean;
+
+  /**
+   * How many cultures the incubator holds at once.
+   *
+   * Here rather than in the equipment list because it is the same kind of
+   * assumption as the one above and belongs beside it: twelve cell cultures at
+   * 48 hours each is 576 instrument-hours a week, so this number alone decides
+   * whether the work is possible. At 1 it is not possible at any number of
+   * incubators; at 6 it is comfortable.
+   */
+  incubatorCapacity: number;
+
   /** How long a client gives a rush order, in wall-clock hours. */
   rushDeadlineHours: number;
   /** Share of arrivals a client needs tomorrow. */

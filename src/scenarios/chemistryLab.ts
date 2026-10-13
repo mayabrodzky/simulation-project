@@ -97,6 +97,16 @@ const tuning: Tuning = {
   // is partial credit rather than a flat penalty. The old emergencies charged
   // 4,000 shekels for work nobody could have reached, which is how a budget
   // reached minus a quarter of a million in a simulated fortnight.
+  // An instrument is free the moment its run ends. The generous reading, and
+  // the one that makes the mass spectrometer *not* the bottleneck - see open
+  // question 10 in docs/product-spec.md.
+  instrumentFreedWhenRunEnds: true,
+
+  // Six cultures at a time. A real cabinet has more shelves than that, but the
+  // number that matters is how many a lab this size runs concurrently, and six
+  // covers the twelve-a-week demand with room for a bad week.
+  incubatorCapacity: 6,
+
   rushDeadlineHours: 24,
   rushFraction: 0.1,
   rushPriceMultiplier: 1.5,
@@ -351,9 +361,10 @@ export const chemistryLab: Scenario = {
       skill: 'Incubator Handling',
       capabilities: ['incubator'],
       count: 1,
-      // Shelves. This is the number that makes a 48-hour incubation possible at
-      // all; see the arithmetic above.
-      capacity: 8,
+      // Shelves, and the number that makes a 48-hour incubation possible at
+      // all. Read from tuning because it is a modelling assumption rather than
+      // a fact about this lab's furniture.
+      capacity: tuning.incubatorCapacity,
     },
     {
       name: 'Spectrophotometer',

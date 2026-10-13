@@ -2003,3 +2003,50 @@ rank so every reported figure is one that actually happened, the median unmoved 
 catastrophic run, and an impossible scenario refused before fifty runs are spent on it.
 
 279 tests in total.
+
+---
+
+## 30. Two occupancy assumptions, parameterised and recorded
+
+**Context.** A7 ended with an open question it could not answer: whether a finished unattended run
+frees its instrument immediately, or whether the sample sits in it until somebody comes to take it
+out. The answer decides the denominator for every instrument's utilisation, and therefore which
+instrument limits the lab.
+
+**Decision.** Both the occupancy reading and the incubator's concurrent capacity become `Tuning`
+values, which is where every model assumption belongs: `instrumentFreedWhenRunEnds: true` and
+`incubatorCapacity: 6`. The incubator's equipment entry now reads its capacity from tuning, because
+the number is a modelling assumption rather than a fact about the lab's furniture.
+
+**The flag decides what the audit judges feasible**, not merely what it reports. With it true,
+availability is the calendar week; with it false, the working week. That makes the assumption
+consequential rather than decorative:
+
+| Capability | Needs | In working hours | Verdict if strict |
+|---|---|---|---|
+| incubator | 579.0 h/wk | 240.0 | impossible |
+| pcr | 110.0 h/wk | 80.0 | impossible |
+| mass-spec | 45.0 h/wk | 40.0 | impossible |
+
+Under the permissive reading the scenario has no infeasible capability at all. Under the strict one it
+has three. The same lab, the same numbers, one assumption.
+
+**The simulation implements only the permissive reading, so the engine refuses the other.** Modelling
+the strict one needs an unload step the engine does not have, and a flag that silently governs the
+audit but not the run would be worse than no flag: it would produce a confident answer to a question
+it had not actually asked. `createWorld` therefore throws on `instrumentFreedWhenRunEnds: false`,
+naming the spec section. This is the same lesson as A1's untested-calendar — a half-wired parameter
+reads as finished work — applied before it could cause anything.
+
+**Incubator capacity at 6 rather than 8.** Reported load rises from 43% to 57% of a calendar week, and
+from 181% to 241% of a working one. Still comfortable under the permissive reading. PCR is unchanged
+at 110 instrument-hours a week: 138% of working hours, 33% of the calendar.
+
+Both are written up as numbered assumptions 10 and 11 in `docs/product-spec.md`, each with why it was
+chosen, what it changes, and a specific question to put to the lab manager — for occupancy, what
+happens to a run finishing at 16:30; for the incubator, how many cultures are genuinely in it at once
+on a normal week.
+
+**Verification.** Four tests: the permissive reading is feasible, the strict reading produces exactly
+three errors naming all three capabilities, `createWorld` refuses the unimplemented reading, and
+capacity 1 makes cell culture impossible while the shipped value does not. 283 tests in total.
