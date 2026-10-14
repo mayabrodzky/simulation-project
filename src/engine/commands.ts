@@ -217,7 +217,7 @@ function serviceEquipment(
   }
 
   world.money -= cost;
-  world.metrics.equipmentSpend += cost;
+  world.metrics.repairs += cost;
   equipment.condition = Math.min(100, equipment.condition + amount);
 
   events.push({

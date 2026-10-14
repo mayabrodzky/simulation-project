@@ -299,8 +299,16 @@ export interface Job {
   /** Set by manual assignment. The dispatcher never reassigns a pinned job. */
   pinnedStaffId: StaffId | null;
   completedAtMinute: number | null;
-  /** What was actually paid. A6 makes this differ from basePrice. */
+  /** What was actually paid, after any rush premium or lateness adjustment. */
   settledRevenue: number;
+  /**
+   * Whether materials have been charged for this job.
+   *
+   * A flag rather than deriving it from the step counters, because the charge
+   * must happen exactly once: a job that is started, set down at closing time
+   * and picked up again the next morning has not bought two sets of reagents.
+   */
+  materialsCharged: boolean;
   blockReason: BlockReason | null;
   /**
    * When the current block began, or null if nothing is in the way.
@@ -370,8 +378,6 @@ export interface Layout {
  */
 export interface Tuning {
   startingMoney: number;
-  startingMaterials: number;
-  startingSamples: number;
   /**
    * Simulated minutes per real second, for the live view. The batch runner
    * ignores it and steps in simulated minutes directly.
@@ -492,6 +498,24 @@ export interface Tuning {
 
   /** How long a client gives a rush order, in wall-clock hours. */
   rushDeadlineHours: number;
+  /* --- Money ---------------------------------------------------------------
+   *
+   * From docs/product-spec.md section 3.4. Every figure is in shekels; the
+   * lab is Israeli and the currency is part of the specification rather than a
+   * presentation choice.
+   */
+
+  /** Loaded cost of an hour of contracted time, full-time and part-time. */
+  ratePerHourFullTime: number;
+  ratePerHourPartTime: number;
+  /** The multiplier on the first overtime band, and on everything past it. */
+  overtimeFirstBandMultiplier: number;
+  overtimeBeyondMultiplier: number;
+  /** Share of a job's price spent on materials, charged at its first step. */
+  materialsFraction: number;
+  /** Rent, utilities and admin for a month. Accrued daily. */
+  fixedCostsPerMonth: number;
+
   /** Share of arrivals a client needs tomorrow. */
   rushFraction: number;
   /** What a client pays for a rush. */
@@ -513,11 +537,55 @@ export interface Tuning {
  * Phase 2 replaces the invented energy percentage with real measures — hours
  * worked, overtime, backlog, delays — and this is where they attach.
  */
+/**
+ * Running totals, and the account a verdict is built from.
+ *
+ * Everything here is cumulative and never reset. The measurement *window* is a
+ * separate idea: `snapshotMetrics` takes a copy at the end of a warm-up and a
+ * report subtracts it, which keeps the live view's counters meaningful while
+ * keeping the window out of the hot loop.
+ *
+ * `penalties` is gone with the emergencies that charged them. Lateness is now
+ * partial credit, so a late job appears as *less revenue* rather than as a
+ * charge — which is both what actually happens and the only way the two can be
+ * told apart in a report.
+ */
 export interface Metrics {
-  tasksCompleted: number;
-  tasksFailed: number;
+  jobsCompleted: number;
+  jobsLate: number;
+  /** Clients who gave up. Nothing is charged; the work is simply not paid for. */
+  jobsAbandoned: number;
+
+  /** What was actually settled, after any lateness adjustment. */
   revenue: number;
-  penalties: number;
+  /**
+   * What the same work would have earned delivered on time.
+   *
+   * Kept beside `revenue` so lateness has a price rather than an absence. The
+   * difference between them is the cost of being late, which is a number the
+   * lab manager has never seen.
+   */
+  revenueIfAllOnTime: number;
+
+  /* --- Costs, in the four lines a lab manager would recognise ------------- */
+
+  /**
+   * Contracted hours, charged whether or not they were worked.
+   *
+   * This is what makes an idle hire cost something. Charged per person per week
+   * at their own rate, so decision A — hire a technician at 16,000 a month —
+   * shows up as a cost even in a week when the queue is empty. Without it the
+   * decision appears free and the comparison the product exists to make is
+   * destroyed.
+   */
+  labourBase: number;
+  /** The premium on overtime minutes only, not their whole cost. */
+  labourOvertime: number;
+  /** A share of each job's price, charged when its first step begins. */
+  materials: number;
+  /** Rent, utilities and admin, accrued daily. Identical in every option. */
+  fixedCosts: number;
+  repairs: number;
   trainingSpend: number;
   equipmentSpend: number;
 }

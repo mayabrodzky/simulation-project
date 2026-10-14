@@ -85,7 +85,7 @@ describe('settlement in a running lab', () => {
   it('pays the premium when a rush order lands', () => {
     const world = newWorld();
     const job = massSpecJob(world, true);
-    const before = world.money;
+    const before = world.metrics.revenue;
 
     job.dueAtMinute = world.simMinutes + 10 * MINUTES_PER_DAY; // comfortably in time
     job.steps.forEach((s) => {
@@ -100,7 +100,9 @@ describe('settlement in a running lab', () => {
 
     expect(job.status).toBe('done-on-time');
     expect(job.settledRevenue).toBe(job.basePrice * t.rushPriceMultiplier);
-    expect(world.money - before).toBeCloseTo(job.settledRevenue, 6);
+    // Measured on the revenue line: the budget also carries rent and materials
+    // now, so it is no longer a proxy for what a job paid.
+    expect(world.metrics.revenue - before).toBeCloseTo(job.settledRevenue, 6);
   });
 
   it('charges nothing at all for work nobody reached', () => {
@@ -108,15 +110,17 @@ describe('settlement in a running lab', () => {
     // how a budget reached minus a quarter of a million in two simulated
     // weeks. An abandoned job now simply pays nothing.
     const world = newWorld();
-    const before = world.money;
+    const before = world.metrics.revenue;
     advance(world, 21 * MINUTES_PER_DAY);
 
     const expired = world.jobs.filter((j) => j.status === 'expired');
     expect(expired.length).toBeGreaterThan(0);
     for (const job of expired) expect(job.settledRevenue).toBe(0);
     // Nothing was done either, so the budget has not moved at all.
-    expect(world.money).toBe(before);
-    expect(world.money).toBeGreaterThan(0);
+    expect(world.metrics.revenue).toBe(before);
+    // And the foregone revenue is still recorded, which is what gives an
+    // abandoned job a price rather than an absence.
+    expect(world.metrics.revenueIfAllOnTime).toBeGreaterThan(0);
   });
 
   it('never leaves a finished job unpriced', () => {

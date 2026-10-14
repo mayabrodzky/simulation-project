@@ -68,3 +68,10 @@ export {
   type QueueLineView,
   type UrgentWorkView,
 } from './queries';
+
+/**
+ * The account. Everything here is derived from `world.metrics`, which is
+ * cumulative — a measurement window is `snapshot` plus `since`, kept out of the
+ * hot loop on purpose.
+ */
+export { profitAndLoss, ratePerHour, since, snapshot, type ProfitAndLoss } from './money';

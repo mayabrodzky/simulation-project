@@ -20,6 +20,7 @@ import {
   tickJobs,
   tickUnattended,
 } from './jobs';
+import { accrueFixedCosts } from './money';
 import { applyShiftWindow, creditWork, nextShiftEventIn, rollLedgers } from './shifts';
 import type { EngineEvent } from './events';
 import { admitArrivals, ensureArrivalsThrough, rngForStaff, type WorldState } from './world';
@@ -220,6 +221,11 @@ function applySlice(
     }
 
     expireAbandonedJobs(world, events);
+
+    // Rent, utilities and admin, by the minute. Identical in every option being
+    // compared, which is exactly why it has to be here: leaving it out would
+    // overstate the proportional effect of every decision.
+    accrueFixedCosts(world, dt);
   }
 
   // Instruments running on their own advance first, and are not conditioned on

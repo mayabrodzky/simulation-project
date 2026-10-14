@@ -2151,3 +2151,119 @@ exceed 100%. And energy is gone: no field, no break state, none appearing over a
 
 303 tests in total, and the suite now takes 48 seconds — most of it simulating weeks a minute at a
 time, which B3 is what fixes.
+
+---
+
+## 32. Shekels, materials, and a profit and loss account
+
+**Context.** `Metrics` had six fields, was written by the engine and read by nobody. The header showed
+two counters — Materials and Samples — that nothing consumed and no decision turned on. The one
+visible money figure was a budget that moved only when a job settled or somebody bought something, so
+a four-week run could look profitable while never paying rent or wages.
+
+**Decision.** Six lines on the account, chosen because they are the ones a lab manager would recognise
+on a statement: revenue, and what the same work would have earned on time; then labour split into
+contracted and overtime, materials, fixed costs, and repairs.
+
+**Labour is charged against contracted hours, not minutes worked.** This is the single most
+consequential decision in the step and the easiest to get wrong without noticing. Somebody employed
+for forty hours costs forty hours whether the queue is full or empty. Charge worked minutes instead and
+an idle hire is free — so decision A, *hire a technician at ₪16,000 a month*, would appear to improve
+everything at no cost, and the comparison the product exists to make would come out backwards. Not
+approximately wrong: inverted. Four tests exist only to pin it down, and the mutation that charges
+worked minutes fails all four.
+
+Overtime adds **only the premium** above the ordinary rate, because the hour inside it is already paid
+for by the contract. Charging the whole multiplier would bill the first forty hours twice for anybody
+who stayed late.
+
+**Materials are charged once, when work genuinely begins, and never refunded.** At the first step
+rather than on arrival, because a job nobody starts has cost nothing. Never refunded, because the
+reagents are gone whatever the client ends up paying — which is what makes a missed rush order
+expensive rather than merely unpaid. A flag on the job rather than a derivation, because a job started
+on Thursday, set down at closing time and resumed on Sunday has not bought two sets of reagents and
+"has any work been done" is true in both cases.
+
+**Fixed costs accrue by the minute.** Identical in every option being compared, which is exactly why
+they must be present: omitting them would overstate the *proportional* effect of every decision. And
+`profitPerMonth` exists because four weeks is 93% of a month — reporting one as the other is a silent
+7% error, which is how a verdict card goes wrong with nobody noticing.
+
+**A measurement window is a snapshot and a subtraction.** The account is cumulative and never reset;
+`snapshot` copies it and `since` subtracts. That keeps the warm-up exclusion the batch runner needs out
+of the hot loop and leaves the live view's counters running.
+
+**Lateness is a price, not an absence.** A late job appears as less revenue, which is what actually
+happens, so `revenueIfAllOnTime` is kept beside it. The difference between the two is the cost of being
+late — a number the lab manager has never seen. `penalties` is gone with the emergencies that charged
+them.
+
+Materials and Samples leave the world and the header, replaced by Revenue and Labour: the two figures
+the manager's complaint is actually about, with the overtime premium folded into the second.
+
+### The bug worth recording
+
+`ratePerHour` decided "full-time" by comparing weekly hours against `DAYS_PER_WEEK * 8` — fifty-six
+hours. Every forty-hour full-timer fell below it and was billed at the part-timer's rate: a ten percent
+error on the largest cost line in the model, invisible in any total, and caught only because four
+tests asserted the rate directly rather than asserting that the total looked plausible. It now derives
+the threshold from the lab's own shift.
+
+### Two tolerance problems in the invariance test, and what they were really saying
+
+The step-size invariance test failed the moment money arrived, twice, and both failures were the test
+being right.
+
+First, `metrics` sat in the **exact** fingerprint. Two of its new lines — rent and materials — accrue
+over `dt`, so they inherit the clock's floating-point drift and cannot be compared exactly. The split
+has to follow *which quantities integrate*, not which object they happen to live on. Counts stayed
+exact; money moved to the tolerant comparison.
+
+Second, the tolerant comparison was `toBeCloseTo(x, 6)` — an absolute bound of 5e-7. Fine while every
+continuous quantity was a position or a countdown; wrong for rent, which is about ₪24,667 over four
+simulated hours. The two runs differed by 6.6e-7, a **relative** error of 2.7e-11, which is about as
+exact as double-precision addition gets. The test was failing a quantity for being large. The bound now
+scales with magnitude and keeps an absolute floor for quantities near zero.
+
+Worth being precise about the direction: this is *tighter* for money than loosening the absolute bound
+would have been, and unchanged for everything else. The temptation was to relax 6 to 4 and move on,
+which would have blunted the test for positions and timers too.
+
+### A process note
+
+While mutation-testing the accounting I ran `git checkout -- src/engine/jobs.ts` to undo a deliberate
+breakage, and it reverted that file to the last commit — discarding the uncommitted work of this very
+step. The money.ts mutations had been done properly, against a copy in a scratch directory; this one
+took a shortcut. Reapplied from the edit script, and the gate confirmed the restoration. The lesson is
+narrow and worth keeping: `git checkout --` is not an undo for an edit, it is an undo for *everything
+since the last commit*, and mutation testing on an uncommitted tree needs a file copy.
+
+### What the account says about the lab
+
+Fifty runs of four weeks, same demand seeds:
+
+```
+revenue                   246,816
+labour                    138,839   (of which overtime 839)
+profit                    -13,692
+profit per month          -14,670
+```
+
+**The lab as specified loses money.** It completes 538 jobs of roughly 648 arriving, so the backlog
+grows by about a hundred over four weeks, and unfinished work earns nothing while still consuming
+reagents. That is a finding about the scenario rather than a defect in the model, and it is the kind
+the product exists to produce — but it is also the first number here that would be worth checking
+against the real lab's accounts before anybody relies on it.
+
+**It also inverts the cross-training comparison.** By jobs completed the decision looks clearly bad:
+24 fewer. By money it is a wash — revenue actually *rises* by ₪3,942, because the work that does get
+done is more valuable, and labour barely moves. Profit differs by ₪251 against a spread of ₪20,000.
+Two metrics, opposite verdicts, same runs. Which is exactly why a verdict card has to show more than
+one number, and why B3's dispatcher change is worth measuring before concluding anything.
+
+**Verification.** 17 new tests, 320 in total. Three mutations, all caught: labour on worked minutes
+fails four tests, overtime at the full multiplier fails two, and refunding materials on abandonment
+fails two — one of them the conservation law, which checks that the opening budget plus revenue minus
+every cost line equals the budget actually left. That is the same shape as the per-minute conservation
+law from the capacity work, and for the same reason: a charge that reaches the budget without reaching
+a cost line would make every profit figure wrong and nothing else would notice.

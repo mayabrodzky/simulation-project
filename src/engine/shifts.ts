@@ -27,6 +27,7 @@ import { dayIndex, isWithinShift, nextCalendarBoundary, weekIndex } from './cale
 import type { EngineEvent } from './events';
 import { EPSILON } from './geometry';
 import { releaseJobOf } from './jobs';
+import { chargeWeeklyLabour } from './money';
 import type { WorldState } from './world';
 
 /**
@@ -46,6 +47,11 @@ export function rollLedgers(world: WorldState): void {
 
   const week = weekIndex(world.simMinutes);
   if (week !== world.ledgerWeek) {
+    // Payroll for the week just ended, charged *before* the counters are
+    // cleared. Getting that order wrong would bill every week as though nobody
+    // had worked any overtime at all.
+    chargeWeeklyLabour(world);
+
     world.ledgerWeek = week;
     for (const person of world.staff) {
       person.minutesWorkedThisWeek = 0;

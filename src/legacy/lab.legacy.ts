@@ -441,8 +441,7 @@ const Lab = {
           actions: this.currentSandboxSession.actions,
           finalState: {
             money: Math.round(this.world.money),
-            materials: this.world.materials,
-            samples: this.world.samples,
+            revenue: this.world.metrics.revenue,
           },
         }),
       });
@@ -677,8 +676,14 @@ const Lab = {
   },
   updateUI() {
     document.getElementById('money').textContent = this.world.money.toFixed(0);
-    document.getElementById('materials').textContent = this.world.materials;
-    document.getElementById('samples').textContent = this.world.samples;
+    // The two numbers the lab manager's complaint is actually about. Labour
+    // includes the overtime premium, which is the part she says she cannot see
+    // until payroll.
+    const m = this.world.metrics;
+    document.getElementById('revenue').textContent = Math.round(m.revenue).toLocaleString();
+    document.getElementById('labour').textContent = Math.round(
+      m.labourBase + m.labourOvertime,
+    ).toLocaleString();
   },
   updateStatusCounts() {
     const c = { working: 0, overtime: 0, off: 0, sick: 0, vacation: 0, training: 0 };

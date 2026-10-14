@@ -167,6 +167,7 @@ function makeJob(
     pinnedStaffId: null,
     completedAtMinute: null,
     settledRevenue: 0,
+    materialsCharged: false,
     blockReason: null,
     blockedSinceMinute: null,
     stallReported: false,

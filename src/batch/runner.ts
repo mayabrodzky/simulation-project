@@ -28,6 +28,7 @@ import { assertScenarioIsPossible } from '../engine/audit';
 import { MINUTES_PER_DAY } from '../engine/calendar';
 import { applyCommand } from '../engine/commands';
 import { listAssignableJobs } from '../engine/queries';
+import { chargeWeeklyLabour, profitAndLoss } from '../engine/money';
 import { instrumentsFor } from '../engine/resources';
 import { advance } from '../engine/tick';
 import { createWorld, type WorldState } from '../engine/world';
@@ -43,6 +44,18 @@ export interface RunResult {
   averageBacklog: number;
   /** Mass spectrometer busy time as a share of the whole calendar period. */
   massSpecUtilisation: number;
+
+  /* --- Money, over the measured period ----------------------------------- */
+
+  revenue: number;
+  /** What the same work would have earned delivered on time. */
+  revenueIfAllOnTime: number;
+  labour: number;
+  /** The overtime premium alone, which is the invisible part. */
+  labourOvertime: number;
+  profit: number;
+  /** Scaled to a calendar month, because four weeks is 93% of one. */
+  profitPerMonth: number;
 }
 
 export interface BatchOptions {
@@ -114,6 +127,14 @@ export function runOnce(scenario: Scenario, seed: number, options: BatchOptions 
     }
   }
 
+  // Payroll for the final, incomplete week. The week hook charges labour when
+  // the week turns over, so a run ending mid-week would otherwise report four
+  // weeks of revenue against three weeks of wages - a profit overstated by a
+  // quarter of its largest cost.
+  chargeWeeklyLabour(world);
+
+  const account = profitAndLoss(world.metrics, totalMinutes);
+
   const massSpecBusy = instrumentsFor(world, 'mass-spec').reduce(
     (total, instrument) => total + instrument.totalWorkTime,
     0,
@@ -133,6 +154,13 @@ export function runOnce(scenario: Scenario, seed: number, options: BatchOptions 
     jobsAbandoned: world.jobs.filter((j) => j.status === 'expired').length,
     averageBacklog: backlogSamples > 0 ? backlogTotal / backlogSamples : 0,
     massSpecUtilisation: massSpecSlots > 0 ? massSpecBusy / (massSpecSlots * totalMinutes) : 0,
+
+    revenue: account.revenue,
+    revenueIfAllOnTime: world.metrics.revenueIfAllOnTime,
+    labour: account.labourBase + account.labourOvertime,
+    labourOvertime: account.labourOvertime,
+    profit: account.profit,
+    profitPerMonth: account.profitPerMonth,
   };
 }
 
@@ -151,6 +179,11 @@ export interface BatchResult {
   jobsAbandoned: Spread;
   averageBacklog: Spread;
   massSpecUtilisation: Spread;
+  revenue: Spread;
+  labour: Spread;
+  labourOvertime: Spread;
+  profit: Spread;
+  profitPerMonth: Spread;
 }
 
 export function runBatch(
@@ -175,6 +208,11 @@ export function runBatch(
     jobsAbandoned: of((r) => r.jobsAbandoned),
     averageBacklog: of((r) => r.averageBacklog),
     massSpecUtilisation: of((r) => r.massSpecUtilisation),
+    revenue: of((r) => r.revenue),
+    labour: of((r) => r.labour),
+    labourOvertime: of((r) => r.labourOvertime),
+    profit: of((r) => r.profit),
+    profitPerMonth: of((r) => r.profitPerMonth),
   };
 }
 

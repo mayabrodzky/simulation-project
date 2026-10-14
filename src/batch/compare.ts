@@ -44,13 +44,16 @@ function spread(s: Spread, decimals = 0): string {
   return `${fmt(s.median, decimals)}  (${fmt(s.p10, decimals)}–${fmt(s.p90, decimals)})`;
 }
 
+/** Wide enough for a six-figure sum with a range beside it. */
+const COLUMN = 26;
+
 function row(name: string, a: Spread, b: Spread, decimals = 0): string {
   const delta = b.median - a.median;
   const sign = delta > 0 ? '+' : '';
   return (
-    `  ${name.padEnd(26)}` +
-    `${spread(a, decimals).padEnd(22)}` +
-    `${spread(b, decimals).padEnd(22)}` +
+    `  ${name.padEnd(COLUMN)}` +
+    `${spread(a, decimals).padEnd(COLUMN)}` +
+    `${spread(b, decimals).padEnd(COLUMN)}` +
     `${delta === 0 ? '—' : sign + fmt(delta, decimals)}`
   );
 }
@@ -66,8 +69,8 @@ function report(base: BatchResult, variant: BatchResult): string[] {
     '',
     `Polaris — ${SEEDS.length} runs x ${WEEKS} weeks, same demand seeds for both cases`,
     '',
-    `  ${''.padEnd(26)}${base.label.padEnd(22)}${variant.label.padEnd(22)}change`,
-    `  ${'-'.repeat(68)}`,
+    `  ${''.padEnd(COLUMN)}${base.label.padEnd(COLUMN)}${variant.label.padEnd(COLUMN)}change`,
+    `  ${'-'.repeat(COLUMN * 3 + 6)}`,
     row('jobs completed', base.jobsCompleted, variant.jobsCompleted),
     row('jobs late', base.jobsLate, variant.jobsLate),
     row('rush orders missed', base.rushMissed, variant.rushMissed),
@@ -80,7 +83,16 @@ function report(base: BatchResult, variant: BatchResult): string[] {
       1,
     ),
     '',
+    `  money, over the four weeks`,
+    row('revenue', base.revenue, variant.revenue),
+    row('labour', base.labour, variant.labour),
+    row('  of which overtime', base.labourOvertime, variant.labourOvertime),
+    row('profit', base.profit, variant.profit),
+    row('profit per month', base.profitPerMonth, variant.profitPerMonth),
+    '',
     '  Median, with the 10th-90th percentile across runs in brackets.',
+    '  Money in shekels. Labour is charged on contracted hours whether worked or',
+    '  not, so an idle hire still costs; overtime adds only the premium.',
     '',
   ];
 }

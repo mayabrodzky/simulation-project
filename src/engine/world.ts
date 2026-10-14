@@ -58,8 +58,6 @@ export interface WorldState {
   speed: number;
 
   money: number;
-  materials: number;
-  samples: number;
 
   staff: Staff[];
   equipment: Equipment[];
@@ -236,8 +234,6 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     speed: 1,
 
     money: t.startingMoney,
-    materials: t.startingMaterials,
-    samples: t.startingSamples,
 
     staff,
     equipment,
@@ -264,10 +260,16 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
     ledgerWeek: weekIndex(start),
 
     metrics: {
-      tasksCompleted: 0,
-      tasksFailed: 0,
+      jobsCompleted: 0,
+      jobsLate: 0,
+      jobsAbandoned: 0,
       revenue: 0,
-      penalties: 0,
+      revenueIfAllOnTime: 0,
+      labourBase: 0,
+      labourOvertime: 0,
+      materials: 0,
+      fixedCosts: 0,
+      repairs: 0,
       trainingSpend: 0,
       equipmentSpend: 0,
     },

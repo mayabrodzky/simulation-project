@@ -46,8 +46,6 @@ const WALL_HEIGHT = 25;
 
 const tuning: Tuning = {
   startingMoney: 25000,
-  startingMaterials: 200,
-  startingSamples: 120,
   // One real second is one simulated minute, so a 20-minute step takes 20
   // seconds to watch and advances the clock by 20 minutes. Before the unit
   // correction those two disagreed by a factor of two.
@@ -108,6 +106,16 @@ const tuning: Tuning = {
   // number that matters is how many a lab this size runs concurrently, and six
   // covers the twelve-a-week demand with room for a bad week.
   incubatorCapacity: 6,
+
+  // From the spec: 100/h full-time, 90/h part-time, overtime at 125% for the
+  // first two hours a day and 150% beyond, materials a quarter of each job's
+  // price, and 60,000 a month in rent, utilities and admin.
+  ratePerHourFullTime: 100,
+  ratePerHourPartTime: 90,
+  overtimeFirstBandMultiplier: 1.25,
+  overtimeBeyondMultiplier: 1.5,
+  materialsFraction: 0.25,
+  fixedCostsPerMonth: 60000,
 
   rushDeadlineHours: 24,
   rushFraction: 0.1,

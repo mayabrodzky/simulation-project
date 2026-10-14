@@ -312,7 +312,11 @@ describe('finishing', () => {
   it('pays, frees the person and the machine, and reports the facts', () => {
     const world = newWorld();
     const { job, operator } = assignBloodPanel(world);
-    const moneyBefore = world.money;
+    // The revenue line rather than the budget. B2 made the budget move on its
+    // own - rent accrues by the minute and materials are charged when work
+    // starts - so "money went up by exactly the price" stopped being a
+    // statement about settlement.
+    const revenueBefore = world.metrics.revenue;
 
     const events = [];
     for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) {
@@ -321,8 +325,8 @@ describe('finishing', () => {
 
     expect(job.status).toBe('done-on-time');
     expect(job.settledRevenue).toBe(job.basePrice);
-    expect(world.money).toBe(moneyBefore + job.basePrice);
-    expect(world.metrics.tasksCompleted).toBe(1);
+    expect(world.metrics.revenue).toBe(revenueBefore + job.basePrice);
+    expect(world.metrics.jobsCompleted).toBe(1);
 
     expect(job.operatorId).toBeNull();
     expect(operator.jobId).toBeNull();
@@ -412,13 +416,15 @@ describe('a job nobody does is eventually abandoned', () => {
   it('pays nothing for it, and does not charge for it either', () => {
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    const moneyBefore = world.money;
+    const revenueBefore = world.metrics.revenue;
 
     advance(world, job.expiresAtMinute - world.simMinutes);
 
     expect(job.settledRevenue).toBe(0);
-    expect(world.money).toBe(moneyBefore);
-    expect(world.metrics.tasksFailed).toBeGreaterThan(0);
+    // Nothing is paid and nothing is charged *for the abandonment itself*. The
+    // materials already spent are not refunded, which is a separate line.
+    expect(world.metrics.revenue).toBe(revenueBefore);
+    expect(world.metrics.jobsAbandoned).toBeGreaterThan(0);
   });
 
   it('reports it as an event carrying facts', () => {

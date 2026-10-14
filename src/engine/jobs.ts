@@ -25,6 +25,7 @@ import type { EngineEvent } from './events';
 // Straight from the calendar rather than through shifts.ts, which imports
 // this module: a cycle would resolve at runtime and is not worth relying on.
 import { isWithinShift } from './calendar';
+import { chargeMaterials } from './money';
 import { fatiguePace } from './shifts';
 import { EPSILON, hasArrivedAt, hasReached } from './geometry';
 import {
@@ -214,7 +215,10 @@ export function expireAbandonedJobs(world: WorldState, events: EngineEvent[]): v
 
     job.status = 'expired';
     job.completedAtMinute = world.simMinutes;
-    world.metrics.tasksFailed += 1;
+    world.metrics.jobsAbandoned += 1;
+    // Nothing is charged. The materials already spent are not refunded and are
+    // already in the account, which is the whole cost of an abandoned job.
+    world.metrics.revenueIfAllOnTime += job.basePrice;
     events.push({
       type: 'job-expired',
       jobId: job.id,
@@ -342,6 +346,14 @@ function startStep(world: WorldState, job: Job, operator: Staff, step: JobStep):
   operator.targetX = null;
   operator.targetY = null;
   operator.state = 'working';
+
+  // Materials, once, when work genuinely begins on the job. Charged here rather
+  // than at arrival because a job nobody ever starts has cost nothing, and
+  // never refunded because the reagents are gone whatever the client pays.
+  if (!job.materialsCharged) {
+    job.materialsCharged = true;
+    chargeMaterials(world, job.basePrice);
+  }
 }
 
 /**
@@ -503,7 +515,11 @@ function settle(
 
   world.money += job.settledRevenue;
   world.metrics.revenue += job.settledRevenue;
-  world.metrics.tasksCompleted += 1;
+  // What the same work would have earned on time, so lateness has a price
+  // rather than being an absence from the revenue line.
+  world.metrics.revenueIfAllOnTime += settlementFor(world, job, true);
+  world.metrics.jobsCompleted += 1;
+  if (!onTime) world.metrics.jobsLate += 1;
 
   releaseMachine(world, job);
   job.operatorId = null;
