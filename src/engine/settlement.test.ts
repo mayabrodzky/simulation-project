@@ -28,6 +28,16 @@ import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
 const SUNDAY_0800 = 480;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 const t = chemistryLab.tuning;
 
 const newWorld = (startMinutes = SUNDAY_0800) => createWorld(chemistryLab, SEED, startMinutes);
@@ -37,7 +47,7 @@ function massSpecJob(world: WorldState, rush: boolean): Job {
   for (let i = 0; i < 5000; i++) {
     const found = world.jobs.find((j) => j.workTypeId === 'mass-spec' && j.rush === rush);
     if (found) return found;
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   throw new Error(`no ${rush ? 'rush' : 'ordinary'} mass-spec job arrived`);
 }
@@ -96,7 +106,7 @@ describe('settlement in a running lab', () => {
     job.status = 'in-progress';
     job.operatorId = world.staff[0]!.id;
     world.staff[0]!.jobId = job.id;
-    advance(world, 1);
+    advance(world, 1, QUIET);
 
     expect(job.status).toBe('done-on-time');
     expect(job.settledRevenue).toBe(job.basePrice * t.rushPriceMultiplier);
@@ -111,7 +121,7 @@ describe('settlement in a running lab', () => {
     // weeks. An abandoned job now simply pays nothing.
     const world = newWorld();
     const before = world.metrics.revenue;
-    advance(world, 21 * MINUTES_PER_DAY);
+    advance(world, 21 * MINUTES_PER_DAY, QUIET);
 
     const expired = world.jobs.filter((j) => j.status === 'expired');
     expect(expired.length).toBeGreaterThan(0);
@@ -125,7 +135,7 @@ describe('settlement in a running lab', () => {
 
   it('never leaves a finished job unpriced', () => {
     const world = newWorld();
-    advance(world, 14 * MINUTES_PER_DAY);
+    advance(world, 14 * MINUTES_PER_DAY, QUIET);
     for (const job of world.jobs) {
       if (job.status === 'done-on-time' || job.status === 'done-late') {
         expect(job.settledRevenue).toBeGreaterThan(0);
@@ -146,7 +156,7 @@ describe('rush orders are ordinary jobs with a flag', () => {
 
   it('holds no work on a person except training', () => {
     const world = newWorld();
-    advance(world, 7 * MINUTES_PER_DAY);
+    advance(world, 7 * MINUTES_PER_DAY, QUIET);
     for (const p of world.staff) {
       if (p.activeTask) expect(p.activeTask.type).toBe('training');
     }

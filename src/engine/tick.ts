@@ -20,12 +20,23 @@ import {
   tickJobs,
   tickUnattended,
 } from './jobs';
+import { dispatch, type DispatchOptions } from './dispatch';
 import { accrueFixedCosts } from './money';
 import { applyShiftWindow, creditWork, nextShiftEventIn, rollLedgers } from './shifts';
 import type { EngineEvent } from './events';
 import { admitArrivals, ensureArrivalsThrough, rngForStaff, type WorldState } from './world';
 
 export interface TickOptions {
+  /**
+   * Who works on what, decided inside the loop.
+   *
+   * Here rather than outside it because the clamping already guarantees a slice
+   * never steps over the moment somebody becomes free — so putting assignment
+   * inside brings it under the step-size invariance guarantee. Outside, a
+   * coarser step meant work was handed out less often: 97 jobs against 102 for
+   * the same seed at fifteen minutes against one.
+   */
+  dispatch?: DispatchOptions;
   /**
    * Sandbox mode freezes the clock and suspends new work arriving, while
    * letting people finish what they are doing. Passed in rather than stored on
@@ -146,6 +157,11 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
     // ends at 16:00 ends at midnight in a batch run that steps a day at a
     // time, which is eight hours of work nobody did.
     inMinutes(nextShiftEventIn(world));
+
+    // Handing out work. An event like any other, and that is the whole point:
+    // the instants are a function of the clock alone, so every caller agrees on
+    // them however finely it steps.
+    at(nextDispatchAt(world));
   }
 
   for (const person of world.staff) {
@@ -268,6 +284,27 @@ function applySlice(
   // Same rule as A2: whatever was true during a slice is charged for that
   // slice before anything changes.
   if (!options.freezeClock) applyShiftWindow(world, events);
+
+  // Work is handed out after everything else has settled and before the
+  // reasons are computed: somebody who has just been given a job is not
+  // waiting for anything, and a job just taken is no longer in the queue.
+  //
+  // On a fixed cadence of absolute simulated time, which the loop clamps to
+  // like any other event — see `nextDispatchIn`. Two weaker rules were tried
+  // and both made the answer depend on how finely the caller stepped.
+  if (!options.freezeClock && hasReached(world.simMinutes, nextDispatchAt(world))) {
+    // Advanced by whole cadences from where it was, never recomputed from the
+    // clock. `Math.floor(simMinutes + EPSILON)` looked equivalent and was not:
+    // at a sixtieth-of-a-second step the clock reaches minute 567 as
+    // 566.9999999997, which floors to 566, so the marker never moved and
+    // dispatch then fired on *every* slice. The finest caller lost the cadence
+    // entirely while coarser ones kept it — the exact failure the cadence was
+    // introduced to prevent.
+    while (hasReached(world.simMinutes, nextDispatchAt(world))) {
+      world.dispatchedAtMinute += DISPATCH_CADENCE_MINUTES;
+    }
+    dispatch(world, events, options.dispatch);
+  }
 
   // Why anything is not moving, computed from scratch once everything else has
   // settled — it is derived state, so it goes after every change rather than
@@ -439,3 +476,33 @@ function moveStaff(world: WorldState, person: Staff, dt: number, options: TickOp
   person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));
   person.y = Math.max(f.y + 0.5, Math.min(f.y + f.h - 0.5, person.y));
 }
+
+/**
+ * When work is next handed out.
+ *
+ * Every whole simulated minute. The cadence is arbitrary in itself — what
+ * matters is that it is a function of *absolute simulated time* and nothing
+ * else, so the instants are identical whether the caller steps a minute at a
+ * time or a day.
+ *
+ * Two weaker rules were tried first and both failed, in instructive ways.
+ * Dispatching at the end of every slice made the finer caller look more often,
+ * so a one-minute run assigned a job at 567.98 that a fifteen-minute run
+ * assigned at 566.98. Dispatching only on slices that ended on an event fixed
+ * that case and still failed at an hour against a day — because once people are
+ * walking, the *events themselves* are arrivals whose instants depend on who was
+ * dispatched when, so "the next event" is not a cadence both runs agree on. It
+ * is circular: dispatch changes the events, and the events were deciding when
+ * to dispatch.
+ *
+ * A clock-derived cadence breaks the circle. The cost is that somebody who
+ * becomes free at 566.98 waits until 567 — under a minute, uniformly, in every
+ * run, and far smaller than the quarter of an hour the old out-of-loop
+ * arrangement cost at a fifteen-minute step.
+ */
+function nextDispatchAt(world: WorldState): number {
+  return world.dispatchedAtMinute + DISPATCH_CADENCE_MINUTES;
+}
+
+/** How often work is handed out, in simulated minutes. */
+const DISPATCH_CADENCE_MINUTES = 1;

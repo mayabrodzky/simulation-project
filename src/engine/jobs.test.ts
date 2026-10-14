@@ -25,6 +25,16 @@ import { createWorld, type WorldState } from './world';
 const SEED = 42;
 const SUNDAY_0800 = 480;
 
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
+
 function newWorld(startMinutes = SUNDAY_0800): WorldState {
   const world = createWorld(chemistryLab, SEED, startMinutes);
   return world;
@@ -58,7 +68,7 @@ function waitForJob(world: WorldState, workTypeId: string): Job {
   for (let i = 0; i < 5000; i++) {
     const found = world.jobs.find((j) => j.workTypeId === workTypeId && j.status === 'waiting');
     if (found) return found;
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   throw new Error(`waitForJob: no ${workTypeId} arrived`);
 }
@@ -109,7 +119,7 @@ describe('taking a job on', () => {
     const { job, operator } = assignBloodPanel(world);
     const centrifuge = world.equipment.find((e) => e.name === 'Centrifuge')!;
 
-    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5, QUIET);
 
     expect(operator.state).toBe('working');
     expect(job.equipmentId).toBe(centrifuge.id);
@@ -160,8 +170,8 @@ describe('an interruption costs nothing', () => {
     const world = newWorld();
     const { job, operator } = assignBloodPanel(world);
 
-    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5);
-    advance(world, 10);
+    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5, QUIET);
+    advance(world, 10, QUIET);
     const leftWhenInterrupted = workLeft(job);
     // Partway through the first step, which is the interesting moment.
     expect(leftWhenInterrupted).toBeLessThan(totalWork(job));
@@ -178,7 +188,7 @@ describe('an interruption costs nothing', () => {
   it('gives the machine back, so nothing is held by a person who has gone', () => {
     const world = newWorld();
     const { job, operator } = assignBloodPanel(world);
-    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5, QUIET);
     const centrifuge = world.equipment.find((e) => e.id === job.equipmentId)!;
     expect(centrifuge.inUse).toBe(true);
 
@@ -202,9 +212,9 @@ describe('an interruption costs nothing', () => {
     const { job, operator } = assignBloodPanel(world);
     const expected = totalWork(job);
 
-    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) advance(world, 0.5);
-    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5);
-    advance(world, 5);
+    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) advance(world, 0.5, QUIET);
+    for (let i = 0; i < 500 && operator.state !== 'working'; i++) advance(world, 0.5, QUIET);
+    advance(world, 5, QUIET);
 
     const doneBeforeHandover = expected - workLeft(job);
     expect(doneBeforeHandover).toBeGreaterThan(job.steps[0]!.total);
@@ -216,7 +226,7 @@ describe('an interruption costs nothing', () => {
     expect(canOperate(finisher, job)).toBe(true);
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: finisher.id, jobId: job.id });
 
-    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5);
+    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5, QUIET);
 
     expect(job.completedAtMinute).not.toBeNull();
     expect(workLeft(job)).toBe(0);
@@ -248,7 +258,7 @@ describe('an interruption costs nothing', () => {
     );
 
     const events = [];
-    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) events.push(...advance(world, 0.5));
+    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) events.push(...advance(world, 0.5, QUIET));
 
     expect(job.stepIndex).toBe(1);
     expect(job.status).toBe('waiting');
@@ -265,7 +275,7 @@ describe('an interruption costs nothing', () => {
     expect(finisher.skills).not.toContain('Centrifuge Usage');
     expect(canOperate(finisher, job)).toBe(true);
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: finisher.id, jobId: job.id });
-    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5);
+    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5, QUIET);
     expect(job.status).toBe('done-on-time');
   });
 
@@ -276,7 +286,7 @@ describe('an interruption costs nothing', () => {
     const { job, operator } = assignBloodPanel(world);
 
     const events = [];
-    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) events.push(...advance(world, 0.5));
+    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) events.push(...advance(world, 0.5, QUIET));
 
     expect(job.stepIndex).toBe(1);
     expect(job.status).toBe('in-progress');
@@ -320,7 +330,7 @@ describe('finishing', () => {
 
     const events = [];
     for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) {
-      events.push(...advance(world, 0.5));
+      events.push(...advance(world, 0.5, QUIET));
     }
 
     expect(job.status).toBe('done-on-time');
@@ -344,7 +354,7 @@ describe('finishing', () => {
     const visited: string[] = [];
 
     for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) {
-      advance(world, 0.5);
+      advance(world, 0.5, QUIET);
       const step = job.steps[job.stepIndex];
       if (operator.state === 'working' && step && visited.at(-1) !== step.capability) {
         visited.push(step.capability);
@@ -362,7 +372,7 @@ describe('finishing', () => {
     // which the engine cannot tell apart from a genuinely late finish.
     job.dueAtMinute = world.simMinutes - 1;
 
-    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5);
+    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5, QUIET);
 
     expect(job.status).toBe('done-late');
     expect(operator.jobId).toBeNull();
@@ -386,7 +396,7 @@ describe('a machine serves one job at a time', () => {
     if (!second) return; // only one mass-spec job in the queue this early
 
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: lihi.id, jobId: second.id });
-    for (let i = 0; i < 400; i++) advance(world, 0.5);
+    for (let i = 0; i < 400; i++) advance(world, 0.5, QUIET);
 
     const spectrometer = world.equipment.find((e) => e.name === 'Mass Spectrometer')!;
     // One of them holds it; the other is standing next to it, waiting.
@@ -403,10 +413,10 @@ describe('a job nobody does is eventually abandoned', () => {
     const job = waitForJob(world, 'blood-panel');
     expect(job.expiresAtMinute).toBeGreaterThan(job.dueAtMinute);
 
-    advance(world, job.expiresAtMinute - world.simMinutes - 1);
+    advance(world, job.expiresAtMinute - world.simMinutes - 1, QUIET);
     expect(job.status).toBe('waiting');
 
-    advance(world, 1);
+    advance(world, 1, QUIET);
     expect(job.status).toBe('expired');
     // Close rather than exact: the clock accumulates float drift over
     // thousands of additions, which is why hasReached exists at all.
@@ -418,7 +428,7 @@ describe('a job nobody does is eventually abandoned', () => {
     const job = waitForJob(world, 'blood-panel');
     const revenueBefore = world.metrics.revenue;
 
-    advance(world, job.expiresAtMinute - world.simMinutes);
+    advance(world, job.expiresAtMinute - world.simMinutes, QUIET);
 
     expect(job.settledRevenue).toBe(0);
     // Nothing is paid and nothing is charged *for the abandonment itself*. The
@@ -430,7 +440,7 @@ describe('a job nobody does is eventually abandoned', () => {
   it('reports it as an event carrying facts', () => {
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    const events = advance(world, job.expiresAtMinute - world.simMinutes);
+    const events = advance(world, job.expiresAtMinute - world.simMinutes, QUIET);
 
     const expired = events.find((e) => e.type === 'job-expired' && e.jobId === job.id);
     expect(expired).toMatchObject({ name: job.name, workingDaysLate: 3 });
@@ -441,8 +451,8 @@ describe('a job nobody does is eventually abandoned', () => {
     const { job, operator } = assignBloodPanel(world);
     job.expiresAtMinute = world.simMinutes + 1;
 
-    for (let i = 0; i < 200 && operator.state !== 'working'; i++) advance(world, 0.5);
-    advance(world, 5);
+    for (let i = 0; i < 200 && operator.state !== 'working'; i++) advance(world, 0.5, QUIET);
+    advance(world, 5, QUIET);
 
     expect(job.status).not.toBe('expired');
   });
@@ -451,7 +461,7 @@ describe('a job nobody does is eventually abandoned', () => {
     // Nothing picks work up on its own yet, so every job eventually expires.
     // Without that the backlog would grow forever and no run could be measured.
     const world = newWorld();
-    advance(world, 28 * MINUTES_PER_DAY);
+    advance(world, 28 * MINUTES_PER_DAY, QUIET);
 
     const open = world.jobs.filter((j) => j.status === 'waiting' || j.status === 'blocked');
     const expired = world.jobs.filter((j) => j.status === 'expired');
@@ -483,7 +493,7 @@ describe('a scheduled instant is never missed by a hair', () => {
 
       const target = job.expiresAtMinute;
       while (world.simMinutes < target - 1e-9) {
-        advance(world, Math.min(step, target - world.simMinutes));
+        advance(world, Math.min(step, target - world.simMinutes), QUIET);
       }
 
       expect(job.status, `step ${step}`).toBe('expired');
@@ -493,7 +503,7 @@ describe('a scheduled instant is never missed by a hair', () => {
   it('treats finishing exactly on the deadline as on time', () => {
     const world = newWorld();
     const { job, operator } = assignBloodPanel(world);
-    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5);
+    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5, QUIET);
 
     // The boundary belongs to the client: due at 16:00 means 16:00 is fine.
     expect(job.status).toBe('done-on-time');
@@ -516,7 +526,7 @@ describe('a part-finished job says so', () => {
     // mass-spec preparation begun at 15:40 now runs to completion in overtime.
     // The cap is the one thing that still stops a step part-way through.
     const world = newWorld(4 * MINUTES_PER_DAY + 8 * 60);
-    advance(world, 4 * MINUTES_PER_DAY + 10 * 60 - world.simMinutes);
+    advance(world, 4 * MINUTES_PER_DAY + 10 * 60 - world.simMinutes, QUIET);
 
     const job = world.jobs.find((j) => j.workTypeId === 'mass-spec' && j.status === 'waiting');
     expect(job, 'no mass-spec job waiting by Thursday morning').toBeDefined();
@@ -524,11 +534,11 @@ describe('a part-finished job says so', () => {
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: amit.id, jobId: job!.id });
 
     // Started, then stopped by the cap a few minutes later.
-    for (let i = 0; i < 200 && amit.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 200 && amit.state !== 'working'; i++) advance(world, 0.5, QUIET);
     expect(amit.state).toBe('working');
-    advance(world, 5);
+    advance(world, 5, QUIET);
     amit.minutesWorkedToday = world.tuning.maxHoursPerDay * 60 - 1;
-    advance(world, 2);
+    advance(world, 2, QUIET);
 
     expect(job!.stepIndex).toBe(0);
     expect(job!.status).toBe('waiting');
@@ -558,7 +568,7 @@ describe('a part-finished job says so', () => {
     const job = waitForJob(world, 'blood-panel');
     const starter = available(world, 'Amir Barzilay');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: starter.id, jobId: job.id });
-    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) advance(world, 0.5);
+    for (let i = 0; i < 5000 && job.stepIndex < 1; i++) advance(world, 0.5, QUIET);
 
     expect(job.stepIndex).toBe(1);
     expect(job.status).toBe('waiting');

@@ -29,6 +29,16 @@ import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
 const SUNDAY_0800 = 480;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 const STEP = 0.25;
 
 interface Breakdown {
@@ -62,7 +72,7 @@ function measureWeek(): Breakdown {
   const wasWorking = new Map<number, boolean>();
 
   for (let t = 0; t < 7 * MINUTES_PER_DAY; t += STEP) {
-    advance(world, STEP);
+    advance(world, STEP, QUIET);
 
     for (const person of world.staff) {
       if (person.state === 'working') {

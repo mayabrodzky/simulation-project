@@ -123,10 +123,24 @@ export function main(): void {
   const lines: string[] = ['', 'Before running — what the arithmetic says limits this lab:'];
   lines.push(...constraints(chemistryLab));
 
-  const base = runBatch('as is', chemistryLab, SEEDS, { weeks: WEEKS });
-  const variant = runBatch('cross-trained x2', crossTrained(), SEEDS, { weeks: WEEKS });
+  // Run twice, because the dispatcher's rule for choosing a *person* is a
+  // policy decision that can move a verdict, and a comparison that does not
+  // say which rule produced it is not a finding. Least-versatile-first exists
+  // to stop the only mass-spec scientist being spent on a centrifuge, which
+  // is the very mechanism cross-training is meant to relieve.
+  //
+  // Nothing is tuned between the two. Same seeds, same scenario, same
+  // everything but the rule.
+  for (const policy of ['first-free', 'least-versatile'] as const) {
+    const base = runBatch('as is', chemistryLab, SEEDS, { weeks: WEEKS, policy });
+    const variant = runBatch('cross-trained x2', crossTrained(), SEEDS, {
+      weeks: WEEKS,
+      policy,
+    });
 
-  lines.push(...report(base, variant));
+    lines.push('', `Operator policy: ${policy}`);
+    lines.push(...report(base, variant));
+  }
   process.stdout.write(lines.join('\n') + '\n');
 }
 

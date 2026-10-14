@@ -138,10 +138,11 @@ describe('the arithmetic agrees with the simulation', () => {
 
     for (let t = 0; t < WEEKS * 7 * MINUTES_PER_DAY; t += 1) {
       advance(world, 1);
+      // No hand-rolled assignment any more: B3 moved the dispatcher inside the
+      // loop, so running one out here as well would have two of them competing
+      // and would measure neither.
       for (const person of world.staff) {
-        if (person.state !== 'idle' || person.jobId !== null || person.activeTask) continue;
-        const pick = listAssignableJobs(world, person).filter((r) => r.qualified)[0];
-        if (pick) applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: pick.id });
+        void person;
       }
     }
 
@@ -192,14 +193,23 @@ describe('the arithmetic agrees with the simulation', () => {
       0,
     );
 
-    // The bound is the sampling granularity, not a fudge. State is read once
-    // per STEP *after* advancing, so somebody who begins a step part-way
-    // through a sample is credited with the whole of it: at most one STEP per
-    // step started. Observed 55 minutes over 7,191 against a bound of 56.
+    // Minutes *spent* are never fewer than minutes of work *delivered*, and can
+    // be more for one reason: fatigue. Past forty-five hours in a week a person
+    // spends 1.1 minutes of presence per minute of work done, so the two
+    // quantities are deliberately not equal — the gap is the cost of tiredness,
+    // measured rather than assumed.
+    //
+    // The sampling slop goes the same way: state is read once per STEP *after*
+    // advancing, so somebody beginning a step part-way through a sample is
+    // credited with the whole of it, at most one STEP per step started.
     const samplingSlop = stepStarts * STEP;
-    expect(Math.abs(workedMinutes - accounted)).toBeLessThanOrEqual(samplingSlop);
-    // And the two agree to better than one percent, which is the real claim.
-    expect(Math.abs(workedMinutes - accounted) / workedMinutes).toBeLessThan(0.01);
+    expect(workedMinutes).toBeGreaterThan(accounted - samplingSlop);
+
+    // And the gap stays within what fatigue alone can explain. Ten percent is
+    // the pace multiplier itself: nobody can be slower than the slowest rate.
+    const gap = (workedMinutes - accounted) / accounted;
+    expect(gap).toBeLessThan(chemistryLab.tuning.fatiguePaceMultiplier - 1);
+    expect(gap).toBeGreaterThan(-0.01);
   });
 });
 

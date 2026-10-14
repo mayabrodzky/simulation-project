@@ -30,6 +30,16 @@ import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
 const SUNDAY_0800 = 480;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 const t = chemistryLab.tuning;
 
 const newWorld = (startMinutes = SUNDAY_0800) => createWorld(chemistryLab, SEED, startMinutes);
@@ -139,7 +149,7 @@ describe('overtime adds only its premium', () => {
     hadas.overtimeMinutesThisWeek = 120;
 
     // Past Saturday midnight, which is where the week hook fires.
-    advance(world, DAYS_PER_WEEK * MINUTES_PER_DAY);
+    advance(world, DAYS_PER_WEEK * MINUTES_PER_DAY, QUIET);
 
     expect(world.metrics.labourOvertime).toBeGreaterThan(0);
     expect(hadas.overtimeMinutesThisWeek).toBe(0);
@@ -159,7 +169,7 @@ describe('materials are spent once and never returned', () => {
     // "has any work been done" is true in both cases.
     const world = newWorld();
     for (let i = 0; i < 400; i++) {
-      advance(world, 1);
+      advance(world, 1, QUIET);
       for (const p of world.staff) {
         if (p.state !== 'idle' || p.jobId !== null || p.activeTask) continue;
         const job = world.jobs.find((j) => j.status === 'waiting' && j.stepIndex < j.steps.length);
@@ -179,7 +189,7 @@ describe('materials are spent once and never returned', () => {
     chargeMaterials(world, 1000);
     const spent = world.metrics.materials;
 
-    advance(world, 40 * MINUTES_PER_DAY);
+    advance(world, 40 * MINUTES_PER_DAY, QUIET);
 
     expect(world.metrics.jobsAbandoned).toBeGreaterThan(0);
     expect(world.metrics.materials).toBeGreaterThanOrEqual(spent);
@@ -189,7 +199,7 @@ describe('materials are spent once and never returned', () => {
 describe('fixed costs accrue by the minute', () => {
   it('charges a month of rent over a month', () => {
     const world = newWorld();
-    advance(world, 30 * MINUTES_PER_DAY);
+    advance(world, 30 * MINUTES_PER_DAY, QUIET);
     expect(world.metrics.fixedCosts).toBeCloseTo(t.fixedCostsPerMonth, 0);
   });
 
@@ -197,7 +207,7 @@ describe('fixed costs accrue by the minute', () => {
     // 28 days against 30. Billing a whole month for four weeks would be a
     // silent 7% error in every profit figure.
     const world = newWorld();
-    advance(world, 28 * MINUTES_PER_DAY);
+    advance(world, 28 * MINUTES_PER_DAY, QUIET);
     expect(world.metrics.fixedCosts).toBeCloseTo((t.fixedCostsPerMonth * 28) / 30, 0);
   });
 });
@@ -205,7 +215,7 @@ describe('fixed costs accrue by the minute', () => {
 describe('lateness has a price rather than an absence', () => {
   it('records what the work would have earned on time', () => {
     const world = newWorld();
-    advance(world, 14 * MINUTES_PER_DAY);
+    advance(world, 14 * MINUTES_PER_DAY, QUIET);
 
     // Nothing is assigned in this run, so everything is abandoned unpaid — and
     // the foregone revenue is still recorded.
@@ -229,11 +239,11 @@ describe('a measurement window is a snapshot and a subtraction', () => {
     // the account is cumulative and never reset, so the live view's counters
     // keep running while a report can still be scoped.
     const world = newWorld();
-    advance(world, 7 * MINUTES_PER_DAY);
+    advance(world, 7 * MINUTES_PER_DAY, QUIET);
     const warmUp = snapshot(world.metrics);
     expect(warmUp.fixedCosts).toBeGreaterThan(0);
 
-    advance(world, 7 * MINUTES_PER_DAY);
+    advance(world, 7 * MINUTES_PER_DAY, QUIET);
     const measured = since(warmUp, world.metrics);
 
     expect(measured.fixedCosts).toBeCloseTo(world.metrics.fixedCosts - warmUp.fixedCosts, 6);
@@ -255,7 +265,7 @@ describe('the account adds up', () => {
     // every profit figure is wrong and nothing else would notice.
     const world = newWorld();
     const opening = world.money;
-    advance(world, 14 * MINUTES_PER_DAY);
+    advance(world, 14 * MINUTES_PER_DAY, QUIET);
     chargeWeeklyLabour(world);
 
     const m = world.metrics;

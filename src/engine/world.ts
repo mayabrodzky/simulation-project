@@ -113,6 +113,15 @@ export interface WorldState {
   /** Source of unique ids. Replaces Date.now(), which is not deterministic. */
   nextId: number;
   /**
+   * The last simulated minute at which work was handed out.
+   *
+   * Dispatch happens on a fixed cadence of absolute simulated time rather than
+   * whenever a slice happens to end, and the loop clamps to it like any other
+   * event. That is what makes assignment independent of how finely the caller
+   * steps: the instants are a function of the clock alone.
+   */
+  dispatchedAtMinute: number;
+  /**
    * The day and week the hour ledgers were last reset for.
    *
    * Compared against the clock rather than scheduled, because nothing works
@@ -256,6 +265,7 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
 
     rngState: rng.getState(),
     nextId: 1,
+    dispatchedAtMinute: Math.floor(start),
     ledgerDay: dayIndex(start),
     ledgerWeek: weekIndex(start),
 

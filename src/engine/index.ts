@@ -75,3 +75,9 @@ export {
  * hot loop on purpose.
  */
 export { profitAndLoss, ratePerHour, since, snapshot, type ProfitAndLoss } from './money';
+
+/**
+ * Who works on what. Inside the slice loop, so assignment is covered by the
+ * same step-size invariance guarantee as everything else.
+ */
+export { dispatch, isAvailable, type DispatchOptions, type OperatorPolicy } from './dispatch';

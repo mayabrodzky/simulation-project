@@ -30,6 +30,16 @@ import { createWorld, type WorldState } from './world';
 const SEED = 42;
 const SUNDAY_0800 = 480;
 
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
+
 function newWorld(scenario: Scenario = chemistryLab, startMinutes = SUNDAY_0800) {
   const world = createWorld(scenario, SEED, startMinutes);
   return world;
@@ -39,7 +49,7 @@ function waitForJob(world: WorldState, workTypeId: string): Job {
   for (let i = 0; i < 5000; i++) {
     const found = world.jobs.find((j) => j.workTypeId === workTypeId && j.status === 'waiting');
     if (found) return found;
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   throw new Error(`waitForJob: no ${workTypeId} arrived`);
 }
@@ -49,7 +59,7 @@ const person = (world: WorldState, name: string): Staff =>
 
 /** Runs until a predicate holds, or gives up with a useful message. */
 function runUntil(world: WorldState, what: string, done: () => boolean, maxMinutes = 6000): void {
-  for (let i = 0; i < maxMinutes * 2 && !done(); i++) advance(world, 0.5);
+  for (let i = 0; i < maxMinutes * 2 && !done(); i++) advance(world, 0.5, QUIET);
   if (!done()) throw new Error(`runUntil: ${what} never happened`);
 }
 
@@ -143,7 +153,7 @@ describe('unattended time ignores the calendar', () => {
     expect(left).toBeGreaterThan(2000);
 
     // Through Friday and Saturday, when nobody is in the lab at all.
-    advance(world, left);
+    advance(world, left, QUIET);
 
     expect(world.staff.every((p) => p.state === 'off')).toBe(true);
     expect(job.steps[1]!.unattendedRemaining).toBe(0);
@@ -158,18 +168,18 @@ describe('unattended time ignores the calendar', () => {
     // they are on, so attended work can continue past four. What it cannot do
     // is continue once the floor is empty.
     const world = newWorld();
-    advance(world, 16 * 60 - 20 - world.simMinutes);
+    advance(world, 16 * 60 - 20 - world.simMinutes, QUIET);
     const job = waitForJob(world, 'blood-panel');
     const hadas = person(world, 'Hadas Ben Hamo');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
     runUntil(world, 'work started', () => hadas.state === 'working');
 
     // Past closing and past the overtime that finishes the step.
-    advance(world, 16 * 60 + 120 - world.simMinutes);
+    advance(world, 16 * 60 + 120 - world.simMinutes, QUIET);
     expect(world.staff.every((p) => p.state === 'off')).toBe(true);
 
     const left = job.steps.reduce((sum, s) => sum + s.remaining, 0);
-    advance(world, 12 * 60);
+    advance(world, 12 * 60, QUIET);
 
     expect(job.steps.reduce((sum, s) => sum + s.remaining, 0)).toBe(left);
   });
@@ -184,7 +194,7 @@ describe('unattended time ignores the calendar', () => {
     const cycler = world.equipment.find((e) => e.id === job.equipmentId)!;
     expect(cycler.heldBy).toContain(job.id);
 
-    advance(world, job.steps[0]!.unattendedRemaining);
+    advance(world, job.steps[0]!.unattendedRemaining, QUIET);
 
     expect(cycler.heldBy).not.toContain(job.id);
     expect(job.stepIndex).toBe(1);
@@ -292,7 +302,7 @@ describe('slots are given back exactly once', () => {
     // own record of where it was.
     const world = newWorld();
     for (let day = 0; day < 21; day++) {
-      advance(world, MINUTES_PER_DAY);
+      advance(world, MINUTES_PER_DAY, QUIET);
       for (const resource of world.equipment) {
         for (const jobId of resource.heldBy) {
           const job = world.jobs.find((j) => j.id === jobId);

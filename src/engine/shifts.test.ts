@@ -24,6 +24,16 @@ import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
 const SUNDAY_0800 = 480;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 const SUNDAY_1600 = 960;
 const { shift } = chemistryLab.calendar;
 
@@ -39,7 +49,7 @@ function waitForJob(world: WorldState, workTypeId: string): Job {
   for (let i = 0; i < 5000; i++) {
     const found = world.jobs.find((j) => j.workTypeId === workTypeId && j.status === 'waiting');
     if (found) return found;
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   throw new Error(`waitForJob: no ${workTypeId} arrived`);
 }
@@ -53,12 +63,12 @@ function waitForJob(world: WorldState, workTypeId: string): Job {
  * progress when the lab shuts.
  */
 function workingOnBloodPanel(world: WorldState, atMinute = SUNDAY_1600 - 20) {
-  if (atMinute > world.simMinutes) advance(world, atMinute - world.simMinutes);
+  if (atMinute > world.simMinutes) advance(world, atMinute - world.simMinutes, QUIET);
 
   const job = waitForJob(world, 'blood-panel');
   const operator = person(world, 'Hadas Ben Hamo');
   applyCommand(world, { type: 'ASSIGN_JOB', staffId: operator.id, jobId: job.id });
-  for (let i = 0; i < 100 && operator.state !== 'working'; i++) advance(world, 0.5);
+  for (let i = 0; i < 100 && operator.state !== 'working'; i++) advance(world, 0.5, QUIET);
   expect(operator.state).toBe('working');
   return { job, operator };
 }
@@ -82,17 +92,17 @@ describe('the clock decides who is in the building', () => {
 
   it('sends everybody home at closing time, to the minute', () => {
     const world = newWorld(SUNDAY_0800);
-    advance(world, SUNDAY_1600 - world.simMinutes - 1);
+    advance(world, SUNDAY_1600 - world.simMinutes - 1, QUIET);
     expect(world.staff.some((p) => p.state !== 'off')).toBe(true);
 
-    advance(world, 1);
+    advance(world, 1, QUIET);
     expect(world.simMinutes).toBeCloseTo(SUNDAY_1600, 6);
     expect(world.staff.every((p) => p.state === 'off')).toBe(true);
   });
 
   it('brings them back the next morning', () => {
     const world = newWorld(SUNDAY_0800);
-    advance(world, MINUTES_PER_DAY); // Monday 08:00
+    advance(world, MINUTES_PER_DAY, QUIET); // Monday 08:00
     expect(world.staff.filter((p) => p.state !== 'off')).toHaveLength(
       world.tuning.staffOnShiftCount,
     );
@@ -100,24 +110,39 @@ describe('the clock decides who is in the building', () => {
 
   it('leaves the floor empty all weekend', () => {
     const world = newWorld(SUNDAY_0800);
-    advance(world, 4 * MINUTES_PER_DAY + 9 * 60); // Thursday 17:00
+    advance(world, 4 * MINUTES_PER_DAY + 9 * 60, QUIET); // Thursday 17:00
     expect(world.staff.every((p) => p.state === 'off')).toBe(true);
 
     for (let hour = 0; hour < 48; hour++) {
-      advance(world, 60);
+      advance(world, 60, QUIET);
       expect(world.staff.every((p) => p.state === 'off')).toBe(true);
     }
   });
 
   it('reports arriving and leaving as events', () => {
     const world = newWorld(SUNDAY_0800);
-    const leaving = advance(world, SUNDAY_1600 - world.simMinutes).filter(
+    const fullTimers = world.staff.filter((p) => p.weeklyHours === 40).length;
+    const partTimers = world.staff.filter((p) => p.weeklyHours === 20).length;
+    expect(partTimers).toBeGreaterThan(0);
+
+    // Noon: the part-timers go, and nobody else.
+    const atNoon = advance(world, 12 * 60 - world.simMinutes, QUIET).filter(
       (e) => e.type === 'shift-ended',
     );
-    expect(leaving).toHaveLength(world.tuning.staffOnShiftCount);
+    expect(atNoon).toHaveLength(partTimers);
 
-    const arriving = advance(world, MINUTES_PER_DAY).filter((e) => e.type === 'shift-started');
-    expect(arriving).toHaveLength(world.tuning.staffOnShiftCount);
+    // Four: the rest. Counting `staffOnShiftCount` here was wrong once shifts
+    // became per person — it counts everybody employed, and half of them had
+    // already gone home.
+    const atClose = advance(world, SUNDAY_1600 - world.simMinutes, QUIET).filter(
+      (e) => e.type === 'shift-ended',
+    );
+    expect(atClose).toHaveLength(fullTimers);
+
+    const arriving = advance(world, MINUTES_PER_DAY, QUIET).filter(
+      (e) => e.type === 'shift-started',
+    );
+    expect(arriving).toHaveLength(fullTimers + partTimers);
   });
 });
 
@@ -135,7 +160,7 @@ describe('closing time and work in progress', () => {
     const step = job.steps[job.stepIndex]!;
     expect(step.remaining).toBeGreaterThan(5);
 
-    advance(world, SUNDAY_1600 - world.simMinutes + 1);
+    advance(world, SUNDAY_1600 - world.simMinutes + 1, QUIET);
 
     expect(isLabOpen(world)).toBe(false);
     expect(operator.state).toBe('working');
@@ -148,8 +173,8 @@ describe('closing time and work in progress', () => {
     const step = job.steps[job.stepIndex]!;
     const overtimeNeeded = step.remaining;
 
-    advance(world, SUNDAY_1600 - world.simMinutes);
-    advance(world, overtimeNeeded + 1);
+    advance(world, SUNDAY_1600 - world.simMinutes, QUIET);
+    advance(world, overtimeNeeded + 1, QUIET);
 
     expect(operator.state).toBe('off');
     expect(operator.jobId).toBeNull();
@@ -162,7 +187,7 @@ describe('closing time and work in progress', () => {
   it('starts no new work after hours', () => {
     const world = newWorld(SUNDAY_0800);
     const job = waitForJob(world, 'blood-panel');
-    advance(world, SUNDAY_1600 - world.simMinutes + 60); // 17:00
+    advance(world, SUNDAY_1600 - world.simMinutes + 60, QUIET); // 17:00
 
     const hadas = person(world, 'Hadas Ben Hamo');
     const events = applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
@@ -175,11 +200,11 @@ describe('closing time and work in progress', () => {
     const world = newWorld(SUNDAY_0800);
     const { operator } = workingOnBloodPanel(world);
 
-    advance(world, SUNDAY_1600 - world.simMinutes);
+    advance(world, SUNDAY_1600 - world.simMinutes, QUIET);
     const beforeClose = operator.minutesWorkedThisWeek;
     expect(operator.overtimeMinutesThisWeek).toBe(0);
 
-    advance(world, 10);
+    advance(world, 10, QUIET);
 
     expect(operator.minutesWorkedThisWeek).toBeGreaterThan(beforeClose);
     expect(operator.overtimeMinutesThisWeek).toBeCloseTo(
@@ -197,7 +222,7 @@ describe('closing time and work in progress', () => {
     const cap = world.tuning.maxHoursPerDay * 60;
     operator.minutesWorkedToday = cap - 5;
 
-    const events = advance(world, 10);
+    const events = advance(world, 10, QUIET);
 
     expect(operator.state).toBe('off');
     expect(operator.minutesWorkedToday).toBeGreaterThanOrEqual(cap);
@@ -215,7 +240,7 @@ describe('closing time and work in progress', () => {
 
       const target = world.simMinutes + 240;
       while (world.simMinutes < target - 1e-9) {
-        advance(world, Math.min(step, target - world.simMinutes));
+        advance(world, Math.min(step, target - world.simMinutes), QUIET);
       }
 
       expect(operator.minutesWorkedToday, `step ${step}`).toBeLessThanOrEqual(
@@ -233,7 +258,7 @@ describe('closing time and work in progress', () => {
     const machine = world.equipment.find((e) => e.id === job.equipmentId)!;
     expect(machine.inUse).toBe(true);
 
-    advance(world, SUNDAY_1600 - world.simMinutes + 120);
+    advance(world, SUNDAY_1600 - world.simMinutes + 120, QUIET);
 
     expect(world.staff.every((p) => p.state === 'off')).toBe(true);
     expect(world.equipment.every((e) => !e.inUse)).toBe(true);
@@ -242,11 +267,11 @@ describe('closing time and work in progress', () => {
   it('does not advance attended work once everybody has gone', () => {
     const world = newWorld(SUNDAY_0800);
     const { job } = workingOnBloodPanel(world);
-    advance(world, SUNDAY_1600 - world.simMinutes + 120);
+    advance(world, SUNDAY_1600 - world.simMinutes + 120, QUIET);
     expect(world.staff.every((p) => p.state === 'off')).toBe(true);
 
     const left = job.steps.reduce((sum, s) => sum + s.remaining, 0);
-    advance(world, 14 * 60);
+    advance(world, 14 * 60, QUIET);
 
     expect(job.steps.reduce((sum, s) => sum + s.remaining, 0)).toBe(left);
   });
@@ -254,16 +279,16 @@ describe('closing time and work in progress', () => {
   it('lets the work be picked up again next morning and finished', () => {
     const world = newWorld(SUNDAY_0800);
     const { job, operator } = workingOnBloodPanel(world);
-    advance(world, SUNDAY_1600 - world.simMinutes + 120);
+    advance(world, SUNDAY_1600 - world.simMinutes + 120, QUIET);
     const leftOvernight = job.steps.reduce((total, step) => total + step.remaining, 0);
     expect(leftOvernight).toBeGreaterThan(0);
 
     // To nine the next morning. Advancing a flat day from 18:00 would land at
     // the *next* closing time, when she is already going home again.
-    advance(world, MINUTES_PER_DAY + 9 * 60 - (world.simMinutes % MINUTES_PER_DAY));
+    advance(world, MINUTES_PER_DAY + 9 * 60 - (world.simMinutes % MINUTES_PER_DAY), QUIET);
     expect(operator.state).toBe('idle');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: operator.id, jobId: job.id });
-    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5);
+    for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5, QUIET);
 
     expect(job.status).not.toBe('waiting');
     expect(job.steps.every((step) => step.remaining === 0)).toBe(true);
@@ -307,7 +332,7 @@ describe('the roster and the clock are different things', () => {
     expect(alex.rostered).toBe(true);
     expect(alex.state).toBe('off');
 
-    advance(world, shift.startMinute - world.simMinutes);
+    advance(world, shift.startMinute - world.simMinutes, QUIET);
     expect(alex.state).toBe('idle');
   });
 
@@ -320,10 +345,10 @@ describe('the roster and the clock are different things', () => {
     const hadas = person(world, 'Hadas Ben Hamo');
     expect(nina.weeklyHours).toBe(20);
 
-    advance(world, 12 * 60 - world.simMinutes - 1);
+    advance(world, 12 * 60 - world.simMinutes - 1, QUIET);
     expect(nina.state).not.toBe('off');
 
-    advance(world, 1);
+    advance(world, 1, QUIET);
     expect(world.simMinutes).toBeCloseTo(12 * 60, 6);
     expect(nina.state).toBe('off');
     // And the full-timers are still working.
@@ -350,7 +375,7 @@ describe('the roster and the clock are different things', () => {
     applyCommand(world, { type: 'SET_STATUS', staffId: operator.id, sick: true });
     expect(operator.state).toBe('sick');
 
-    advance(world, MINUTES_PER_DAY); // through a close and an open
+    advance(world, MINUTES_PER_DAY, QUIET); // through a close and an open
     expect(operator.state).toBe('sick');
   });
 
@@ -361,7 +386,7 @@ describe('the roster and the clock are different things', () => {
     const world = newWorld(SUNDAY_0800);
     const operator = person(world, 'Hadas Ben Hamo');
     applyCommand(world, { type: 'SET_STATUS', staffId: operator.id, sick: true });
-    advance(world, SUNDAY_1600 - world.simMinutes + 120); // 18:00, lab shut
+    advance(world, SUNDAY_1600 - world.simMinutes + 120, QUIET); // 18:00, lab shut
 
     applyCommand(world, { type: 'SET_STATUS', staffId: operator.id, sick: false });
 
@@ -376,7 +401,7 @@ describe('the roster and the clock are different things', () => {
     expect(alex.rostered).toBe(false);
 
     for (let day = 0; day < 3; day++) {
-      advance(world, MINUTES_PER_DAY);
+      advance(world, MINUTES_PER_DAY, QUIET);
       expect(alex.state).toBe('off');
     }
   });
@@ -397,7 +422,7 @@ describe('a closing time is an instant the loop lands on', () => {
       // Through closing time and well past it, in steps of the given size.
       const target = SUNDAY_1600 + 4 * 60;
       while (world.simMinutes < target - 1e-9) {
-        advance(world, Math.min(step, target - world.simMinutes));
+        advance(world, Math.min(step, target - world.simMinutes), QUIET);
       }
 
       const after = job.steps.reduce((sum, s) => sum + s.remaining, 0);

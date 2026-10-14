@@ -26,12 +26,11 @@
 import type { Scenario } from '../domain/types';
 import { assertScenarioIsPossible } from '../engine/audit';
 import { MINUTES_PER_DAY } from '../engine/calendar';
-import { applyCommand } from '../engine/commands';
-import { listAssignableJobs } from '../engine/queries';
+import type { OperatorPolicy } from '../engine/dispatch';
 import { chargeWeeklyLabour, profitAndLoss } from '../engine/money';
 import { instrumentsFor } from '../engine/resources';
 import { advance } from '../engine/tick';
-import { createWorld, type WorldState } from '../engine/world';
+import { createWorld } from '../engine/world';
 
 /** One simulated run's outcome. */
 export interface RunResult {
@@ -60,52 +59,42 @@ export interface RunResult {
 
 export interface BatchOptions {
   weeks?: number;
+  /**
+   * Which operator policy to run under.
+   *
+   * Exposed because it changes the answer. The lab manager's complaint is that
+   * one senior person carries the lab, so a policy that spreads work differently
+   * can move a verdict — and a comparison has to say which rule produced it.
+   */
+  policy?: OperatorPolicy;
 }
 
 /**
- * How often work is handed out, in simulated minutes.
+ * How coarsely the batch runner steps, in simulated minutes.
  *
- * Fixed rather than configurable, and the reason is a measurement worth
- * recording. Stepping the engine coarsely *is* equivalent to stepping it finely
- * — A2 guarantees it and a test enforces it. But assignment happens **between**
- * `advance` calls, from out here, so a coarser step also means work is handed
- * out less often: at a 15-minute step the same seed completed 97 jobs where a
- * 1-minute step completed 102, because people stood idle for up to a quarter of
- * an hour next to work they could have started.
+ * An hour, where it used to be one minute. The reason is the whole point of
+ * B3: assignment used to happen *between* `advance` calls, from out here, so a
+ * coarser step also meant work was handed out less often. At a fifteen-minute
+ * step the same seed completed 97 jobs where a one-minute step completed 102,
+ * because people stood idle for up to a quarter of an hour beside work they
+ * could have started. The only honest setting was the finest one, which made a
+ * fast run exactly as slow as the live view per simulated minute.
  *
- * That is not a flaw in the engine. It is the consequence of the dispatcher not
- * being *in* the engine yet, so its cadence is whatever the caller's loop
- * happens to be. Until B3 moves dispatch inside the slice loop — where it will
- * run at event boundaries like everything else — a fast run and a watched run
- * would disagree, and the only honest setting is the finest one.
+ * The dispatcher now runs inside the slice loop, at event boundaries like
+ * everything else, so A2's guarantee covers assignment too. A test asserts that
+ * one-minute and fifteen-minute steps produce identical discrete outcomes.
  *
- * So the batch runner is currently as slow as the live view per simulated
- * minute, which is the price of the comparison meaning anything. B3 buys the
- * speed back.
+ * An hour rather than a day only because the backlog is sampled from this loop
+ * and an hourly mean is a more honest average than a daily one.
  */
-const DISPATCH_EVERY_MINUTES = 1;
+const STEP_MINUTES = 60;
 
 const SUNDAY_0800 = 480;
 
-/**
- * Takes the most urgent job each free person can start.
- *
- * Deliberately simple, and deliberately the *same* rule for every option being
- * compared. B3 builds a real dispatcher with a named operator policy; using a
- * clever one here would mean a comparison measured the policy as much as the
- * decision, and a different policy might favour one option over another.
- */
-function assignWhatWeCan(world: WorldState): void {
-  for (const person of world.staff) {
-    if (person.state !== 'idle' || person.jobId !== null || person.activeTask) continue;
-    const pick = listAssignableJobs(world, person).filter((row) => row.qualified)[0];
-    if (pick) applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: pick.id });
-  }
-}
-
 export function runOnce(scenario: Scenario, seed: number, options: BatchOptions = {}): RunResult {
   const weeks = options.weeks ?? 4;
-  const step = DISPATCH_EVERY_MINUTES;
+  const policy = options.policy ?? 'first-free';
+  const step = STEP_MINUTES;
   const totalMinutes = weeks * 7 * MINUTES_PER_DAY;
 
   const world = createWorld(scenario, seed, SUNDAY_0800);
@@ -114,8 +103,10 @@ export function runOnce(scenario: Scenario, seed: number, options: BatchOptions 
   let backlogTotal = 0;
 
   for (let elapsed = 0; elapsed < totalMinutes; elapsed += step) {
-    advance(world, step);
-    assignWhatWeCan(world);
+    // The dispatcher is inside the engine now, so this loop only advances time
+    // and samples. Nothing it does can change the outcome, which is what lets
+    // the step be an hour instead of a minute.
+    advance(world, step, { dispatch: { policy } });
 
     // Sampled hourly rather than every step: the mean is the same and the cost
     // is not, and a step-size change must not alter a reported metric.

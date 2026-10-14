@@ -22,6 +22,16 @@ export const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 export const DAYS_PER_WEEK = 7;
 export const MINUTES_PER_WEEK = DAYS_PER_WEEK * MINUTES_PER_DAY;
 
+/**
+ * Below this, two instants are the same instant.
+ *
+ * Duplicated from `geometry.ts` rather than imported, because this module
+ * deliberately depends on nothing: it is the one place in the engine that is
+ * pure arithmetic over a number line, and it was built and tested alone before
+ * anything used it.
+ */
+const SHIFT_EPSILON = 1e-9;
+
 /** Guards the day-walking loops against a malformed calendar with no working days. */
 const MAX_DAYS_SEARCH = 400;
 
@@ -97,10 +107,27 @@ export function isWorkingDay(shift: Shift, minute: number): boolean {
  * both open and closed, which is what lets the slice loop in A2 stop exactly
  * on it.
  */
+/**
+ * Whether the clock is inside a shift, tolerant of floating-point drift.
+ *
+ * The tolerance is not cosmetic. The slice loop clamps a slice so that it ends
+ * exactly on a shift boundary, but `simMinutes` is a sum of thousands of
+ * additions and lands a hair either side: a day advanced from minute 480
+ * arrives at 1,919.999999999999 rather than 1,920. Compared exactly, everybody
+ * is still at home for one more slice, nobody is given work, and — because the
+ * drift depends on the history of slice lengths — a one-minute run and a
+ * fifteen-minute run disagree about it. That is precisely the step-size
+ * dependence the slice loop exists to remove.
+ *
+ * Same reasoning and the same epsilon as `hasReached`, which was added for the
+ * identical problem in job expiry. Closing stays exclusive: a clock within
+ * EPSILON of the closing minute is treated as having reached it, so a shift that
+ * ends at 16:00 does not include 16:00.
+ */
 export function isWithinShift(shift: Shift, minute: number): boolean {
   if (!isWorkingDay(shift, minute)) return false;
   const m = minuteOfDay(minute);
-  return m >= shift.startMinute && m < shift.endMinute;
+  return m >= shift.startMinute - SHIFT_EPSILON && m < shift.endMinute - SHIFT_EPSILON;
 }
 
 /** The first working day at or after `day`. */

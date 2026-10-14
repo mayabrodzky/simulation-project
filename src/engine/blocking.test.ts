@@ -27,6 +27,18 @@ import { createWorld, type WorldState } from './world';
 const SEED = 42;
 const SUNDAY_0800 = 480;
 
+/**
+ * Every run in this file has the dispatcher switched off.
+ *
+ * These tests are about *why work is not moving*, which means nothing must be
+ * moving it. With dispatch on — the default, as the live lab wants — jobs are
+ * taken the moment somebody is free, so a test asserting "this job is held up
+ * because the lab is shut" would instead be asserting that the dispatcher
+ * exists. Off is the only setting under which a block reason is observable at
+ * all.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
+
 function newWorld(scenario: Scenario = chemistryLab, startMinutes = SUNDAY_0800) {
   const world = createWorld(scenario, SEED, startMinutes);
   return world;
@@ -36,7 +48,7 @@ function waitForJob(world: WorldState, workTypeId: string): Job {
   for (let i = 0; i < 5000; i++) {
     const found = world.jobs.find((j) => j.workTypeId === workTypeId && j.status === 'waiting');
     if (found) return found;
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   throw new Error(`waitForJob: no ${workTypeId} arrived`);
 }
@@ -45,14 +57,14 @@ describe('the reason is specific enough to act on', () => {
   it('says nothing is wrong when somebody free could start it', () => {
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 1);
+    advance(world, 1, QUIET);
     expect(job.blockReason).toBeNull();
   });
 
   it('names the lab being shut', () => {
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 16 * 60 - world.simMinutes + 60); // 17:00
+    advance(world, 16 * 60 - world.simMinutes + 60, QUIET); // 17:00
 
     expect(job.blockReason).toBe('outside-working-hours');
   });
@@ -66,7 +78,7 @@ describe('the reason is specific enough to act on', () => {
     };
     const world = newWorld(unskilled);
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 1);
+    advance(world, 1, QUIET);
 
     expect(job.blockReason).toBe('no-qualified-operator');
   });
@@ -78,7 +90,7 @@ describe('the reason is specific enough to act on', () => {
     };
     const world = newWorld(noCentrifuge);
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 1);
+    advance(world, 1, QUIET);
 
     expect(job.blockReason).toBe('no-such-resource');
   });
@@ -91,7 +103,7 @@ describe('the reason is specific enough to act on', () => {
     const first = waitForJob(world, 'mass-spec');
     const amit = world.staff.find((p) => p.name === 'Dr. Amit Katz')!;
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: amit.id, jobId: first.id });
-    for (let i = 0; i < 400 && amit.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 400 && amit.state !== 'working'; i++) advance(world, 0.5, QUIET);
     expect(amit.state).toBe('working');
 
     const second = world.jobs.find(
@@ -107,7 +119,7 @@ describe('the reason is specific enough to act on', () => {
     const lihi = world.staff.find((p) => p.name === 'Dr. Lihi Dayan')!;
     const other = world.jobs.find((j) => j.status === 'waiting' && j.workTypeId === 'blood-panel');
     if (other) applyCommand(world, { type: 'ASSIGN_JOB', staffId: lihi.id, jobId: other.id });
-    advance(world, 1);
+    advance(world, 1, QUIET);
 
     const third = world.jobs.find(
       (j) => j.workTypeId === 'mass-spec' && j.status === 'waiting' && j.blockReason !== null,
@@ -122,12 +134,12 @@ describe('blocked is advisory and never absorbing', () => {
     // deadlocks: work that can never be picked up again.
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 16 * 60 - world.simMinutes + 60);
+    advance(world, 16 * 60 - world.simMinutes + 60, QUIET);
     expect(job.blockReason).toBe('outside-working-hours');
     expect(job.status).toBe('waiting');
 
     // Next morning it is simply taken, with no unblocking step anywhere.
-    advance(world, 15 * 60);
+    advance(world, 15 * 60, QUIET);
     const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo')!;
     const events = applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
 
@@ -138,10 +150,10 @@ describe('blocked is advisory and never absorbing', () => {
   it('clears the reason the instant the obstacle goes', () => {
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 16 * 60 - world.simMinutes + 60);
+    advance(world, 16 * 60 - world.simMinutes + 60, QUIET);
     expect(job.blockReason).not.toBeNull();
 
-    advance(world, 15 * 60); // next morning
+    advance(world, 15 * 60, QUIET); // next morning
     expect(job.blockReason).toBeNull();
     expect(job.blockedSinceMinute).toBeNull();
   });
@@ -151,14 +163,14 @@ describe('blocked is advisory and never absorbing', () => {
     // other rule, expiry included.
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    advance(world, job.expiresAtMinute - world.simMinutes);
+    advance(world, job.expiresAtMinute - world.simMinutes, QUIET);
     expect(job.status).toBe('expired');
     expect(job.blockReason).toBeNull();
   });
 
   it('never leaves a finished job carrying a reason', () => {
     const world = newWorld();
-    advance(world, 14 * MINUTES_PER_DAY);
+    advance(world, 14 * MINUTES_PER_DAY, QUIET);
     for (const job of world.jobs) {
       if (job.status.startsWith('done') || job.status === 'expired') {
         expect(job.blockReason).toBeNull();
@@ -173,14 +185,14 @@ describe('a long wait reports itself', () => {
     // waits. Reporting them as one long stall would name the wrong cause.
     const world = newWorld();
     const job = waitForJob(world, 'blood-panel');
-    advance(world, 16 * 60 - world.simMinutes + 60);
+    advance(world, 16 * 60 - world.simMinutes + 60, QUIET);
     const firstReason = job.blockReason;
     const firstSince = job.blockedSinceMinute;
     expect(firstReason).toBe('outside-working-hours');
 
     const unskilled = world.staff.map((p) => p.skills);
     world.staff.forEach((p) => (p.skills = []));
-    advance(world, 1);
+    advance(world, 1, QUIET);
     expect(job.blockReason).toBe('no-qualified-operator');
     expect(job.blockedSinceMinute).not.toBe(firstSince);
 
@@ -196,7 +208,7 @@ describe('a long wait reports itself', () => {
     const job = waitForJob(world, 'blood-panel');
 
     const stalls = [];
-    for (let day = 0; day < 4; day++) stalls.push(...advance(world, MINUTES_PER_DAY));
+    for (let day = 0; day < 4; day++) stalls.push(...advance(world, MINUTES_PER_DAY, QUIET));
 
     const mine = stalls.filter((e) => e.type === 'job-stalled' && e.jobId === job.id);
     expect(mine).toHaveLength(1);
@@ -207,7 +219,7 @@ describe('a long wait reports itself', () => {
     // 48 hours, so a night and a weekend are not news. If this fired every
     // evening the signal would be worthless.
     const world = newWorld();
-    const events = advance(world, MINUTES_PER_DAY);
+    const events = advance(world, MINUTES_PER_DAY, QUIET);
     expect(events.filter((e) => e.type === 'job-stalled')).toHaveLength(0);
   });
 });
@@ -218,7 +230,7 @@ describe('nothing stalls indefinitely', () => {
     // with nobody doing any work at all, every job has either been abandoned or
     // is recent. Nothing is stuck in a state with no way out.
     const world = newWorld();
-    advance(world, 35 * MINUTES_PER_DAY);
+    advance(world, 35 * MINUTES_PER_DAY, QUIET);
 
     const stillOpen = world.jobs.filter((j) => j.status === 'waiting' || j.status === 'blocked');
     for (const job of stillOpen) {
@@ -233,7 +245,7 @@ describe('nothing stalls indefinitely', () => {
     // to release rather than orphan.
     const world = newWorld();
     for (let i = 0; i < 35; i++) {
-      advance(world, MINUTES_PER_DAY);
+      advance(world, MINUTES_PER_DAY, QUIET);
       for (const job of world.jobs) {
         if (job.status === 'in-progress') expect(job.operatorId).not.toBeNull();
       }
@@ -243,7 +255,7 @@ describe('nothing stalls indefinitely', () => {
   it('holds no machine claimed by a job that is not in progress', () => {
     const world = newWorld();
     for (let i = 0; i < 35; i++) {
-      advance(world, MINUTES_PER_DAY);
+      advance(world, MINUTES_PER_DAY, QUIET);
       for (const job of world.jobs) {
         if (job.equipmentId !== null) expect(job.status).toBe('in-progress');
       }

@@ -2267,3 +2267,124 @@ fails two — one of them the conservation law, which checks that the opening bu
 every cost line equals the budget actually left. That is the same shape as the per-minute conservation
 law from the capacity work, and for the same reason: a charge that reaches the budget without reaching
 a cost line would make every profit figure wrong and nothing else would notice.
+
+---
+
+## 33. The dispatcher, and where it had to live
+
+**Context.** Assignment happened outside the engine: the live view sent a command when somebody
+clicked, and the batch runner handed out work between `advance` calls. The second arrangement had a
+measured cost. A2 guarantees that stepping the engine coarsely matches stepping it finely, but
+assignment from outside was not inside that guarantee — so a coarser step also meant work was handed
+out less often. At a fifteen-minute step one seed completed 97 jobs where a one-minute step completed
+102, because people stood idle for up to a quarter of an hour beside work they could have started.
+The only honest setting was the finest one, which made a "fast" run exactly as slow as the live view.
+
+**Decision.** The dispatcher runs inside the slice loop. Earliest deadline, then rush, then arrival,
+then id — a total order with no two jobs comparable, so the sequence is identical in every run of a
+seed. No randomness anywhere: a tie broken by chance would mean a comparison was measuring the
+dispatcher's coin-flips.
+
+Jobs are the outer loop, not people. Iterating people would give the first person the most urgent job
+*they personally* can do, which quietly reorders the queue by who happens to be free.
+
+**The operator policy is a named choice**, because it changes the answer. `first-free` takes whoever
+has been idle longest; `least-versatile` prefers the person with fewest skills, so the only mass-spec
+scientist is not spent on a centrifuge. The lab manager's complaint is that one senior person carries
+the lab, and "who is carrying it" is a reported metric — the dispatcher must not invent or erase that
+effect without it being visible which rule produced it.
+
+### Three attempts at when to dispatch, and why the first two failed
+
+This took three goes, and the failures are more instructive than the fix.
+
+**Attempt one: dispatch at the end of every slice.** The finer caller simply gets more chances to
+look. A one-minute run assigned a job at 567.98 that a fifteen-minute run assigned at 566.98 — not
+because anything differed, but because the fine run had slice boundaries at every minute and the
+coarse run did not. Everything downstream diverged from there.
+
+**Attempt two: dispatch only on slices that end on an event.** The reasoning was that nothing can
+become dispatchable except through an event, so a slice ending on the caller's budget has nothing new
+to offer. That fixed one minute against fifteen and still failed at an hour against a day — and the
+reason is the interesting part. Once people are walking, *the events themselves are arrivals*, and an
+arrival's instant depends on who was dispatched when. "The next event" is not a cadence two runs
+agree on: dispatch changes the events, and the events were deciding when to dispatch. Circular.
+
+**Attempt three: a cadence derived from the clock.** Work is handed out every whole simulated minute,
+and the slice loop clamps to that instant like any other event. The instants are a function of
+absolute simulated time and nothing else, so every caller agrees on them by construction rather than
+by my reasoning being right about which events exist. The cost is that somebody free at 566.98 waits
+until 567 — under a minute, uniformly, against the quarter of an hour the old arrangement cost.
+
+A bug inside attempt three, worth keeping: the cadence marker was recomputed as
+`Math.floor(simMinutes + EPSILON)`. At a sixtieth-of-a-second step the clock reaches minute 567 as
+566.9999999997, which floors to 566 — so the marker never advanced and dispatch then fired on *every*
+slice. The finest caller lost the cadence entirely while coarser ones kept it, which is precisely the
+failure the cadence was introduced to prevent. It now advances by whole cadences from where it was and
+is never recomputed from the clock.
+
+### A limitation I could not close, stated rather than hidden
+
+**With the dispatcher on, a sixtieth-of-a-second step and a one-minute step can still reach different
+outcomes.** Measured: over four simulated hours a job finishes in the coarse run and is still in
+progress in the fine one, and the assignments diverge from there. The engine *alone* is invariant at
+those same step sizes — verified — so the cause is in how dispatch interacts with very fine stepping,
+and I have not identified it.
+
+What it does and does not affect: the batch runner steps in hours, so every reported verdict is inside
+the proven range (one, fifteen and sixty minutes, and a whole day, all exact). The live view steps at
+a sixtieth of a second, so a *watched* run may differ in small ways from the batch run of the same
+seed. That is a real gap between "the simulation you watched" and "the simulation that produced the
+number" — the exact thing the invariance test exists to prevent — and it is recorded here and in
+`slicing.test.ts` as an open issue rather than quietly tolerated.
+
+### The tests this broke, and what that says
+
+Nine test files needed `dispatch: { enabled: false }`. Every one of them builds a precise situation by
+hand — this person, that job, this many minutes — and then asserts about it; with a dispatcher running,
+the subject gets given something else before the test can give it anything. The flag exists for the
+sandbox's hands-on mode, and it turns out to be exactly what a controlled test needs too.
+
+One test was weakened rather than fixed and is worth naming: `audit.test.ts` asserted that hands-on
+minutes *spent* equal hands-on minutes *delivered*. With fatigue that is false by design — past
+forty-five hours a week a person spends 1.1 minutes of presence per minute of work. The assertion now
+says spent is never less than delivered and the gap never exceeds the pace multiplier, which is a
+statement about fatigue rather than a loosened tolerance.
+
+### What it did to the answer
+
+Both earlier findings reverse. The batch runner now steps in hours instead of minutes — a sixtyfold
+reduction in engine calls — and with work handed out the instant people are free rather than whenever
+the caller's loop came round:
+
+| | before B3 | after B3 |
+|---|---|---|
+| jobs completed | 538 | **566** |
+| jobs late | 71 | **32** |
+| average backlog | 64.4 | **50.1** |
+| profit over four weeks | **−13,692** | **+12,690** |
+
+**The lab is profitable.** The loss reported in entry 32 was an artefact of work being handed out once
+a minute from outside the loop, not a finding about the lab. That is a useful caution about every
+number in this log: the ones that survived a change to an unrelated part of the model are worth more
+than the ones that did not.
+
+**And cross-training now helps**, where it clearly hurt before. Under both policies, on identical
+seeds, with nothing tuned:
+
+| | first-free | least-versatile |
+|---|---|---|
+| jobs completed | +5 | +7 |
+| jobs late | −5 | −6 |
+| average backlog | −5.7 | −6.3 |
+| profit | **+5,193** | **+4,482** |
+
+The direction is the same under both rules, which matters more than either number: the finding is a
+property of the lab rather than of the dispatcher's choice of person. Least-versatile-first is better
+for the lab in absolute terms under both options — profit 17,352 against 12,690 as is — which is its
+own small finding, and it slightly *reduces* the benefit of cross-training, exactly as one would
+expect from a rule that already protects scarce skills.
+
+The ranges still overlap heavily (+5,193 against a P10–P90 spread of roughly 6,000 to 24,000), so the
+honest summary is "probably helps, by an amount smaller than the week-to-week variation", not "worth
+₪5,000 a month".

@@ -18,6 +18,18 @@ import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
 
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand — this person, that job, this
+ * many minutes — and then assert about it. With dispatch on, which is the
+ * default the live lab wants, the engine assigns work the moment somebody is
+ * free, so the subject of the test would be given something else before the
+ * test could give it anything. Off is the only setting under which a
+ * hand-built setup survives contact with the clock.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
+
 function run(seed: number, ticks: number, dt = 1 / 30): WorldState {
   const world = createWorld(chemistryLab, seed, 480);
   for (let i = 0; i < ticks; i++) tick(world, dt);
@@ -227,7 +239,7 @@ describe('the engine reports rather than renders', () => {
     // extraction, which is why they could not be tested at all; they are now
     // a flag on an ordinary job and the arrival is the event.
     const world = createWorld(chemistryLab, SEED, 480);
-    const events = advance(world, 240);
+    const events = advance(world, 240, QUIET);
 
     const arrived = events.filter((e) => e.type === 'job-arrived');
     expect(arrived.length).toBeGreaterThan(0);
@@ -239,7 +251,7 @@ describe('the engine reports rather than renders', () => {
     // Alex holds only Spectrophotometry; a blood panel starts on the centrifuge.
     const alex = world.staff.find((p) => p.name === 'Alex Tom')!;
     for (let i = 0; i < 2000 && !world.jobs.some((j) => j.workTypeId === 'blood-panel'); i++) {
-      advance(world, 1);
+      advance(world, 1, QUIET);
     }
     const bloodPanel = world.jobs.find((j) => j.workTypeId === 'blood-panel')!;
     const events = applyCommand(world, {

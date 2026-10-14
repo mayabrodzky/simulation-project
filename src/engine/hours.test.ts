@@ -26,6 +26,18 @@ import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
 const SUNDAY_0800 = 480;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand — this person, that job, this
+ * many minutes — and then assert about it. With dispatch on, which is the
+ * default the live lab wants, the engine assigns work the moment somebody is
+ * free, so the subject of the test would be given something else before the
+ * test could give it anything. Off is the only setting under which a
+ * hand-built setup survives contact with the clock.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 const t = chemistryLab.tuning;
 
 const newWorld = (startMinutes = SUNDAY_0800) => createWorld(chemistryLab, SEED, startMinutes);
@@ -36,7 +48,7 @@ function waitForJob(world: WorldState, workTypeId: string): Job {
   for (let i = 0; i < 5000; i++) {
     const found = world.jobs.find((j) => j.workTypeId === workTypeId && j.status === 'waiting');
     if (found) return found;
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   throw new Error(`waitForJob: no ${workTypeId} arrived`);
 }
@@ -62,7 +74,7 @@ describe('the ledger counts what actually happened', () => {
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
 
     const before = world.simMinutes;
-    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5, QUIET);
     const walked = world.simMinutes - before;
 
     expect(walked).toBeGreaterThan(0);
@@ -72,7 +84,7 @@ describe('the ledger counts what actually happened', () => {
     expect(hadas.minutesWorkedToday).toBeLessThan(0.5);
 
     const atStart = hadas.minutesWorkedToday;
-    advance(world, 10);
+    advance(world, 10, QUIET);
     expect(hadas.minutesWorkedToday - atStart).toBeCloseTo(10, 6);
   });
 
@@ -84,9 +96,9 @@ describe('the ledger counts what actually happened', () => {
     const job = waitForJob(world, 'blood-panel');
     const hadas = person(world, 'Hadas Ben Hamo');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
-    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5, QUIET);
 
-    advance(world, 15);
+    advance(world, 15, QUIET);
 
     const done = job.steps.reduce((sum, s) => sum + (s.total - s.remaining), 0);
     expect(done).toBeCloseTo(hadas.minutesWorkedToday, 6);
@@ -97,13 +109,13 @@ describe('the ledger counts what actually happened', () => {
     const hadas = person(world, 'Hadas Ben Hamo');
     const job = waitForJob(world, 'blood-panel');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
-    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5);
-    advance(world, 20);
+    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5, QUIET);
+    advance(world, 20, QUIET);
 
     const workedDayOne = hadas.minutesWorkedThisWeek;
     expect(workedDayOne).toBeGreaterThan(0);
 
-    advance(world, MINUTES_PER_DAY);
+    advance(world, MINUTES_PER_DAY, QUIET);
 
     expect(hadas.minutesWorkedToday).toBe(0);
     expect(hadas.minutesWorkedThisWeek).toBeGreaterThanOrEqual(workedDayOne);
@@ -114,15 +126,15 @@ describe('the ledger counts what actually happened', () => {
     const hadas = person(world, 'Hadas Ben Hamo');
     const job = waitForJob(world, 'blood-panel');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
-    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5);
-    advance(world, 20);
+    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5, QUIET);
+    advance(world, 20, QUIET);
 
-    advance(world, 3 * MINUTES_PER_DAY);
+    advance(world, 3 * MINUTES_PER_DAY, QUIET);
     const worked = world.staff.map((p) => p.minutesWorkedThisWeek);
     expect(worked.some((m) => m > 0)).toBe(true);
 
     // Past Saturday midnight into the next week.
-    advance(world, 4 * MINUTES_PER_DAY);
+    advance(world, 4 * MINUTES_PER_DAY, QUIET);
 
     for (const p of world.staff) {
       expect(p.minutesWorkedThisWeek).toBe(0);
@@ -136,7 +148,7 @@ describe('overtime is minutes outside a person’s own contract', () => {
     const world = newWorld();
     const hadas = person(world, 'Hadas Ben Hamo');
     creditWork(world, hadas, 0); // the clock is 08:00, squarely inside
-    advance(world, 60);
+    advance(world, 60, QUIET);
     expect(hadas.overtimeMinutesThisWeek).toBe(0);
   });
 
@@ -149,7 +161,7 @@ describe('overtime is minutes outside a person’s own contract', () => {
     const nina = person(world, 'Nina Zur');
     expect(nina.weeklyHours).toBe(20);
 
-    advance(world, 13 * 60 - world.simMinutes); // 13:00
+    advance(world, 13 * 60 - world.simMinutes, QUIET); // 13:00
     creditWork(world, nina, 30);
 
     expect(nina.overtimeMinutesThisWeek).toBe(30);
@@ -162,7 +174,7 @@ describe('overtime is minutes outside a person’s own contract', () => {
     // of ordinary afternoon charged at a premium.
     const world = newWorld();
     const hadas = person(world, 'Hadas Ben Hamo');
-    advance(world, 16 * 60 - world.simMinutes); // exactly 16:00
+    advance(world, 16 * 60 - world.simMinutes, QUIET); // exactly 16:00
     creditWork(world, hadas, 15);
 
     expect(hadas.overtimeMinutesThisWeek).toBe(0);
@@ -177,7 +189,7 @@ describe('overtime is minutes outside a person’s own contract', () => {
     // Assigned every simulated minute, so somebody is genuinely mid-step when
     // four o'clock arrives. Assigning once a day would never catch anybody.
     for (let i = 0; i < 2 * MINUTES_PER_DAY; i++) {
-      advance(world, 1);
+      advance(world, 1, QUIET);
       for (const p of world.staff) {
         if (p.state !== 'idle' || p.jobId !== null || p.activeTask) continue;
         const job = world.jobs.find(
@@ -217,11 +229,11 @@ describe('fatigue is a pace, not a flag', () => {
       const job = waitForJob(world, 'blood-panel');
       const hadas = person(world, 'Hadas Ben Hamo');
       applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
-      for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5);
+      for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5, QUIET);
 
       hadas.minutesWorkedThisWeek = alreadyWorkedThisWeek;
       const before = job.steps.reduce((sum, s) => sum + s.remaining, 0);
-      advance(world, 10);
+      advance(world, 10, QUIET);
       return before - job.steps.reduce((sum, s) => sum + s.remaining, 0);
     }
 
@@ -241,11 +253,11 @@ describe('fatigue is a pace, not a flag', () => {
     const job = waitForJob(world, 'blood-panel');
     const hadas = person(world, 'Hadas Ben Hamo');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
-    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5);
+    for (let i = 0; i < 200 && hadas.state !== 'working'; i++) advance(world, 0.5, QUIET);
 
     hadas.minutesWorkedThisWeek = t.fatigueAfterWeeklyHours * 60 - 5;
     const before = job.steps.reduce((sum, s) => sum + s.remaining, 0);
-    advance(world, 10);
+    advance(world, 10, QUIET);
     const done = before - job.steps.reduce((sum, s) => sum + s.remaining, 0);
 
     // Five minutes fresh and five tired: strictly between the two rates.
@@ -295,7 +307,7 @@ describe('energy is gone', () => {
   it('never puts anybody in a break state over a simulated week', () => {
     const world = newWorld();
     for (let day = 0; day < 7; day++) {
-      advance(world, MINUTES_PER_DAY);
+      advance(world, MINUTES_PER_DAY, QUIET);
       for (const p of world.staff) expect(p.state).not.toBe('break');
     }
   });

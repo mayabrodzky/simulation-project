@@ -23,6 +23,16 @@ import { advance, tick } from './tick';
 import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand and assert about it. With
+ * dispatch on — the default the live lab wants — the engine hands out work the
+ * moment somebody is free, so the subject would be given something else before
+ * the test could give it anything.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 const newWorld = (startMinutes = 480) => createWorld(chemistryLab, SEED, startMinutes);
 
 const hadas = (w: WorldState) => w.staff.find((p) => p.name === 'Hadas Ben Hamo')!;
@@ -46,7 +56,7 @@ function runUntilWorking(world: WorldState, staffId: number, maxTicks = 5000): v
  */
 function bloodPanel(world: WorldState) {
   for (let i = 0; i < 2000 && !world.jobs.some((j) => j.workTypeId === 'blood-panel'); i++) {
-    advance(world, 1);
+    advance(world, 1, QUIET);
   }
   const job = world.jobs.find((j) => j.workTypeId === 'blood-panel');
   if (!job) throw new Error('bloodPanel: none arrived');
@@ -170,7 +180,7 @@ describe('who is free', () => {
     expect(nina.weeklyHours).toBe(20);
     expect(isUnoccupied(world, nina)).toBe(true);
 
-    advance(world, 5 * 60); // 13:00: the lab is open, Nina's shift is not
+    advance(world, 5 * 60, QUIET); // 13:00: the lab is open, Nina's shift is not
     expect(nina.state).toBe('off');
     expect(isUnoccupied(world, nina)).toBe(false);
     expect(unoccupiedStaffIds(world)).not.toContain(nina.id);
