@@ -22,8 +22,8 @@
  */
 import type { Job, Staff } from '../domain/types';
 import type { EngineEvent } from './events';
-import { attach, canDoStep, isOpen } from './jobs';
-import { allocate, existsFor } from './resources';
+import { attach, awaitsInstrumentOnly, canDoStep, isOpen } from './jobs';
+import { allocate, claim, existsFor } from './resources';
 import { isOnShift } from './shifts';
 import type { WorldState } from './world';
 
@@ -118,6 +118,62 @@ function canStart(world: WorldState, person: Staff, job: Job): boolean {
 }
 
 /**
+ * Puts prepped samples onto instruments that have just come free.
+ *
+ * A job whose preparation is finished needs an instrument and nobody else, so
+ * it must not go through the dispatcher - see `awaitsInstrumentOnly` for what
+ * happened when it did. This is the only path by which such a job starts
+ * running, and it involves no person at all.
+ *
+ * Ordered by the same urgency rule the dispatcher uses, and run *before* it, so
+ * a freed mass spectrometer goes to the sample already sitting beside it rather
+ * than to work that has not been started. The hands-on minutes in a prepped
+ * sample are already spent; making it queue behind fresh work wastes them.
+ */
+export function startPreppedRuns(world: WorldState, events: EngineEvent[]): void {
+  // Scanned before anything is allocated, because this runs on every slice of
+  // every run and the job list grows all month. Building and sorting an array
+  // each time cost more than the rest of the loop put together: a forty-day
+  // headless run went from seconds to over twenty. Nothing is allocated unless
+  // something is actually queueing, and nothing is sorted unless two things
+  // are competing for the same machine.
+  let queue: Job[] | null = null;
+  for (const job of world.jobs) {
+    // One field read rejects everything that is not queueing, which is almost
+    // every job almost always. `preppedAtMinute` is set at exactly the moment
+    // a handover fails to find an instrument and cleared the moment one is
+    // claimed, so it is the marker for this state and not merely a timestamp.
+    if (job.preppedAtMinute === null) continue;
+    if (!awaitsInstrumentOnly(world, job)) continue;
+    (queue ??= []).push(job);
+  }
+  if (queue === null) return;
+  if (queue.length > 1) queue.sort(byUrgency);
+
+  for (const job of queue) {
+    const step = job.steps[job.stepIndex];
+    if (!step) continue;
+
+    const machine = allocate(world, step.capability);
+    if (!machine) continue;
+
+    const waited = job.preppedAtMinute === null ? 0 : world.simMinutes - job.preppedAtMinute;
+
+    claim(world, machine, job);
+    job.status = 'unattended';
+    job.blockReason = null;
+    job.preppedAtMinute = null;
+    events.push({
+      type: 'job-on-instrument',
+      jobId: job.id,
+      name: job.name,
+      minutes: step.unattendedRemaining,
+      waited,
+    });
+  }
+}
+
+/**
  * Hands out as much work as can be started this instant.
  *
  * Jobs in urgency order, and for each the best available person under the
@@ -140,7 +196,14 @@ export function dispatch(
   if (free.length === 0) return;
 
   const queue = world.jobs
-    .filter((job) => isOpen(job) && job.stepIndex < job.steps.length)
+    .filter(
+      (job) =>
+        isOpen(job) &&
+        job.stepIndex < job.steps.length &&
+        // Prepped and waiting for an instrument: no person can help it, and
+        // offering it to one burned a slice of their paid time per cadence.
+        !awaitsInstrumentOnly(world, job),
+    )
     .sort(byUrgency);
   if (queue.length === 0) return;
 

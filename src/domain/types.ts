@@ -309,6 +309,16 @@ export interface Job {
    * and picked up again the next morning has not bought two sets of reagents.
    */
   materialsCharged: boolean;
+  /**
+   * When this job's preparation finished and it began queueing for an
+   * instrument, or null if it is not waiting for one.
+   *
+   * The wait it measures is the bottleneck the whole scenario is built around:
+   * a mass-spec sample with sixty minutes of hands-on preparation behind it,
+   * standing in a queue for the one machine that can run it. Separate from
+   * `blockedSinceMinute`, which times a job nobody has started.
+   */
+  preppedAtMinute: number | null;
   blockReason: BlockReason | null;
   /**
    * When the current block began, or null if nothing is in the way.

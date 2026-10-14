@@ -2388,3 +2388,203 @@ expect from a rule that already protects scarce skills.
 The ranges still overlap heavily (+5,193 against a P10–P90 spread of roughly 6,000 to 24,000), so the
 honest summary is "probably helps, by an amount smaller than the week-to-week variation", not "worth
 ₪5,000 a month".
+
+---
+
+## 34. Three step-size bugs, one of them expensive, and a finding that went away
+
+**Context.** Entry 33 closed with an open issue: with the dispatcher on, a
+sixtieth-of-a-second step reached different outcomes from a one-minute step. The
+engine alone was invariant at those sizes, so the cause was somewhere in
+dispatch, and it had not been found. The investigation was time-boxed to one
+attempt, with the fallback of making a watched run and a batch run agree by
+construction instead.
+
+The attempt found three separate defects. All three cost exactly one slice, and
+one of them was not an invariance bug at all.
+
+### Why the existing tests could not have caught any of them
+
+This is the most useful part of the entry.
+
+The dispatch cadence clamps every slice to at most one minute. So every caller
+stepping a minute or more sees the *same* slice lengths, and a cost of "one
+slice" is the same cost for all of them. The step-size tests compared one minute
+against fifteen, sixty, and a whole day - and they agreed with each other
+because they were all paying the same penalty, not because there was no penalty.
+
+The live view steps a sixtieth of a second. It paid a sixtieth of the penalty,
+and that is the only reason the discrepancy was visible at all.
+
+### The three defects
+
+**1. Work handed to somebody already at the machine began one pass late.**
+`attach` set a person to `idle` and left them to be noticed by the next pass
+through the job loop. When they were standing at the right machine already -
+which is the common case, because people are dispatched where they stand - there
+was nothing to wait for.
+
+**2. A job queueing for a busy instrument picked it up one pass late.** Noticing
+that a slot had come free was a poll, once per slice, so the latency *was* the
+caller's step length.
+
+Both are now one pass: `startWhatCanStart` runs at the end of the slice, after
+work has advanced and after dispatch, and iterates to a fixed point because one
+job starting frees what another was waiting for and the order `world.jobs`
+happens to be in must not decide who gets it. It is driven from the staff list
+rather than the job list - a job can only start if it has an operator, and
+operators carry `jobId`, so it is eight iterations rather than one per job in the
+month. The first version scanned the jobs and tripled the cost of the loop it was
+added to; three long-horizon tests timed out.
+
+**3. A cosmetic stroll was moving the simulation.** Idle people wander, which is
+animation. But a wander came due while its owner was busy, so it fired on the
+first pass that found them idle - and that pass was inside `moveStaff`, which
+runs *before* jobs advance, so it was the pass after the one where their job
+finished. The wander was then scheduled from a clock a whole slice late.
+
+Measured: a one-minute run and a one-tenth-minute run drew the same destination
+from the same stream and set out for it 0.8 minutes apart. From there the two
+runs had people standing in different places, walking different distances -
+walking is charged in simulated minutes - and completing different amounts of
+work. Wandering is now a pass of its own, after dispatch, so it begins at the
+instant somebody becomes idle, which is a step completion and therefore an
+instant the loop lands on exactly.
+
+### The expensive one, which was hiding behind a weakened test
+
+The second defect had a second face, and it was not about step size.
+
+A mass-spec job is sixty minutes of preparation at a bench, then ninety minutes
+in an instrument it claims only at the handover. With the only mass spectrometer
+busy, the handover fails by design: the sample is prepped, the operator is
+released, and the job goes back to `waiting`. That queue is the bottleneck the
+whole scenario is built around, and representing it was the point of splitting
+attended from unattended time.
+
+But the only code path that could claim an instrument for such a job ran through
+an attached operator. So the dispatcher handed the prepped job to a qualified
+person, who stood over finished preparation for one slice, achieved nothing, and
+was released when the handover failed again - and on the next cadence it was
+handed to somebody again. Indefinitely, for as long as the instrument stayed
+busy.
+
+Two harms, and they were hiding each other:
+
+- **The lab paid for presence that produced no work**, inflating labour,
+  overtime, fatigue and hands-on utilisation at once. And because the person was
+  attached, they were unavailable for work they could actually have done.
+- **The amount wasted was one slice per cadence**, which is the invariance bug.
+
+A prepped sample now claims its instrument with no person involved
+(`startPreppedRuns`, ordered by the same urgency rule the dispatcher uses and run
+before it, because the hands-on minutes in a prepped sample are already spent).
+`awaitsInstrumentOnly` names the state, and both the dispatcher and the live
+view's assign dialogue skip it: no person can move such a job, so offering it to
+one can only waste their time.
+
+**The weakened assertion was the warning, and it was ignored.** Entry 33 recorded
+that `audit.test.ts` had been loosened from "hands-on minutes spent equal minutes
+delivered" to "spent is never less than delivered, and the gap is within the
+fatigue multiplier", and attributed the gap to fatigue. The gap was this bug. The
+bound was wide enough to swallow it, and the loosening was justified with a
+plausible mechanism that happened to be the wrong one.
+
+Both exact assertions are now restored, and they pin the multiplier from both
+sides: with nobody tired, presence equals delivered exactly; with
+`fatigueAfterWeeklyHours` set to zero so everybody is tired from the first
+minute, presence equals delivered times exactly 1.1. A multiplier applied in the
+wrong direction fails one or the other. The six-day horizon is deliberate - the
+weekly ledger clears at Saturday midnight, and a counter that resets
+mid-measurement cannot be compared against a total.
+
+### What it did to the answer, and to the finding
+
+The lab is substantially more profitable than entry 33 reported, because people
+are no longer standing over prepped samples:
+
+| | entry 33 | now |
+|---|---|---|
+| jobs completed | 566 | **591** |
+| jobs late | 32 | **23** |
+| average backlog | 50.1 | **34.4** |
+| mass-spec utilisation | 21.2% | **26.9%** |
+| profit over four weeks | 12,690 | **33,559** |
+
+**And the cross-training finding has gone away.** Entry 33 reported it as
+"probably helps, by an amount smaller than the week-to-week variation". With the
+defect fixed, and measured by pairing rather than by subtracting medians:
+
+| | first-free | least-versatile |
+|---|---|---|
+| profit, typical per-month difference | +389 | +4 |
+| P10 to P90 of that difference | -1,567 to +2,796 | -1,346 to +1,212 |
+| better in | 6.0 of 10 months | 5.0 of 10 |
+| worse in | 4.0 of 10 | 5.0 of 10 |
+| jobs completed, typical difference | 0 | 0 |
+
+Five of ten is a coin flip. Mass-spec utilisation is 26.9% under both options,
+unchanged to one decimal: the mass spectrometer is running at about a quarter of
+the calendar week, so **it is not the constraint, and adding operators for it
+changes nothing.** The decision is not worth taking. That is a finding, not a
+failure - but it is the third answer this question has given, and the first two
+were both artefacts.
+
+### Pairing, which is why this was visible at all
+
+The per-seed difference is now reported beside the two columns, and it is a
+sharper question than the difference of medians. Both options face the same fifty
+months, so most of the spread in either column is the weather: a month with four
+rush orders in one week is a hard month whichever option is running. Subtracting
+medians leaves that in, which is why entry 33's "+5,193" sat inside a P10-P90
+spread of 6,000 to 24,000 and could not be read. Subtracting within a seed
+cancels the month and leaves the decision.
+
+Better, worse and unchanged are counted separately. A decision that is better in
+three months of ten and worse in two is one that usually changes nothing, which
+reads very differently from three against seven.
+
+**The method matters more than this result.** The pattern "small difference
+between two wide, overlapping distributions" was there in entry 33 and was
+reported as a weak positive. Paired, the same shape resolves into "no effect",
+and it would have resolved the same way before the bug was fixed.
+
+### Still open, narrowed
+
+With the dispatcher on, a sixtieth-of-a-second step and a one-minute step still
+diverge eventually - but the cause is now identified rather than unknown, and it
+is a different class from the three defects above.
+
+Positions are integrated incrementally: `x += (dx / dist) * speed * dt`. At a
+sixtieth of a second that is hundreds of thousands of additions, and the
+accumulated rounding error reaches about **1e-9** - which is the same order as
+`EPSILON`, the tolerance `isArrived` uses to decide whether somebody has reached
+a machine. So the dust can occasionally flip an arrival to the adjacent slice,
+and that cascades. Measured: the first disagreement over a week at a sixtieth of
+a minute is a position differing in the ninth decimal, and discrete outcomes stay
+identical for days before anything observable changes.
+
+The fix that would close it properly is to stop accumulating position at all and
+make it a pure function of the clock - origin, target, departure time - which is
+the same lesson as the dispatch cadence in entry 33: a quantity derived from
+absolute simulated time is identical for every caller by construction, rather
+than by an argument about which events exist. That is a contained change to
+movement and it has not been made.
+
+What is affected, stated plainly: the batch runner steps in hours, and every
+reported number is inside the range proven exact (one, ten and fifteen minutes,
+an hour, and a whole day - the first of those is new, and it is the one that
+would have caught all three defects above). A *watched* run may still differ in
+small ways from the batch run of the same seed. The gap is much narrower than it
+was and it is not closed.
+
+### A specification error found by the same audit
+
+Section 3.1's sanity check read "223 h vs 240 h capacity (~93% load)". The roster
+in section 3.2 is six full-timers at 40 hours plus two part-timers at 20, which
+is 280. The 240 counted the full-timers and left both part-timers out. Corrected
+to 280 h and ~80% load, because section 3.2 is the source of truth for who works.
+
+It matters beyond the arithmetic: at 93% the people look nearly saturated, and at
+80% they plainly are not. The load audit had been computing 280 from the roster
+all along and disagreeing with the document it was built from.

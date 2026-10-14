@@ -19,6 +19,7 @@
  */
 import type { BlockReason, Job, Staff, StaffId } from '../domain/types';
 import { clockLabel as formatClock, dayLabel, minuteOfDay } from './calendar';
+import { awaitsInstrumentOnly } from './jobs';
 import type { WorldState } from './world';
 
 /** What one person is doing, as the staff panel and the canvas want it. */
@@ -298,7 +299,14 @@ export function listAssignableJobs(world: WorldState, person: Staff): Assignable
       // never have been offered. Listing one reported it as *qualified* for
       // everybody - a missing step requires no skill - so it sorted to the front
       // of the queue on age and every attempt to take it was refused.
-      .filter((job) => isWaiting(job.status) && job.stepIndex < job.steps.length)
+      .filter(
+        (job) =>
+          isWaiting(job.status) &&
+          job.stepIndex < job.steps.length &&
+          // Prepped and queueing for an instrument. Nobody can do anything for
+          // it, so offering it in the assign dialogue only invites a refusal.
+          !awaitsInstrumentOnly(world, job),
+      )
       .slice()
       .sort((a, b) => a.dueAtMinute - b.dueAtMinute || a.id.localeCompare(b.id))
       .map((job) => {

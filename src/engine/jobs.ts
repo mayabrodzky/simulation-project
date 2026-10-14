@@ -44,6 +44,42 @@ export function isOpen(job: Job): boolean {
   return job.status === 'waiting' || job.status === 'blocked';
 }
 
+/**
+ * A job that has been prepped and is queueing for an instrument.
+ *
+ * Its hands-on work for this step is done and the operator has been released,
+ * so **no person can move it** - only a free instrument can. Naming that state
+ * is what stops it being offered to people: the dispatcher used to hand such a
+ * job to whoever was qualified, who then stood over finished preparation for a
+ * slice, achieved nothing, and was released when the handover failed again. On
+ * the next cadence the same job was handed to somebody again, indefinitely,
+ * charging the lab for presence that produced no work.
+ *
+ * Two separate harms, and they were hiding each other. The wasted presence is
+ * real money and real fatigue - and it is exactly the gap that `audit.test.ts`
+ * had been weakened to tolerate, where minutes *spent* exceeded minutes
+ * *delivered* by more than fatigue could explain. The amount wasted was one
+ * slice per cadence, and a slice is as long as the caller's step, so it also
+ * made the lab's output depend on how finely it was being watched.
+ */
+export function awaitsInstrumentOnly(world: WorldState, job: Job): boolean {
+  if (!isOpen(job)) return false;
+
+  const step = job.steps[job.stepIndex];
+  if (!step) return false;
+
+  // Still needs hands, or has no unattended run left to wait for.
+  if (step.remaining > EPSILON) return false;
+  if (step.unattendedRemaining <= EPSILON) return false;
+
+  // A step that holds its instrument throughout already claimed one during its
+  // attended phase, so it never queues here. An instrument the lab does not
+  // own cannot be waited for either - that step completes on the spot, which
+  // is how a mis-specified scenario stays visible instead of deadlocking.
+  if (step.resourceHeldDuring === 'attended') return false;
+  return job.equipmentId === null && existsFor(world, step.capability);
+}
+
 /** Statuses from which nothing more will happen. */
 export function isFinished(job: Job): boolean {
   return job.status === 'done-on-time' || job.status === 'done-late' || job.status === 'expired';
@@ -242,6 +278,54 @@ export function tickJobs(world: WorldState, dt: number, events: EngineEvent[]): 
   }
 }
 
+/**
+ * Starts every job that *can* start, at this instant.
+ *
+ * Beginning a step takes no time: the person is at the machine, the instrument
+ * has a free slot, and work starts. But whether those things are true changes
+ * only at instants the slice loop already lands on exactly — an arrival, a run
+ * finishing, a slot being given back, a job being handed out — so noticing
+ * belongs at the end of the slice that contains the change, not on the next
+ * pass through the loop.
+ *
+ * On the next pass was what it used to be, and it cost one slice. A slice is as
+ * long as the caller's step, so the same lab did more work when it was stepped
+ * finely: a person standing at a busy centrifuge picked up the moment it freed
+ * in the live view and a whole minute later in a batch run. It hid for a long
+ * time because the dispatch cadence caps a slice at one minute, so every caller
+ * stepping a minute or more lost exactly the same minute and the step-size
+ * tests agreed with each other.
+ *
+ * Iterated to a fixed point because one job starting frees the person or the
+ * slot another was waiting for, and the order `world.jobs` happens to be in
+ * must not decide who gets it. Each turn of the loop starts at least one job
+ * and no job starts twice, so it terminates in at most one pass per job.
+ */
+export function startWhatCanStart(world: WorldState): void {
+  // Driven from the staff list, not the job list. A job can only begin if it
+  // has an operator, and every operator carries `jobId`, so this is eight
+  // iterations rather than one per job in the month. Scanning the jobs instead
+  // ran on every slice against a list that grows all month, and tripled the
+  // cost of the loop it was added to.
+  for (let guard = 0; guard <= world.staff.length; guard++) {
+    let startedAny = false;
+
+    for (const person of world.staff) {
+      if (person.state !== 'idle' || person.jobId === null) continue;
+
+      const job = findJob(world, person.jobId);
+      if (!job || job.status !== 'in-progress') continue;
+
+      const step = job.steps[job.stepIndex];
+      if (!step) continue;
+
+      if (startStep(world, job, person, step)) startedAny = true;
+    }
+
+    if (!startedAny) return;
+  }
+}
+
 function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent[]): void {
   const operator = job.operatorId === null ? undefined : findStaff(world, job.operatorId);
 
@@ -326,7 +410,7 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
  * Returns without starting when the operator is still walking, or when the
  * machine is busy — in which case they stand and wait. A3c names that wait.
  */
-function startStep(world: WorldState, job: Job, operator: Staff, step: JobStep): void {
+function startStep(world: WorldState, job: Job, operator: Staff, step: JobStep): boolean {
   // A step that holds its instrument only while running unattended needs none
   // during preparation - mass-spec prep is sixty minutes at a bench, and
   // charging the instrument for it would make the spec's own numbers infeasible.
@@ -334,11 +418,11 @@ function startStep(world: WorldState, job: Job, operator: Staff, step: JobStep):
 
   if (existsFor(world, step.capability)) {
     const machine = currentStepMachine(world, job);
-    if (!machine) return;
-    if (!hasArrivedAt(operator, machine)) return;
+    if (!machine) return false;
+    if (!hasArrivedAt(operator, machine)) return false;
 
     if (needsInstrumentNow && job.equipmentId !== machine.id) {
-      if (!hasFreeSlot(machine)) return; // stand and wait; A3c names why
+      if (!hasFreeSlot(machine)) return false; // stand and wait; A3c names why
       claim(world, machine, job);
     }
   }
@@ -354,6 +438,8 @@ function startStep(world: WorldState, job: Job, operator: Staff, step: JobStep):
     job.materialsCharged = true;
     chargeMaterials(world, job.basePrice);
   }
+
+  return true;
 }
 
 /**
@@ -384,6 +470,12 @@ function handOverToInstrument(
         // confusion between people and instruments this step removes.
         detachOperator(job, operator);
         job.status = 'waiting';
+
+        // From here only a free instrument can move it, so it is taken out of
+        // the dispatcher's reach - see `awaitsInstrumentOnly` - and picked up
+        // by `startPreppedRuns` when a machine comes free. The timestamp is
+        // what makes the length of that queue reportable.
+        job.preppedAtMinute = world.simMinutes;
         return;
       }
       claim(world, machine, job);
@@ -394,6 +486,7 @@ function handOverToInstrument(
 
   detachOperator(job, operator);
   job.status = 'unattended';
+  job.preppedAtMinute = null;
   events.push({
     type: 'job-unattended',
     jobId: job.id,

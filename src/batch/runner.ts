@@ -207,6 +207,81 @@ export function runBatch(
   };
 }
 
+/** A decision's effect measured seed by seed, rather than between two spreads. */
+export interface Paired {
+  /** The per-seed differences, variant minus base, in seed order. */
+  differences: number[];
+  median: number;
+  p10: number;
+  p90: number;
+  /** Seeds where the difference came out better, and how many were counted. */
+  wins: number;
+  /** Seeds where it came out worse. Reported beside `wins` so that a row
+   * reading "better in 3 of 10" cannot be misread as "worse in 7": the rest
+   * may all be ties, which is a different finding entirely. */
+  losses: number;
+  seeds: number;
+  /** Seeds where it came out exactly the same. */
+  ties: number;
+}
+
+/**
+ * The difference a decision makes, measured within each seed and then summarised.
+ *
+ * This is a different and much sharper question than subtracting one median from
+ * another, and it is the one the verdict card has to answer. Both options face
+ * the same fifty months of demand, so most of the spread in either column is the
+ * weather: a month with four rush orders in one week is a hard month whichever
+ * option is running. Comparing medians leaves that variation in, which is why
+ * the headline difference looked small against enormous overlapping ranges.
+ * Subtracting within a seed cancels it, and what is left is the decision.
+ *
+ * The honest statement a manager can act on is not an average. It is "better in
+ * X of 10 months, typically by Y, and in the worst tenth it still costs Z" — so
+ * `wins` is reported beside the spread, because a decision that helps a lot on
+ * average and hurts one month in three is a different proposition from one that
+ * helps a little every time.
+ *
+ * `better` says which direction counts as a win, because for jobs completed it
+ * is up and for jobs late it is down. Getting that wrong would report a
+ * regression as a success, so it is a required argument rather than a default.
+ */
+export function paired(
+  base: BatchResult,
+  variant: BatchResult,
+  pick: (r: RunResult) => number,
+  better: 'higher' | 'lower',
+): Paired {
+  // Paired at all only because the seeds line up. If they ever did not, the
+  // subtraction would silently compare unrelated months and still return a
+  // plausible-looking number — the exact failure this whole design avoids.
+  if (base.runs.length !== variant.runs.length) {
+    throw new Error('paired: the two batches ran different numbers of seeds');
+  }
+
+  const differences = base.runs.map((run, i) => {
+    const other = variant.runs[i]!;
+    if (run.seed !== other.seed) {
+      throw new Error(`paired: seed mismatch at index ${i} (${run.seed} vs ${other.seed})`);
+    }
+    return pick(other) - pick(run);
+  });
+
+  const spread = spreadOf(differences);
+  const isWin = (d: number) => (better === 'higher' ? d > 0 : d < 0);
+
+  return {
+    differences,
+    median: spread.median,
+    p10: spread.p10,
+    p90: spread.p90,
+    wins: differences.filter(isWin).length,
+    losses: differences.filter((d) => d !== 0 && !isWin(d)).length,
+    ties: differences.filter((d) => d === 0).length,
+    seeds: differences.length,
+  };
+}
+
 /**
  * Median and the 10th to 90th percentile.
  *

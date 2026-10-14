@@ -73,6 +73,16 @@ export type EngineEvent =
       staffName: string;
       minutes: number;
     }
+  /**
+   * A prepped sample that was queueing for an instrument finally got one.
+   *
+   * Separate from `job-unattended`, which reports a handover that succeeded
+   * immediately and names the person it freed. This one has no person: the
+   * operator was released when the preparation finished, and the sample then
+   * waited. The gap between the two events is the instrument queue, which is
+   * the bottleneck this whole scenario is built around.
+   */
+  | { type: 'job-on-instrument'; jobId: JobId; name: string; minutes: number; waited: number }
   /** An unattended run finished and the instrument is free again. */
   | { type: 'job-off-instrument'; jobId: JobId; name: string; stepsLeft: number }
   /**

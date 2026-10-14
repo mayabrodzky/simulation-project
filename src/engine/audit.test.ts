@@ -13,8 +13,6 @@ import { chemistryLab } from '../scenarios';
 import type { Scenario } from '../domain/types';
 import { assertScenarioIsPossible, auditScenario } from './audit';
 import { MINUTES_PER_DAY } from './calendar';
-import { applyCommand } from './commands';
-import { listAssignableJobs } from './queries';
 import { instrumentsFor } from './resources';
 import { advance } from './tick';
 import { createWorld } from './world';
@@ -159,57 +157,82 @@ describe('the arithmetic agrees with the simulation', () => {
     }
   });
 
-  it('agrees on the attended load the lab actually performed', () => {
-    // The identity worth having: hands-on minutes spent must equal hands-on
-    // minutes the finished work called for. Not an estimate — the two are
-    // computed from different places and must come out the same.
-    const STEP = 0.5;
+  /**
+   * Minutes of presence against minutes of work, exactly.
+   *
+   * Two accountings that never speak to each other: `minutesWorkedThisWeek` is a
+   * per-person ledger written once per slice by the shift code, and
+   * `step.total - step.remaining` is read off the jobs themselves. They must
+   * agree, and the only thing allowed to come between them is fatigue, whose
+   * price is a known multiplier.
+   *
+   * This assertion was weakened once, to "spent is never less than delivered and
+   * the gap is within the pace multiplier", because the exact form had started
+   * failing. The gap was real and fatigue was not causing it: a prepped
+   * mass-spec sample whose instrument was busy was being handed to a qualified
+   * person every cadence, who stood over finished preparation for one slice and
+   * was released again. The lab was paying for presence that produced no work.
+   * The loosened bound was wide enough to swallow it, which is how a defect
+   * survives a passing test suite — so the exactness is the point, not the
+   * tidiness.
+   *
+   * Six days rather than seven: the weekly ledger clears at Saturday midnight,
+   * and a counter that resets mid-measurement cannot be compared against a total.
+   */
+  it('spends exactly the presence the work it delivered called for', () => {
     const world = createWorld(chemistryLab, SEED, SUNDAY_0800);
-    let workedMinutes = 0;
-    let stepStarts = 0;
-    const wasWorking = new Map<number, boolean>();
+    for (let day = 0; day < 6; day++) advance(world, MINUTES_PER_DAY);
 
-    for (let t = 0; t < 7 * MINUTES_PER_DAY; t += STEP) {
-      advance(world, STEP);
-      for (const person of world.staff) {
-        const working = person.state === 'working';
-        if (working) {
-          workedMinutes += STEP;
-          if (!wasWorking.get(person.id)) stepStarts += 1;
-        }
-        wasWorking.set(person.id, working);
-      }
-      for (const person of world.staff) {
-        if (person.state !== 'idle' || person.jobId !== null || person.activeTask) continue;
-        const pick = listAssignableJobs(world, person).filter((r) => r.qualified)[0];
-        if (pick) applyCommand(world, { type: 'ASSIGN_JOB', staffId: person.id, jobId: pick.id });
-      }
-    }
-
-    // Attended minutes accounted for by progress on every job, finished or not.
-    const accounted = world.jobs.reduce(
+    const presence = world.staff.reduce((sum, p) => sum + p.minutesWorkedThisWeek, 0);
+    const delivered = world.jobs.reduce(
       (total, job) =>
         total + job.steps.reduce((sum, step) => sum + (step.total - step.remaining), 0),
       0,
     );
 
-    // Minutes *spent* are never fewer than minutes of work *delivered*, and can
-    // be more for one reason: fatigue. Past forty-five hours in a week a person
-    // spends 1.1 minutes of presence per minute of work done, so the two
-    // quantities are deliberately not equal — the gap is the cost of tiredness,
-    // measured rather than assumed.
-    //
-    // The sampling slop goes the same way: state is read once per STEP *after*
-    // advancing, so somebody beginning a step part-way through a sample is
-    // credited with the whole of it, at most one STEP per step started.
-    const samplingSlop = stepStarts * STEP;
-    expect(workedMinutes).toBeGreaterThan(accounted - samplingSlop);
+    expect(delivered).toBeGreaterThan(0);
 
-    // And the gap stays within what fatigue alone can explain. Ten percent is
-    // the pace multiplier itself: nobody can be slower than the slowest rate.
-    const gap = (workedMinutes - accounted) / accounted;
-    expect(gap).toBeLessThan(chemistryLab.tuning.fatiguePaceMultiplier - 1);
-    expect(gap).toBeGreaterThan(-0.01);
+    // Nobody is tired in this run, so the pace multiplier is one throughout and
+    // the two quantities are the same number. Asserted rather than assumed: if
+    // the roster ever changed enough for somebody to pass the threshold, this
+    // test would be comparing quantities that are *meant* to differ, and would
+    // start failing for a reason that is not a bug.
+    const threshold = chemistryLab.tuning.fatigueAfterWeeklyHours * 60;
+    for (const p of world.staff) {
+      expect(
+        p.minutesWorkedThisWeek,
+        `${p.name} crossed the fatigue threshold`,
+      ).toBeLessThanOrEqual(threshold);
+    }
+
+    expect(presence).toBeCloseTo(delivered, 6);
+  });
+
+  it('spends the pace multiplier more when everybody is tired', () => {
+    // The other regime, with the multiplier pinned exactly rather than bounded.
+    // Fatigue from the first minute, so every delivered minute costs the same
+    // 1.1 minutes of presence and the reconstruction is a single multiplication.
+    //
+    // Together with the test above this fixes the multiplier from both sides: at
+    // a pace of one the quantities are equal, and at 1.1 they differ by exactly
+    // 1.1. A sign error or a multiplier applied in the wrong direction fails one
+    // or the other.
+    const tired: Scenario = {
+      ...chemistryLab,
+      tuning: { ...chemistryLab.tuning, fatigueAfterWeeklyHours: 0 },
+    };
+    const world = createWorld(tired, SEED, SUNDAY_0800);
+    for (let day = 0; day < 6; day++) advance(world, MINUTES_PER_DAY);
+
+    const presence = world.staff.reduce((sum, p) => sum + p.minutesWorkedThisWeek, 0);
+    const delivered = world.jobs.reduce(
+      (total, job) =>
+        total + job.steps.reduce((sum, step) => sum + (step.total - step.remaining), 0),
+      0,
+    );
+
+    expect(delivered).toBeGreaterThan(0);
+    expect(presence).toBeCloseTo(delivered * tired.tuning.fatiguePaceMultiplier, 6);
   });
 });
 

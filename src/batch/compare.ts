@@ -17,7 +17,14 @@
 import { chemistryLab } from '../scenarios';
 import type { Scenario } from '../domain/types';
 import { auditScenario } from '../engine/audit';
-import { runBatch, type BatchResult, type Spread } from './runner';
+import {
+  paired,
+  runBatch,
+  type BatchResult,
+  type Paired,
+  type RunResult,
+  type Spread,
+} from './runner';
 
 const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1);
 const WEEKS = 4;
@@ -98,6 +105,59 @@ function report(base: BatchResult, variant: BatchResult): string[] {
 }
 
 /**
+ * The same comparison again, seed by seed.
+ *
+ * The table above subtracts one median from another, which leaves the weather in:
+ * both options face the same fifty months, and a month that is hard is hard
+ * either way. That is why the change looked small against ranges that overlap
+ * almost completely. Subtracting inside each seed removes the month and leaves
+ * the decision — and it is the only one of the two that can answer "how often",
+ * which is the question a manager actually asks.
+ */
+function pairedRow(
+  name: string,
+  base: BatchResult,
+  variant: BatchResult,
+  pick: (r: RunResult) => number,
+  better: 'higher' | 'lower',
+  decimals = 0,
+): string {
+  const p: Paired = paired(base, variant, pick, better);
+  const sign = p.median > 0 ? '+' : '';
+  const range = `${p.p10 > 0 ? '+' : ''}${fmt(p.p10, decimals)} to ${p.p90 > 0 ? '+' : ''}${fmt(p.p90, decimals)}`;
+  const betterShare = (p.wins / p.seeds) * 10;
+  const worseShare = (p.losses / p.seeds) * 10;
+
+  return (
+    `  ${name.padEnd(COLUMN)}` +
+    `${(sign + fmt(p.median, decimals)).padEnd(14)}` +
+    `${range.padEnd(22)}` +
+    `${(fmt(betterShare, 1) + ' of 10').padEnd(12)}` +
+    `${fmt(worseShare, 1)} of 10`
+  );
+}
+
+function pairedReport(base: BatchResult, variant: BatchResult): string[] {
+  return [
+    '',
+    `  Paired by seed — the same month under both options, subtracted`,
+    '',
+    `  ${''.padEnd(COLUMN)}${'typical'.padEnd(14)}${'P10 to P90'.padEnd(22)}${'better in'.padEnd(12)}worse in`,
+    `  ${'-'.repeat(COLUMN + 56)}`,
+    pairedRow('profit', base, variant, (r) => r.profit, 'higher'),
+    pairedRow('jobs late', base, variant, (r) => r.jobsLate, 'lower'),
+    pairedRow('jobs completed', base, variant, (r) => r.jobsCompleted, 'higher'),
+    pairedRow('rush orders missed', base, variant, (r) => r.rushMissed, 'lower'),
+    '',
+    '  Each row is the median of fifty per-seed differences, not the difference',
+    '  of two medians. Better and worse are counted separately because the rest',
+    '  are ties: a row that is better in 3 and worse in 2 of 10 is a decision',
+    '  that usually changes nothing, which reads very differently from 3 against 7.',
+    '',
+  ];
+}
+
+/**
  * What the audit says before anything is run.
  *
  * Printed first on purpose. If the binding constraint is not the thing the
@@ -140,6 +200,7 @@ export function main(): void {
 
     lines.push('', `Operator policy: ${policy}`);
     lines.push(...report(base, variant));
+    lines.push(...pairedReport(base, variant));
   }
   process.stdout.write(lines.join('\n') + '\n');
 }

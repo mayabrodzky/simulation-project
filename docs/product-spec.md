@@ -52,7 +52,9 @@ The model must also support **combinations** (e.g. B + D) and a **"do nothing"**
 - **Rush orders** (replaces "emergencies"): 10% of incoming jobs of any type are flagged rush → deadline 24 h, price +50%. Missing a rush deadline = lose the premium + 30% refund.
 - **Regular late delivery:** 20% discount on that job.
 
-> Sanity check: demand ≈ 186 hands-on hours + ~20% overhead ≈ 223 h vs 240 h capacity (≈93% load). Mass spec instrument needs ~45 h/week vs 40 h available in one shift → **structural bottleneck**, which is exactly the situation the decisions are meant to address.
+> Sanity check: demand ≈ 186 hands-on hours + ~20% overhead ≈ 223 h against **280 h contracted** (≈ 80% load). The roster in §3.2 is six full-timers at 40 h plus two part-timers at 20 h: 6 × 40 + 2 × 20 = 280. This previously read "240 h capacity (≈ 93% load)", which counted the six full-timers and left both part-timers out; the load audit computes 280 h from the roster and disagreed with the figure stated here. Corrected rather than reconciled, because §3.2 is the source of truth for who works.
+>
+> The people are therefore *not* the binding constraint, and the bottleneck claim does not rest on them. The mass spectrometer needs ~45 instrument-hours a week against 40 available in one shift → **structural bottleneck**, which is the situation the decisions are meant to address. Note that this is 112% of a *working* week and 27% of a *calendar* week; which denominator applies is assumption 10, and it decides whether the lab as described can function at all.
 
 ### 3.2 Staff (keep today's 8 people, adjust skills)
 

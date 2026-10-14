@@ -168,6 +168,7 @@ function makeJob(
     completedAtMinute: null,
     settledRevenue: 0,
     materialsCharged: false,
+    preppedAtMinute: null,
     blockReason: null,
     blockedSinceMinute: null,
     stallReported: false,

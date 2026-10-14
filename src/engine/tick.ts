@@ -14,13 +14,14 @@ import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './
 import {
   expireAbandonedJobs,
   nextJobEventIn,
-  releaseJobOf,
   nextUnattendedEventIn,
   recomputeBlockReasons,
+  releaseJobOf,
+  startWhatCanStart,
   tickJobs,
   tickUnattended,
 } from './jobs';
-import { dispatch, type DispatchOptions } from './dispatch';
+import { dispatch, startPreppedRuns, type DispatchOptions } from './dispatch';
 import { accrueFixedCosts } from './money';
 import { applyShiftWindow, creditWork, nextShiftEventIn, rollLedgers } from './shifts';
 import type { EngineEvent } from './events';
@@ -271,6 +272,13 @@ function applySlice(
   // the whole point of the change.
   tickJobs(world, dt, events);
 
+  // Prepped samples take any instrument that just came free, before the
+  // dispatcher hands out work to people. No person is involved: a sample whose
+  // preparation is finished is waiting for a machine, and used to be offered to
+  // whoever was qualified - who stood over it for a slice, achieved nothing and
+  // was released, once per cadence, indefinitely.
+  if (!options.freezeClock) startPreppedRuns(world, events);
+
   // People arrive and leave after the slice they were present for has been
   // paid for.
   //
@@ -304,6 +312,20 @@ function applySlice(
       world.dispatchedAtMinute += DISPATCH_CADENCE_MINUTES;
     }
     dispatch(world, events, options.dispatch);
+  }
+
+  // Anything that can now begin, begins at this instant rather than on the
+  // next pass — see `startWhatCanStart`. After dispatch, so that somebody
+  // handed a job while already standing at the right machine starts it now;
+  // after `tickJobs`, so that a slot given back this slice is taken by whoever
+  // was waiting for it. Both latencies used to be one slice long, and a slice
+  // is as long as the caller's step.
+  if (!options.freezeClock) startWhatCanStart(world);
+
+  // Strolling, after work has been handed out - see `wanderIfIdle` for why it
+  // is not part of movement.
+  if (!options.freezeClock) {
+    for (const person of world.staff) wanderIfIdle(world, person);
   }
 
   // Why anything is not moving, computed from scratch once everything else has
@@ -441,6 +463,47 @@ function tickTraining(
   });
 }
 
+/**
+ * Sends people with nothing to do for a stroll.
+ *
+ * Cosmetic, and nonetheless load-bearing, which is why it is a pass of its own
+ * rather than a branch inside `moveStaff`. Where somebody stands decides how
+ * far they walk to their next job, walking is charged in simulated minutes, so
+ * a stroll moves a start time and therefore moves throughput.
+ *
+ * It has to run *after* jobs advance. A wander comes due while its owner is
+ * busy, so it fires on the first pass that finds them idle - and inside
+ * `moveStaff`, which runs before `tickJobs`, that was the pass after the one
+ * where their job finished. The wander was then scheduled from a clock a whole
+ * slice late, and a slice is as long as the caller's step: a one-minute run and
+ * a one-tenth-minute run drew the same destination from the same stream and set
+ * out for it 0.8 minutes apart. From there the two runs had people standing in
+ * different places, walking different distances, and completing different
+ * amounts of work.
+ *
+ * Here, the instant somebody becomes idle is a step completion - an event the
+ * loop already lands on exactly - so every caller starts the stroll at the same
+ * instant. Running after `dispatch` as well, so that nobody who has just been
+ * handed work wanders off instead of doing it.
+ */
+function wanderIfIdle(world: WorldState, person: Staff): void {
+  if (person.state !== 'idle' || person.activeTask) return;
+  if (person.targetX !== null || person.targetY !== null) return;
+  if (!hasReached(world.simMinutes, person.nextWanderAtMinute)) return;
+
+  const f = world.layout.labFloor;
+
+  // Drawn from this person's own stream, not the lab's. Wandering is cosmetic,
+  // but if it drew from the shared stream then how many people there are would
+  // shift when emergencies happen - and a decision that hires someone would
+  // change the weather along with the staffing.
+  const own = rngForStaff(person);
+  person.targetX = f.x + 1 + own.next() * (f.w - 2);
+  person.targetY = f.y + 1 + own.next() * (f.h - 2);
+  person.nextWanderAtMinute = world.simMinutes + own.nextInterval(world.tuning.wanderRatePerMinute);
+  person.rngState = own.getState();
+}
+
 function moveStaff(world: WorldState, person: Staff, dt: number, options: TickOptions): void {
   const f = world.layout.labFloor;
 
@@ -456,21 +519,6 @@ function moveStaff(world: WorldState, person: Staff, dt: number, options: TickOp
       person.x = person.targetX;
       person.y = person.targetY;
     }
-  } else if (
-    person.state === 'idle' &&
-    !person.activeTask &&
-    hasReached(world.simMinutes, person.nextWanderAtMinute)
-  ) {
-    // Drawn from this person's own stream, not the lab's. Wandering is
-    // cosmetic, but if it drew from the shared stream then how many people
-    // there are would shift when emergencies happen — and a decision that
-    // hires someone would change the weather along with the staffing.
-    const own = rngForStaff(person);
-    person.targetX = f.x + 1 + own.next() * (f.w - 2);
-    person.targetY = f.y + 1 + own.next() * (f.h - 2);
-    person.nextWanderAtMinute =
-      world.simMinutes + own.nextInterval(world.tuning.wanderRatePerMinute);
-    person.rngState = own.getState();
   }
 
   person.x = Math.max(f.x + 0.5, Math.min(f.x + f.w - 0.5, person.x));

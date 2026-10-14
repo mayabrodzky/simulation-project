@@ -19,6 +19,7 @@ import type { Scenario, Staff } from '../domain/types';
 import { MINUTES_PER_DAY } from './calendar';
 import { applyCommand } from './commands';
 import { isAvailable, type OperatorPolicy } from './dispatch';
+import { listAssignableJobs } from './queries';
 import { advance } from './tick';
 import { createWorld, type WorldState } from './world';
 
@@ -236,5 +237,102 @@ describe('who is carrying the lab is observable', () => {
     // or erases the effect without it being visible which rule produced it.
     expect(busiest(run(60, 5 * MINUTES_PER_DAY, 'first-free')).name).toBeTruthy();
     expect(busiest(run(60, 5 * MINUTES_PER_DAY, 'least-versatile')).name).toBeTruthy();
+  });
+});
+
+/**
+ * Sub-minute stepping, which is what the live view does.
+ *
+ * The group above tests a minute against fifteen, and for a long time that was
+ * the whole guarantee — but it could not have failed, and that is the point. The
+ * dispatch cadence caps a slice at one minute, so every caller stepping a minute
+ * or more saw the *same* slice lengths and agreed with itself. Three separate
+ * step-size bugs lived underneath it, and all three cost exactly one slice:
+ *
+ *  1. Work handed to somebody already standing at the machine began on the next
+ *     pass rather than at the instant of assignment.
+ *  2. A job queueing for a busy instrument picked it up on the next pass rather
+ *     than when the slot came free.
+ *  3. A cosmetic stroll was scheduled from the clock of whichever slice happened
+ *     to notice its owner was idle — which moved where people stood, and so how
+ *     far they walked to their next job, and so the lab's output.
+ *
+ * At a minute each cost a minute, identically everywhere. At a sixtieth of a
+ * second — the live view — they cost a sixtieth of a second, so a watched run
+ * and the batch run of the same seed reached different answers.
+ */
+describe('the guarantee holds below a minute, where the live view runs', () => {
+  it('produces identical discrete outcomes at one minute and a tenth of one', () => {
+    const coarse = run(1, 3 * MINUTES_PER_DAY);
+    const fine = run(1 / 10, 3 * MINUTES_PER_DAY);
+
+    expect(outcome(fine)).toEqual(outcome(coarse));
+    expect(coarse.metrics.jobsCompleted).toBeGreaterThan(0);
+  });
+
+  it('agrees under least-versatile-first too', () => {
+    const coarse = run(1, 2 * MINUTES_PER_DAY, 'least-versatile');
+    const fine = run(1 / 10, 2 * MINUTES_PER_DAY, 'least-versatile');
+
+    expect(outcome(fine)).toEqual(outcome(coarse));
+  });
+});
+
+describe('a prepped sample waits for an instrument, not for a person', () => {
+  /**
+   * The costliest of the three, because it was not only a step-size bug.
+   *
+   * A mass-spec job is sixty minutes of preparation at a bench, then ninety
+   * minutes in an instrument it claims only at the handover. With the only mass
+   * spectrometer busy, the handover fails: the sample is prepped, the operator is
+   * released, and the job goes back to `waiting`. It was then handed straight
+   * back to a qualified person, who stood over finished preparation for one
+   * slice, achieved nothing, and was released when the handover failed again —
+   * every cadence, for as long as the instrument stayed busy.
+   *
+   * So the lab paid for presence that produced no work, inflating labour,
+   * overtime, fatigue and hands-on utilisation at once. That gap is exactly what
+   * `audit.test.ts` had been weakened to tolerate when its exact identity
+   * started failing: minutes *spent* exceeded minutes *delivered* by more than
+   * fatigue could explain, and loosening the assertion hid the cause.
+   */
+  it('is never offered to anybody while it queues', () => {
+    const world = createWorld(chemistryLab, SEED, SUNDAY_0800);
+    advance(world, 2 * MINUTES_PER_DAY, { dispatch: {} });
+
+    const queueing = world.jobs.filter((job) => job.preppedAtMinute !== null);
+    for (const job of queueing) {
+      // Nobody is attached, and nobody is standing over it.
+      expect(job.operatorId, `${job.id} has an operator while queueing`).toBeNull();
+      expect(world.staff.some((p) => p.jobId === job.id)).toBe(false);
+
+      // Its hands-on work really is finished, so there is nothing to attach for.
+      expect(job.steps[job.stepIndex]!.remaining).toBeLessThanOrEqual(1e-9);
+      expect(job.steps[job.stepIndex]!.unattendedRemaining).toBeGreaterThan(0);
+    }
+
+    // And the assign dialogue does not list it either, so a human cannot be
+    // talked into the same mistake.
+    for (const person of world.staff) {
+      const offered = listAssignableJobs(world, person).map((j) => j.id);
+      for (const job of queueing) expect(offered).not.toContain(job.id);
+    }
+  });
+
+  it('takes the instrument the moment one comes free, with nobody involved', () => {
+    const world = createWorld(chemistryLab, SEED, SUNDAY_0800);
+
+    let sawQueue = false;
+    let sawRelease = false;
+    for (let i = 0; i < 4 * 24; i++) {
+      const events = advance(world, 60, { dispatch: {} });
+      if (world.jobs.some((j) => j.preppedAtMinute !== null)) sawQueue = true;
+      if (events.some((e) => e.type === 'job-on-instrument')) sawRelease = true;
+    }
+
+    // Both halves matter: that the queue forms at all, and that it drains
+    // without a person — a deadlock here would look exactly like a slow lab.
+    expect(sawQueue, 'no instrument queue ever formed').toBe(true);
+    expect(sawRelease, 'a prepped sample never got an instrument').toBe(true);
   });
 });

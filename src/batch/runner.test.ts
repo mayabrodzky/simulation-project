@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { chemistryLab } from '../scenarios';
 import type { Scenario } from '../domain/types';
-import { runBatch, runOnce, spreadOf } from './runner';
+import { paired, runBatch, runOnce, spreadOf, type BatchResult, type RunResult } from './runner';
 
 const SEEDS = [1, 2, 3, 4, 5];
 const SHORT = { weeks: 1 } as const;
@@ -131,5 +131,98 @@ describe('it refuses to run an impossible scenario', () => {
       equipment: chemistryLab.equipment.filter((e) => !e.capabilities.includes('mass-spec')),
     };
     expect(() => runBatch('broken', noSpectrometer, SEEDS, SHORT)).toThrow(/cannot work/);
+  });
+});
+
+/**
+ * Pairing, which is where most of the noise goes.
+ *
+ * Both options face the same fifty months, so most of the spread in either
+ * column is the weather rather than the decision. Subtracting two medians leaves
+ * it in; subtracting within each seed takes it out. These tests pin the second
+ * behaviour, including the refusals that stop it being done wrongly — a paired
+ * difference between misaligned seeds would compare unrelated months and return
+ * a number that looks exactly as trustworthy as a real one.
+ */
+describe('a decision is measured within each seed', () => {
+  /** A batch of `values`, one per seed, with everything else left at zero. */
+  function fakeBatch(label: string, values: number[]): BatchResult {
+    const runs = values.map(
+      (profit, i) => ({ seed: i + 1, profit, jobsLate: 0 }) as unknown as RunResult,
+    );
+    return { label, runs } as unknown as BatchResult;
+  }
+
+  it('removes variation the two options share', () => {
+    // The whole argument for pairing, as arithmetic. Every month differs wildly
+    // — 100 to 500 — and the decision is worth exactly 10 in every one of them.
+    // Both columns therefore have an enormous spread, and the difference between
+    // their medians sits inside it looking like noise. Paired, the answer is
+    // exact: +10, every time, with no range at all.
+    const base = fakeBatch('as is', [100, 200, 300, 400, 500]);
+    const variant = fakeBatch('decided', [110, 210, 310, 410, 510]);
+
+    const wide = spreadOf(base.runs.map((r) => r.profit));
+    expect(wide.p90 - wide.p10).toBe(400);
+
+    const p = paired(base, variant, (r) => r.profit, 'higher');
+    expect(p.median).toBe(10);
+    expect(p.p10).toBe(10);
+    expect(p.p90).toBe(10);
+    expect(p.wins).toBe(5);
+    expect(p.losses).toBe(0);
+  });
+
+  it('counts better, worse and unchanged separately', () => {
+    // Three outcomes, not two. A decision that changes nothing in most months
+    // is a different proposition from one that helps and hurts in turn, and
+    // reporting only the wins cannot tell them apart.
+    const base = fakeBatch('as is', [100, 100, 100, 100, 100]);
+    const variant = fakeBatch('decided', [110, 90, 100, 100, 100]);
+
+    const p = paired(base, variant, (r) => r.profit, 'higher');
+    expect(p.wins).toBe(1);
+    expect(p.losses).toBe(1);
+    expect(p.ties).toBe(3);
+    expect(p.seeds).toBe(5);
+    expect(p.median).toBe(0);
+  });
+
+  it('knows which direction is an improvement', () => {
+    // Fewer late jobs is better and more profit is better, so the direction
+    // cannot be inferred from the sign. Getting it wrong reports a regression
+    // as a success, which is why it is a required argument.
+    const base = fakeBatch('as is', [10, 10, 10]);
+    const fewer = fakeBatch('decided', [5, 5, 5]);
+
+    expect(paired(base, fewer, (r) => r.profit, 'lower').wins).toBe(3);
+    expect(paired(base, fewer, (r) => r.profit, 'higher').wins).toBe(0);
+    expect(paired(base, fewer, (r) => r.profit, 'higher').losses).toBe(3);
+  });
+
+  it('refuses to pair runs that are not the same months', () => {
+    const base = fakeBatch('as is', [1, 2, 3]);
+    const shifted = { ...fakeBatch('decided', [1, 2, 3]) };
+    shifted.runs = shifted.runs.map((r) => ({ ...r, seed: r.seed + 100 }));
+
+    expect(() => paired(base, shifted, (r) => r.profit, 'higher')).toThrow(/seed mismatch/);
+  });
+
+  it('refuses to pair batches of different sizes', () => {
+    expect(() =>
+      paired(fakeBatch('a', [1, 2, 3]), fakeBatch('b', [1, 2]), (r) => r.profit, 'higher'),
+    ).toThrow(/different numbers of seeds/);
+  });
+
+  it('pairs two real batches on the shipped scenario', () => {
+    // Not an assertion about the answer — that belongs to the comparison, not to
+    // the plumbing. Only that identical seeds survive the round trip, which is
+    // the precondition everything above depends on.
+    const base = runBatch('as is', chemistryLab, SEEDS, SHORT);
+    const variant = runBatch('cross-trained', crossTrained(), SEEDS, SHORT);
+
+    const p = paired(base, variant, (r) => r.profit, 'higher');
+    expect(p.seeds).toBe(SEEDS.length);
+    expect(p.wins + p.losses + p.ties).toBe(SEEDS.length);
   });
 });
