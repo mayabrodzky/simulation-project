@@ -31,7 +31,12 @@ export type Skill = string;
  */
 export type Capability = string;
 
-export type StaffState = 'idle' | 'working' | 'break' | 'off' | 'sick' | 'vacation';
+/**
+ * `break` is gone with the energy metric that produced it. Nobody is sent for a
+ * rest by a draining percentage; fatigue is a pace multiplier read from hours
+ * actually worked.
+ */
+export type StaffState = 'idle' | 'working' | 'off' | 'sick' | 'vacation';
 
 /* --- Time ------------------------------------------------------------------
  *
@@ -382,19 +387,41 @@ export interface Tuning {
   calibrateCost: number;
   calibrateAmount: number;
 
-  energyDrainPerMinute: number;
-  energyRecoverPerMinute: number;
-  energyBreakThreshold: number;
-  energyRecoveredThreshold: number;
   conditionWearPerMinute: number;
+
+  /* --- Hours, overtime and fatigue -----------------------------------------
+   *
+   * The specification's people rules, expressed as measurable effects. There is
+   * no abstract energy bar: fatigue is a pace multiplier applied at one call
+   * site, and overtime is minutes counted beyond a contracted shift.
+   */
+
+  /**
+   * Hours in a week past which work takes longer.
+   *
+   * Not a flag on the person and not recomputed when the threshold is crossed
+   * mid-step: it is read from the ledger each time work is consumed, so there
+   * is no second place that could disagree about whether somebody is tired.
+   */
+  fatigueAfterWeeklyHours: number;
+  /** How much longer work takes past that point. 1.1 is ten percent. */
+  fatiguePaceMultiplier: number;
+
+  /**
+   * The most anybody may work in one day, in hours.
+   *
+   * The spec's cap. It is what stops "finish what you started" becoming "stay
+   * all night", and it is the reason overtime is bounded rather than a runaway.
+   */
+  maxHoursPerDay: number;
+  /** Overtime hours a day charged at the lower premium before the higher one. */
+  overtimeFirstBandHours: number;
 
   /** Average idle wanders per simulated minute. Cosmetic. */
   wanderRatePerMinute: number;
 
   /** Grid units covered per simulated minute. */
   staffWalkGridPerMinute: number;
-  initialEnergyMin: number;
-  initialEnergyRange: number;
   initialConditionMin: number;
   initialConditionRange: number;
   /** Staff beyond this index start off-shift. */
@@ -565,8 +592,26 @@ export interface Staff extends StaffTemplate {
   state: StaffState;
   speed: number;
   color: string;
-  /** @deprecated Invented metric. Phase 2 replaces it with workload and overtime. */
-  energy: number;
+  /* --- Hours worked -------------------------------------------------------
+   *
+   * Replaces `energy`, which was a percentage that drained, refilled and sent
+   * people on breaks, was grounded in nothing measurable, and gated nothing.
+   * These three numbers are measurable, they are what a payroll argument is
+   * actually about, and they are what fatigue is computed from.
+   */
+
+  /** Minutes worked since midnight. Reset by the day hook. */
+  minutesWorkedToday: number;
+  /** Minutes worked since the start of the week. Reset by the week hook. */
+  minutesWorkedThisWeek: number;
+  /**
+   * Minutes worked beyond this person's contracted shift, this week.
+   *
+   * Counted separately rather than derived, because it is the number the lab
+   * manager's complaint is about: overtime is invisible until payroll. B2
+   * prices it; this counts it.
+   */
+  overtimeMinutesThisWeek: number;
   /**
    * The job this person is on, if any.
    *

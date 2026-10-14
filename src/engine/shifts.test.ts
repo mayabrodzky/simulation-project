@@ -122,122 +122,151 @@ describe('the clock decides who is in the building', () => {
 });
 
 describe('closing time and work in progress', () => {
-  it('sets the job down part-finished rather than losing or completing it', () => {
+  it('lets somebody stay to finish the step they are on', () => {
+    // The behaviour B1 introduced, and the only reason overtime can exist at
+    // all. Before it, everybody was sent home the instant their shift ended, so
+    // the specification's overtime bands priced a quantity that was always
+    // zero and the lab manager's actual complaint was unmodellable.
+    //
+    // The rule is the narrowest one that produces overtime: finish the step you
+    // are on, then go. Nobody starts new work after hours.
     const world = newWorld(SUNDAY_0800);
     const { job, operator } = workingOnBloodPanel(world);
     const step = job.steps[job.stepIndex]!;
+    expect(step.remaining).toBeGreaterThan(5);
 
-    // Right up to the close. Every minute of the slice that ends at 16:00 is
-    // inside working hours and must be credited — the bug this found was
-    // sending people home before paying for the slice they worked.
+    advance(world, SUNDAY_1600 - world.simMinutes + 1);
+
+    expect(isLabOpen(world)).toBe(false);
+    expect(operator.state).toBe('working');
+    expect(operator.overtimeMinutesThisWeek).toBeGreaterThan(0);
+  });
+
+  it('sends them home at the step boundary, not before and not later', () => {
+    const world = newWorld(SUNDAY_0800);
+    const { job, operator } = workingOnBloodPanel(world);
+    const step = job.steps[job.stepIndex]!;
+    const overtimeNeeded = step.remaining;
+
     advance(world, SUNDAY_1600 - world.simMinutes);
+    advance(world, overtimeNeeded + 1);
 
     expect(operator.state).toBe('off');
     expect(operator.jobId).toBeNull();
+    // The step they stayed for is finished; the next one waits for morning.
+    expect(step.remaining).toBe(0);
     expect(job.status).toBe('waiting');
-    expect(job.completedAtMinute).toBeNull();
-    expect(step.remaining).toBeGreaterThan(0);
-    expect(step.remaining).toBeLessThan(step.total);
+    expect(job.stepIndex).toBeGreaterThan(0);
   });
 
-  it('credits the whole of the slice that ends at closing time', () => {
-    // The ordering bug stated directly, and measured against a lab that never
-    // closes. Up to 16:00 the two are the same lab, so the work done must be
-    // identical — if the close discards the slice it lands on, it will not be.
-    const closing = newWorld(SUNDAY_0800);
-    const neverCloses = newWorld(SUNDAY_0800);
-    // Per person, not per lab: shifts moved onto the individual when the spec's
-    // two part-timers were introduced, so overriding the calendar alone would
-    // change nothing and this test would pass vacuously.
-    for (const p of neverCloses.staff) {
-      p.shift = { ...p.shift, endMinute: MINUTES_PER_DAY };
+  it('starts no new work after hours', () => {
+    const world = newWorld(SUNDAY_0800);
+    const job = waitForJob(world, 'blood-panel');
+    advance(world, SUNDAY_1600 - world.simMinutes + 60); // 17:00
+
+    const hadas = person(world, 'Hadas Ben Hamo');
+    const events = applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
+
+    expect(events).toEqual([{ type: 'rejected', reason: 'not-idle', detail: hadas.name }]);
+    expect(job.status).toBe('waiting');
+  });
+
+  it('counts minutes after the shift as overtime, and ordinary minutes as not', () => {
+    const world = newWorld(SUNDAY_0800);
+    const { operator } = workingOnBloodPanel(world);
+
+    advance(world, SUNDAY_1600 - world.simMinutes);
+    const beforeClose = operator.minutesWorkedThisWeek;
+    expect(operator.overtimeMinutesThisWeek).toBe(0);
+
+    advance(world, 10);
+
+    expect(operator.minutesWorkedThisWeek).toBeGreaterThan(beforeClose);
+    expect(operator.overtimeMinutesThisWeek).toBeCloseTo(
+      operator.minutesWorkedThisWeek - beforeClose,
+      6,
+    );
+  });
+
+  it('sends somebody home mid-step when they hit the daily cap', () => {
+    // The cap is what stops "finish what you started" becoming "stay all
+    // night". It is also the one thing that can interrupt a step, so the job
+    // has to survive it with its counters intact like any other interruption.
+    const world = newWorld(SUNDAY_0800);
+    const { job, operator } = workingOnBloodPanel(world);
+    const cap = world.tuning.maxHoursPerDay * 60;
+    operator.minutesWorkedToday = cap - 5;
+
+    const events = advance(world, 10);
+
+    expect(operator.state).toBe('off');
+    expect(operator.minutesWorkedToday).toBeGreaterThanOrEqual(cap);
+    expect(job.status).toBe('waiting');
+    expect(job.steps[job.stepIndex]!.remaining).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === 'hours-cap-reached')).toBe(true);
+    expect(world.equipment.every((e) => !e.inUse)).toBe(true);
+  });
+
+  it('never lets anybody exceed the daily cap, whatever the step size', () => {
+    for (const step of [1, 60, 480]) {
+      const world = newWorld(SUNDAY_0800);
+      const { operator } = workingOnBloodPanel(world);
+      operator.minutesWorkedToday = world.tuning.maxHoursPerDay * 60 - 3;
+
+      const target = world.simMinutes + 240;
+      while (world.simMinutes < target - 1e-9) {
+        advance(world, Math.min(step, target - world.simMinutes));
+      }
+
+      expect(operator.minutesWorkedToday, `step ${step}`).toBeLessThanOrEqual(
+        world.tuning.maxHoursPerDay * 60 + 1e-6,
+      );
     }
-
-    const a = workingOnBloodPanel(closing, SUNDAY_1600 - 20);
-    const b = workingOnBloodPanel(neverCloses, SUNDAY_1600 - 20);
-    expect(a.job.id).toBe(b.job.id);
-    expect(closing.simMinutes).toBe(neverCloses.simMinutes);
-
-    advance(closing, SUNDAY_1600 - closing.simMinutes);
-    advance(neverCloses, SUNDAY_1600 - neverCloses.simMinutes);
-
-    const left = (j: Job) => j.steps.reduce((sum, s) => sum + s.remaining, 0);
-    expect(left(a.job)).toBe(left(b.job));
-
-    // And from 16:00 they diverge, which is the point of a closing time.
-    advance(closing, 60);
-    advance(neverCloses, 60);
-    expect(left(a.job)).toBeGreaterThan(left(b.job));
   });
 
-  it('gives the machine back, which is what lets an evening shift help', () => {
-    // The consequence that matters. Held overnight, utilisation reads 100% with
-    // nobody in the building, and decision C adds no capacity at all.
+  it('gives the machine back when the person finally leaves', () => {
+    // The consequence that matters for decision C. Held overnight, utilisation
+    // would read 100% with nobody in the building and an evening shift would
+    // add no capacity at all.
     const world = newWorld(SUNDAY_0800);
     const { job } = workingOnBloodPanel(world);
     const machine = world.equipment.find((e) => e.id === job.equipmentId)!;
     expect(machine.inUse).toBe(true);
 
-    advance(world, SUNDAY_1600 - world.simMinutes);
+    advance(world, SUNDAY_1600 - world.simMinutes + 120);
 
-    expect(machine.inUse).toBe(false);
-    expect(machine.assignedTo).toBeNull();
+    expect(world.staff.every((p) => p.state === 'off')).toBe(true);
     expect(world.equipment.every((e) => !e.inUse)).toBe(true);
   });
 
-  it('does not advance the work overnight', () => {
+  it('does not advance attended work once everybody has gone', () => {
     const world = newWorld(SUNDAY_0800);
     const { job } = workingOnBloodPanel(world);
-    advance(world, SUNDAY_1600 - world.simMinutes);
-    const atClose = job.steps[job.stepIndex]!.remaining;
+    advance(world, SUNDAY_1600 - world.simMinutes + 120);
+    expect(world.staff.every((p) => p.state === 'off')).toBe(true);
 
-    advance(world, 16 * 60); // through to Monday 08:00
+    const left = job.steps.reduce((sum, s) => sum + s.remaining, 0);
+    advance(world, 14 * 60);
 
-    expect(job.steps[job.stepIndex]!.remaining).toBe(atClose);
-  });
-
-  it('names the job that was put down, so carry-over can be counted', () => {
-    const world = newWorld(SUNDAY_0800);
-    const { job } = workingOnBloodPanel(world);
-    const events = advance(world, SUNDAY_1600 - world.simMinutes);
-
-    const setDown = events.filter((e) => e.type === 'shift-ended' && e.jobSetDown !== null);
-    expect(setDown).toHaveLength(1);
-    expect(setDown[0]).toMatchObject({ jobSetDown: job.id });
+    expect(job.steps.reduce((sum, s) => sum + s.remaining, 0)).toBe(left);
   });
 
   it('lets the work be picked up again next morning and finished', () => {
     const world = newWorld(SUNDAY_0800);
     const { job, operator } = workingOnBloodPanel(world);
-    advance(world, SUNDAY_1600 - world.simMinutes);
+    advance(world, SUNDAY_1600 - world.simMinutes + 120);
     const leftOvernight = job.steps.reduce((total, step) => total + step.remaining, 0);
+    expect(leftOvernight).toBeGreaterThan(0);
 
-    advance(world, 16 * 60); // Monday 08:00
+    // To nine the next morning. Advancing a flat day from 18:00 would land at
+    // the *next* closing time, when she is already going home again.
+    advance(world, MINUTES_PER_DAY + 9 * 60 - (world.simMinutes % MINUTES_PER_DAY));
     expect(operator.state).toBe('idle');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: operator.id, jobId: job.id });
     for (let i = 0; i < 5000 && job.completedAtMinute === null; i++) advance(world, 0.5);
 
     expect(job.status).not.toBe('waiting');
     expect(job.steps.every((step) => step.remaining === 0)).toBe(true);
-    // Only the work that was actually left got done: no day was lost and none
-    // was repeated.
-    expect(leftOvernight).toBeGreaterThan(0);
-  });
-
-  it('refuses to start work outside opening hours', () => {
-    const world = newWorld(SUNDAY_0800);
-    const job = waitForJob(world, 'blood-panel');
-    const operator = person(world, 'Hadas Ben Hamo');
-    advance(world, SUNDAY_1600 - world.simMinutes + 60); // 17:00
-
-    const events = applyCommand(world, {
-      type: 'ASSIGN_JOB',
-      staffId: operator.id,
-      jobId: job.id,
-    });
-
-    expect(events).toEqual([{ type: 'rejected', reason: 'not-idle', detail: operator.name }]);
-    expect(job.status).toBe('waiting');
   });
 });
 
@@ -354,7 +383,7 @@ describe('the roster and the clock are different things', () => {
 });
 
 describe('a closing time is an instant the loop lands on', () => {
-  it('stops work at 16:00 however coarsely time is stepped', () => {
+  it('does the same amount of work however coarsely time is stepped', () => {
     // Stepping over a close means a shift that ends at 16:00 ends at midnight
     // in a batch run that steps a day at a time — eight hours of work nobody
     // did, which the run would then report as throughput.
@@ -376,10 +405,11 @@ describe('a closing time is an instant the loop lands on', () => {
     }
 
     const values = [...results.values()];
-    // The same amount of work, whichever step size: she worked until 16:00 and
-    // stopped. A step of a whole day would otherwise have let her finish.
+    // The same amount of work whichever step size. The bound on *how much* went
+    // with B1 — she now stays past four to finish the step she is on, so the
+    // figure is the whole step rather than the twenty minutes before closing.
+    // The invariance is the claim, and it survived the change.
     for (const done of values) expect(done).toBeCloseTo(values[0]!, 6);
     expect(values[0]!).toBeGreaterThan(0);
-    expect(values[0]!).toBeLessThanOrEqual(20);
   });
 });

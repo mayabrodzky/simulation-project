@@ -25,6 +25,7 @@ import type { EngineEvent } from './events';
 // Straight from the calendar rather than through shifts.ts, which imports
 // this module: a cycle would resolve at runtime and is not worth relying on.
 import { isWithinShift } from './calendar';
+import { fatiguePace } from './shifts';
 import { EPSILON, hasArrivedAt, hasReached } from './geometry';
 import {
   allBusyFor,
@@ -246,10 +247,6 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
     release(world, job);
     return;
   }
-  // On a break, holding whatever they hold. Energy disappears in B1 and this
-  // case with it.
-  if (operator.state === 'break') return;
-
   const step = job.steps[job.stepIndex];
   if (!step) {
     settle(world, job, operator, events);
@@ -261,7 +258,11 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
     return;
   }
 
-  step.remaining -= dt;
+  // Fatigue, in one line at one call site. Past the weekly threshold the same
+  // minute of presence buys less work done — which is what "tasks take 10%
+  // longer" means, expressed as a rate rather than as a stored flag on a tired
+  // person.
+  step.remaining -= dt / fatiguePace(world, operator);
   if (step.remaining > EPSILON) return;
 
   // Clamped to zero rather than left at float dust, so a step that is finished
@@ -283,6 +284,14 @@ function tickOneJob(world: WorldState, job: Job, dt: number, events: EngineEvent
 
   if (job.stepIndex >= job.steps.length) {
     settle(world, job, operator, events);
+    return;
+  }
+
+  // Out of hours, they were only staying to finish this step. Now it is done,
+  // they go home and the job waits for the morning.
+  if (!isWithinShift(operator.shift, world.simMinutes)) {
+    release(world, job);
+    operator.state = 'off';
     return;
   }
 

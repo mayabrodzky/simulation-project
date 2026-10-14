@@ -426,12 +426,18 @@ export function clockView(world: WorldState): ClockView {
 /**
  * How loaded a person is, 0–100.
  *
- * Reads the energy percentage today. Phase 2b replaces that with hours worked
- * against contracted hours, at which point only this function changes — the
- * bar that displays it does not know the difference.
+ * Hours worked this week against contracted hours. Over 100 is possible and is
+ * the point: it means overtime, which is precisely the thing the lab manager
+ * says is invisible until payroll.
+ *
+ * This read the invented energy percentage until B1. Only this function
+ * changed; the bar that displays it never knew the difference, which is what
+ * the query seam was built for.
  */
 export function staffLoadPercent(_world: WorldState, person: Staff): number {
-  return Math.max(0, Math.min(100, Math.floor(person.energy)));
+  const contracted = person.weeklyHours * 60;
+  if (contracted <= 0) return 0;
+  return Math.max(0, Math.round((person.minutesWorkedThisWeek / contracted) * 100));
 }
 
 /**

@@ -69,7 +69,9 @@ function continuous(world: WorldState) {
     money: world.money,
     staffX: world.staff.map((p) => p.x),
     staffY: world.staff.map((p) => p.y),
-    energy: world.staff.map((p) => p.energy),
+    // Hours worked, which replaced the energy percentage. An accumulating
+    // quantity, so it belongs here rather than in the exact fingerprint.
+    minutesWorked: world.staff.map((p) => p.minutesWorkedThisWeek),
     taskTimer: world.staff.map((p) => p.taskTimer),
     condition: world.equipment.map((e) => e.condition),
     // Progress on every step of every job. The thing this step moved off the

@@ -61,11 +61,15 @@ const tuning: Tuning = {
   calibrateCost: 100,
   calibrateAmount: 25,
 
-  energyDrainPerMinute: 0.2,
-  energyRecoverPerMinute: 1,
-  energyBreakThreshold: 20,
-  energyRecoveredThreshold: 95,
   conditionWearPerMinute: 0.05,
+
+  // From the spec: past 45 hours in a week work takes 10% longer, and nobody
+  // works more than 12 hours in a day. The first two overtime hours a day are
+  // charged at a lower premium than the rest; B2 prices them.
+  fatigueAfterWeeklyHours: 45,
+  fatiguePaceMultiplier: 1.1,
+  maxHoursPerDay: 12,
+  overtimeFirstBandHours: 2,
 
   // Rates per simulated minute. The numbers are unchanged from when they
   // were per simulated second, which preserves the real-time spacing,
@@ -74,8 +78,6 @@ const tuning: Tuning = {
   // 1.2 grid units a minute. Previously 0.02 multiplied by a hard-coded 60
   // inside the movement code, which hid the unit.
   staffWalkGridPerMinute: 1.2,
-  initialEnergyMin: 80,
-  initialEnergyRange: 20,
   initialConditionMin: 70,
   initialConditionRange: 30,
   // All eight are employed. The spec has six full-time and two part-time, and

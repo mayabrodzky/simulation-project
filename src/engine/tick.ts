@@ -14,12 +14,13 @@ import { ARRIVAL_RADIUS, EPSILON, hasArrivedAt, hasReached, isArrived } from './
 import {
   expireAbandonedJobs,
   nextJobEventIn,
+  releaseJobOf,
   nextUnattendedEventIn,
   recomputeBlockReasons,
   tickJobs,
   tickUnattended,
 } from './jobs';
-import { applyShiftWindow, nextShiftEventIn } from './shifts';
+import { applyShiftWindow, creditWork, nextShiftEventIn, rollLedgers } from './shifts';
 import type { EngineEvent } from './events';
 import { admitArrivals, ensureArrivalsThrough, rngForStaff, type WorldState } from './world';
 
@@ -152,11 +153,12 @@ function nextEventIn(world: WorldState, options: TickOptions): number {
     // A step finishing.
     if (person.state === 'working') inMinutes(person.taskTimer);
 
-    // Energy crossing the threshold that forces a break, or clears one.
-    if (person.state === 'working' && t.energyDrainPerMinute > 0) {
-      inMinutes((person.energy - t.energyBreakThreshold) / t.energyDrainPerMinute);
-    } else if (person.state === 'break' && t.energyRecoverPerMinute > 0) {
-      inMinutes((t.energyRecoveredThreshold - person.energy) / t.energyRecoverPerMinute);
+    // The daily hours cap, which is what stops overtime running away. An
+    // instant the loop has to land on: stepping over it would let somebody work
+    // a thirteenth hour because the slice happened to be long.
+    const capMinutes = t.maxHoursPerDay * 60;
+    if (person.state === 'working' && person.minutesWorkedToday < capMinutes) {
+      inMinutes(capMinutes - person.minutesWorkedToday);
     }
 
     // Arriving at a destination — meaning reaching the radius that counts as
@@ -198,6 +200,11 @@ function applySlice(
   if (!options.freezeClock) {
     world.simMinutes += dt;
     world.minutes = minuteOfDay(world.simMinutes);
+
+    // Day and week ledgers. Safe to do lazily here because midnight falls
+    // outside every shift, so no attended minute is ever credited between a day
+    // ending and this noticing.
+    rollLedgers(world);
 
     // New work appears after existing work has been charged for the slice, for
     // the same reason the emergency is raised here rather than at the top: a
@@ -299,6 +306,28 @@ function resetStaffTask(person: Staff): void {
   person.state = 'idle';
 }
 
+/**
+ * Sends somebody home because they have hit the daily hours cap.
+ *
+ * The job goes back to the queue with its counters intact, like every other
+ * interruption. Separate from the shift window because the cause is different
+ * and worth distinguishing in a report: one is the lab closing, the other is a
+ * person having worked twelve hours.
+ */
+function stopForTheDay(world: WorldState, person: Staff, events: EngineEvent[]): void {
+  const job = releaseJobOf(world, person);
+  person.state = 'off';
+  person.targetX = null;
+  person.targetY = null;
+  events.push({
+    type: 'hours-cap-reached',
+    staffId: person.id,
+    staffName: person.name,
+    minutesWorked: person.minutesWorkedToday,
+    jobSetDown: job?.id ?? null,
+  });
+}
+
 function tickStaff(
   world: WorldState,
   person: Staff,
@@ -309,10 +338,18 @@ function tickStaff(
   if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') return;
   const t = world.tuning;
 
-  if (person.state === 'working') person.energy -= dt * t.energyDrainPerMinute;
-  if (person.state === 'break') person.energy += dt * t.energyRecoverPerMinute;
-  if (person.energy < t.energyBreakThreshold && person.state !== 'break') person.state = 'break';
-  if (person.energy > t.energyRecoveredThreshold && person.state === 'break') person.state = 'idle';
+  // Hours worked, credited once, in one place. A person 'working' at the start
+  // of a slice works through all of it — the loop is clamped so nothing starts
+  // or stops partway — so this count and the progress made on the job agree by
+  // construction rather than by coincidence.
+  if (person.state === 'working') {
+    creditWork(world, person, dt);
+    // The cap is the one thing that can send somebody home mid-step.
+    if (person.minutesWorkedToday >= t.maxHoursPerDay * 60) {
+      stopForTheDay(world, person, events);
+      return;
+    }
+  }
 
   // Movement first, then the work. Arrival is an instant the loop lands on
   // exactly, so looking at the work *after* moving means it starts at that

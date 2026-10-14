@@ -23,11 +23,90 @@
  * 100% with nobody in the building.
  */
 import type { Staff } from '../domain/types';
-import { isWithinShift, nextCalendarBoundary } from './calendar';
+import { dayIndex, isWithinShift, nextCalendarBoundary, weekIndex } from './calendar';
 import type { EngineEvent } from './events';
 import { EPSILON } from './geometry';
 import { releaseJobOf } from './jobs';
 import type { WorldState } from './world';
+
+/**
+ * Resets the day and week ledgers when the clock has moved on.
+ *
+ * Lazy rather than scheduled, and that is safe for one specific reason:
+ * midnight falls outside every shift, so no attended minute is ever credited
+ * between a day ending and this noticing. A reset that had to land exactly
+ * would need a clamp in the slice loop; this one does not.
+ */
+export function rollLedgers(world: WorldState): void {
+  const day = dayIndex(world.simMinutes);
+  if (day !== world.ledgerDay) {
+    world.ledgerDay = day;
+    for (const person of world.staff) person.minutesWorkedToday = 0;
+  }
+
+  const week = weekIndex(world.simMinutes);
+  if (week !== world.ledgerWeek) {
+    world.ledgerWeek = week;
+    for (const person of world.staff) {
+      person.minutesWorkedThisWeek = 0;
+      person.overtimeMinutesThisWeek = 0;
+    }
+  }
+}
+
+/**
+ * Credits a slice of work to a person, and says whether it was overtime.
+ *
+ * One place, so the ledger and the work done cannot disagree. Overtime is
+ * minutes worked outside this person's own contracted shift — not minutes past
+ * forty hours, which would count a part-timer's ordinary Tuesday as overtime.
+ */
+export function creditWork(world: WorldState, person: Staff, minutes: number): void {
+  person.minutesWorkedToday += minutes;
+  person.minutesWorkedThisWeek += minutes;
+
+  // Judged at the *start* of the slice being credited, not at the clock's
+  // current value. The clock has already advanced by the time work is credited,
+  // so a slice ending exactly at 16:00 would otherwise be recorded as overtime
+  // — fifteen minutes of ordinary afternoon counted as a premium. The loop
+  // clamps to shift boundaries, so a slice never straddles one and its start is
+  // an unambiguous answer.
+  const sliceStarted = world.simMinutes - minutes;
+  if (!isWithinShift(person.shift, sliceStarted)) {
+    person.overtimeMinutesThisWeek += minutes;
+  }
+}
+
+/**
+ * How much slower this person is working, from hours already done this week.
+ *
+ * Read from the ledger at the point work is consumed rather than stored as a
+ * flag, so crossing the threshold mid-step needs no recomputation and there is
+ * no second place that could disagree about whether somebody is tired.
+ */
+export function fatiguePace(world: WorldState, person: Staff): number {
+  const threshold = world.tuning.fatigueAfterWeeklyHours * 60;
+  return person.minutesWorkedThisWeek > threshold ? world.tuning.fatiguePaceMultiplier : 1;
+}
+
+/**
+ * Whether somebody may stay past their shift to finish what they started.
+ *
+ * Without this, overtime could never happen: everybody was sent home the
+ * instant their shift ended, so the specification's overtime bands would have
+ * priced a quantity that was always zero, and the lab manager's actual
+ * complaint — that overtime is invisible until payroll — would have been
+ * unmodellable.
+ *
+ * The rule is deliberately the narrowest one that produces overtime at all:
+ * *finish the step you are on, then go.* Nobody starts new work after hours,
+ * and nobody exceeds the daily cap. It needs no policy input and no judgement
+ * about when a lab would ask somebody to stay.
+ */
+export function mayWorkLate(world: WorldState, person: Staff): boolean {
+  if (person.minutesWorkedToday >= world.tuning.maxHoursPerDay * 60) return false;
+  return person.state === 'working' && person.jobId !== null;
+}
 
 /**
  * States the clock does not override.
@@ -57,6 +136,19 @@ export function applyShiftWindow(world: WorldState, events: EngineEvent[]): void
 
     if (!person.rostered) {
       // Not on the rota: at home whatever the clock says.
+      if (person.state !== 'off') sendHome(world, person, events);
+      continue;
+    }
+
+    // Mid-step and inside the daily cap: they stay to finish, which is the
+    // only way overtime arises. The step boundary sends them home.
+    if (!open && mayWorkLate(world, person)) continue;
+
+    // Somebody who has hit the daily cap stays home even though the lab is
+    // open. Without this the cap was undone the instant it fired: the window
+    // runs after the work, saw an idle lab and an off-duty rostered person, and
+    // brought them straight back.
+    if (person.minutesWorkedToday >= world.tuning.maxHoursPerDay * 60) {
       if (person.state !== 'off') sendHome(world, person, events);
       continue;
     }

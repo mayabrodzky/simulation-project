@@ -106,6 +106,20 @@ export type EngineEvent =
     }
   | { type: 'staff-status-changed'; staffId: StaffId; staffName: string; status: string }
   | { type: 'shift-toggled'; staffId: StaffId; staffName: string; onShift: boolean }
+  /**
+   * Somebody reached the daily hours cap and went home mid-step.
+   *
+   * Distinct from a shift ending, because the cause is different and a manager
+   * would want to know which: one is the lab closing, the other is a person
+   * having worked twelve hours.
+   */
+  | {
+      type: 'hours-cap-reached';
+      staffId: StaffId;
+      staffName: string;
+      minutesWorked: number;
+      jobSetDown: JobId | null;
+    }
   /** The clock brought someone in. Distinct from a roster change. */
   | { type: 'shift-started'; staffId: StaffId; staffName: string }
   /**

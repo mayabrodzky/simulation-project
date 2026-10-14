@@ -25,7 +25,7 @@ import type {
   Wall,
 } from '../domain/types';
 import { generateWeekArrivals } from './arrivals';
-import { isWithinShift, minuteOfDay, shiftForWeeklyHours, weekIndex } from './calendar';
+import { dayIndex, isWithinShift, minuteOfDay, shiftForWeeklyHours, weekIndex } from './calendar';
 import { hasReached } from './geometry';
 import { createRng, deriveSeed, type Rng } from './rng';
 
@@ -114,6 +114,15 @@ export interface WorldState {
   rngState: number;
   /** Source of unique ids. Replaces Date.now(), which is not deterministic. */
   nextId: number;
+  /**
+   * The day and week the hour ledgers were last reset for.
+   *
+   * Compared against the clock rather than scheduled, because nothing works
+   * across midnight — the reset always lands before the new day's first
+   * attended minute, whatever the step size.
+   */
+  ledgerDay: number;
+  ledgerWeek: number;
 
   metrics: Metrics;
 }
@@ -173,7 +182,9 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
       // which would make world.ts depend on shifts.ts and jobs.ts and so on
       // itself — the dependency direction is worth more than the reuse.
       state: i < t.staffOnShiftCount && isWithinShift(shift, start) ? 'idle' : 'off',
-      energy: t.initialEnergyMin + own.next() * t.initialEnergyRange,
+      minutesWorkedToday: 0,
+      minutesWorkedThisWeek: 0,
+      overtimeMinutesThisWeek: 0,
       speed: t.staffWalkGridPerMinute,
       color: `hsl(${i * 45}, 70%, 50%)`,
       jobId: null,
@@ -249,6 +260,8 @@ export function createWorld(scenario: Scenario, seed: number, startMinutes?: num
 
     rngState: rng.getState(),
     nextId: 1,
+    ledgerDay: dayIndex(start),
+    ledgerWeek: weekIndex(start),
 
     metrics: {
       tasksCompleted: 0,

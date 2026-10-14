@@ -681,12 +681,10 @@ const Lab = {
     document.getElementById('samples').textContent = this.world.samples;
   },
   updateStatusCounts() {
-    const c = { working: 0, break: 0, off: 0, sick: 0, vacation: 0, training: 0 };
+    const c = { working: 0, overtime: 0, off: 0, sick: 0, vacation: 0, training: 0 };
     this.staff.forEach((p) => {
       if (p.state === 'working' || p.state === 'idle') {
         c.working++;
-      } else if (p.state === 'break') {
-        c.break++;
       } else if (p.state === 'off') {
         c.off++;
       } else if (p.state === 'sick') {
@@ -695,9 +693,14 @@ const Lab = {
         c.vacation++;
       }
     });
+    // Replaces the "On Break" count, which existed only because a draining
+    // percentage sent people for a rest. How many people are *over* their
+    // contracted hours this week is the thing the lab manager says she cannot
+    // see until payroll.
+    c.overtime = this.staff.filter((p) => p.overtimeMinutesThisWeek > 0).length;
     c.training = countTraining(this.world);
     document.getElementById('workingCount').textContent = c.working;
-    document.getElementById('breakCount').textContent = c.break;
+    document.getElementById('overtimeCount').textContent = c.overtime;
     document.getElementById('offCount').textContent = c.off;
     document.getElementById('sickCount').textContent = c.sick;
     document.getElementById('vacationCount').textContent = c.vacation;
@@ -708,8 +711,12 @@ const Lab = {
     setHtml(
       listEl,
       html`${this.staff.map((p) => {
-        const energy = Math.floor(p.energy);
-        const energyColor = energy > 60 ? '#10b981' : energy > 30 ? '#f59e0b' : '#ef4444';
+        // Hours worked against contracted hours. Over 100% means overtime, so
+        // the colours run the other way from the energy bar they replace: full
+        // is not good here, it is a warning.
+        const load = staffLoadPercent(this.world, p);
+        const loadColor = load > 100 ? '#ef4444' : load > 85 ? '#f59e0b' : '#10b981';
+        const overtimeHours = p.overtimeMinutesThisWeek / 60;
         // An array of fragments rather than a joined string: html`` flattens
         // arrays and leaves nested results unescaped, whereas a pre-joined
         // string of markup would be escaped and shown as literal tags.
@@ -727,9 +734,22 @@ const Lab = {
             <span class="staff-badge badge-${p.state}">${p.state}</span>
           </div>
           <div class="energy-bar-container">
-            <div class="energy-bar-label"><span>Energy</span><span>${energy}%</span></div>
+            <div class="energy-bar-label">
+              <span>Hours this week</span>
+              <span
+                >${(p.minutesWorkedThisWeek / 60).toFixed(1)} /
+                ${p.weeklyHours}h${
+                  overtimeHours > 0.05
+                    ? html` · <strong>+${overtimeHours.toFixed(1)}h OT</strong>`
+                    : ''
+                }</span
+              >
+            </div>
             <div class="energy-bar">
-              <div class="energy-fill" style="width: ${energy}%; background: ${energyColor};"></div>
+              <div
+                class="energy-fill"
+                style="width: ${Math.min(100, load)}%; background: ${loadColor};"
+              ></div>
             </div>
           </div>
           <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.25rem;">

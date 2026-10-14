@@ -505,25 +505,24 @@ describe('a part-finished job says so', () => {
     // step *boundary*. Mass spectrometry has one step, so a job 86% finished
     // reported itself as untouched. The one signal available for "has anyone
     // worked on this?" was wrong for a quarter of the work the lab sells.
-    // Opened on Thursday morning and walked to twenty minutes before closing,
-    // rather than created at 15:40 — a fresh world has no arrivals yet, and
-    // `waitForJob` would then advance past four o'clock looking for one, which
-    // made the later advance negative and silently did nothing.
-    //
-    // Twenty minutes is deliberate: mass-spec preparation is a full hour, so it
-    // cannot finish. Given longer it would hand over to the instrument and keep
-    // running overnight, which is a different thing with its own tests.
-    const closing = 4 * MINUTES_PER_DAY + 16 * 60;
+    // Interrupted by the daily hours cap rather than by closing time, because
+    // B1 lets somebody stay past four to finish the step they are on — so a
+    // mass-spec preparation begun at 15:40 now runs to completion in overtime.
+    // The cap is the one thing that still stops a step part-way through.
     const world = newWorld(4 * MINUTES_PER_DAY + 8 * 60);
-    advance(world, closing - 20 - world.simMinutes);
+    advance(world, 4 * MINUTES_PER_DAY + 10 * 60 - world.simMinutes);
 
     const job = world.jobs.find((j) => j.workTypeId === 'mass-spec' && j.status === 'waiting');
-    expect(job, 'no mass-spec job waiting by Thursday afternoon').toBeDefined();
+    expect(job, 'no mass-spec job waiting by Thursday morning').toBeDefined();
     const amit = available(world, 'Dr. Amit Katz');
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: amit.id, jobId: job!.id });
 
-    // Up to closing time, which sets the job down mid-step.
-    advance(world, closing - world.simMinutes);
+    // Started, then stopped by the cap a few minutes later.
+    for (let i = 0; i < 200 && amit.state !== 'working'; i++) advance(world, 0.5);
+    expect(amit.state).toBe('working');
+    advance(world, 5);
+    amit.minutesWorkedToday = world.tuning.maxHoursPerDay * 60 - 1;
+    advance(world, 2);
 
     expect(job!.stepIndex).toBe(0);
     expect(job!.status).toBe('waiting');

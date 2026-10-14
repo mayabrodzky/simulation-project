@@ -151,10 +151,12 @@ describe('unattended time ignores the calendar', () => {
     expect(world.simMinutes - startedAt).toBeCloseTo(left, 6);
   });
 
-  it('does not advance attended work outside working hours', () => {
+  it('does not advance attended work once everybody has gone home', () => {
     // The other half of the claim, and the reason the two clocks are separate.
-    // Twenty minutes before closing, because a blood panel is 45 minutes of
-    // work and anything begun in the morning is long finished by four.
+    //
+    // Not "outside working hours": B1 lets somebody stay to finish the step
+    // they are on, so attended work can continue past four. What it cannot do
+    // is continue once the floor is empty.
     const world = newWorld();
     advance(world, 16 * 60 - 20 - world.simMinutes);
     const job = waitForJob(world, 'blood-panel');
@@ -162,11 +164,14 @@ describe('unattended time ignores the calendar', () => {
     applyCommand(world, { type: 'ASSIGN_JOB', staffId: hadas.id, jobId: job.id });
     runUntil(world, 'work started', () => hadas.state === 'working');
 
-    advance(world, 16 * 60 - world.simMinutes);
-    const atClose = job.steps[job.stepIndex]!.remaining;
-    advance(world, 15 * 60);
+    // Past closing and past the overtime that finishes the step.
+    advance(world, 16 * 60 + 120 - world.simMinutes);
+    expect(world.staff.every((p) => p.state === 'off')).toBe(true);
 
-    expect(job.steps[job.stepIndex]!.remaining).toBe(atClose);
+    const left = job.steps.reduce((sum, s) => sum + s.remaining, 0);
+    advance(world, 12 * 60);
+
+    expect(job.steps.reduce((sum, s) => sum + s.remaining, 0)).toBe(left);
   });
 
   it('gives the instrument back when the run finishes, not when someone returns', () => {

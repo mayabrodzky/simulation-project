@@ -3,7 +3,7 @@
  *
  * Two different jobs. The first is a conservation law: every minute a person is
  * on shift must be accounted for as exactly one of working, travelling, waiting
- * for a machine, on a break, or free. If minutes can go missing or be counted
+ * for a machine, or free. If minutes can go missing or be counted
  * twice, every capacity figure downstream is wrong and nothing else here would
  * notice — the A2 ordering bugs were all of that shape.
  *
@@ -35,7 +35,6 @@ interface Breakdown {
   working: number;
   travelling: number;
   waitingForMachine: number;
-  onBreak: number;
   free: number;
   offShift: number;
   stepsStarted: number;
@@ -55,7 +54,6 @@ function measureWeek(): Breakdown {
     working: 0,
     travelling: 0,
     waitingForMachine: 0,
-    onBreak: 0,
     free: 0,
     offShift: 0,
     stepsStarted: 0,
@@ -77,8 +75,6 @@ function measureWeek(): Breakdown {
 
       if (person.state === 'off' || person.state === 'sick' || person.state === 'vacation') {
         b.offShift += STEP;
-      } else if (person.state === 'break') {
-        b.onBreak += STEP;
       } else if (person.jobId === null) {
         b.free += STEP;
       } else {
@@ -129,20 +125,23 @@ describe('the working day adds up', () => {
   it('accounts for every person-minute exactly once', () => {
     // A conservation law. Minutes that go missing or get counted twice would
     // make every capacity figure wrong, and nothing else here would notice.
-    const accounted =
-      b.working + b.travelling + b.waitingForMachine + b.onBreak + b.free + b.offShift;
+    const accounted = b.working + b.travelling + b.waitingForMachine + b.free + b.offShift;
     expect(accounted).toBeCloseTo(totalPersonMinutes, 4);
   });
 
-  it('spends no on-shift minute outside opening hours', () => {
-    const onShift = b.working + b.travelling + b.waitingForMachine + b.onBreak + b.free;
-    const openMinutes = chemistryLab.staff.reduce((sum, p) => sum + p.weeklyHours, 0) * 60;
-    // Plus a sampling allowance. State is read once per STEP *after* advancing,
-    // so a person present at the instant a shift ends contributes one extra
-    // sample. The bound is the slop, not a fudge: 8 people x 2 boundaries x 5
-    // days x STEP is the worst case, and the observed excess is 1.5 minutes.
-    const samplingSlop = chemistryLab.staff.length * 2 * 5 * STEP;
-    expect(onShift).toBeLessThanOrEqual(openMinutes + samplingSlop);
+  it('works some minutes beyond contracted hours, and not many', () => {
+    // This asserted that nobody was ever present outside opening hours, which
+    // B1 deliberately made false: somebody mid-step stays to finish it, and
+    // those minutes are overtime. Without them the specification's overtime
+    // bands would price a quantity that is always zero.
+    //
+    // The claim now is that overtime exists and is bounded - a tail on each
+    // day, not a second shift.
+    const contracted = chemistryLab.staff.reduce((sum, p) => sum + p.weeklyHours, 0) * 60;
+    const onShift = b.working + b.travelling + b.waitingForMachine + b.free;
+
+    expect(onShift).toBeGreaterThan(contracted * 0.9);
+    expect(onShift).toBeLessThan(contracted * 1.2);
   });
 });
 

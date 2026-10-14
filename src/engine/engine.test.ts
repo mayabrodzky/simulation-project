@@ -31,7 +31,7 @@ function fingerprint(world: WorldState) {
     minutes: world.minutes,
     rngState: world.rngState,
     metrics: world.metrics,
-    staff: world.staff.map((p) => [p.id, p.state, p.x, p.y, p.energy, p.jobId]),
+    staff: world.staff.map((p) => [p.id, p.state, p.x, p.y, p.minutesWorkedThisWeek, p.jobId]),
     equipment: world.equipment.map((e) => [e.id, e.inUse, e.condition, e.assignedTo]),
     jobs: world.jobs.map((j) => [j.id, j.status, j.stepIndex, j.rush]),
   };

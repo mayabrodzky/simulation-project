@@ -101,7 +101,7 @@ describe('a decision does not disturb the rest of the lab', () => {
     const hired = createWorld(withExtraStaff(), SEED, MONDAY_0800);
 
     const fingerprint = (w: ReturnType<typeof createWorld>) =>
-      w.staff.map((p) => [p.name, p.energy, p.nextWanderAtMinute, p.rngState]);
+      w.staff.map((p) => [p.name, p.nextWanderAtMinute, p.rngState]);
 
     // The new hire is appended, so the originals must match element for
     // element — the extra person is additive, not a reshuffle.
@@ -112,8 +112,8 @@ describe('a decision does not disturb the rest of the lab', () => {
     const base = createWorld(fullShift(), SEED, MONDAY_0800);
     const leased = createWorld(withExtraEquipment(), SEED, MONDAY_0800);
 
-    expect(leased.staff.map((p) => [p.energy, p.nextWanderAtMinute])).toEqual(
-      base.staff.map((p) => [p.energy, p.nextWanderAtMinute]),
+    expect(leased.staff.map((p) => p.nextWanderAtMinute)).toEqual(
+      base.staff.map((p) => p.nextWanderAtMinute),
     );
     expect(leased.arrivalQueue.map((j) => j.arrivedAtMinute)).toEqual(
       base.arrivalQueue.map((j) => j.arrivedAtMinute),
@@ -131,13 +131,14 @@ describe('a decision does not disturb the rest of the lab', () => {
 });
 
 describe('the streams are still streams', () => {
-  it('gives each person a different starting energy', () => {
+  it('gives each person a different idle rhythm', () => {
+    // Was starting energy, which B1 deleted. The property is the same: a test
+    // that only asserts "nothing changed" would pass just as happily if every
+    // stream had collapsed onto one value, so something has to differ.
     const world = createWorld(fullShift(), SEED, MONDAY_0800);
-    const energies = new Set(world.staff.map((p) => p.energy));
+    const wanders = new Set(world.staff.map((p) => p.nextWanderAtMinute));
 
-    // A test that only asserts "nothing changed" would pass just as happily if
-    // every stream had collapsed to the same sequence. This is the other half.
-    expect(energies.size).toBe(world.staff.length);
+    expect(wanders.size).toBe(world.staff.length);
   });
 
   it('gives each machine a different starting condition', () => {
@@ -151,7 +152,9 @@ describe('the streams are still streams', () => {
     const a = createWorld(fullShift(), 42, MONDAY_0800);
     const b = createWorld(fullShift(), 43, MONDAY_0800);
 
-    expect(b.staff.map((p) => p.energy)).not.toEqual(a.staff.map((p) => p.energy));
+    expect(b.staff.map((p) => p.nextWanderAtMinute)).not.toEqual(
+      a.staff.map((p) => p.nextWanderAtMinute),
+    );
     expect(b.equipment.map((e) => e.condition)).not.toEqual(a.equipment.map((e) => e.condition));
     expect(b.arrivalQueue.map((j) => j.arrivedAtMinute)).not.toEqual(
       a.arrivalQueue.map((j) => j.arrivedAtMinute),

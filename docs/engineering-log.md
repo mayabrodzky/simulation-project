@@ -2050,3 +2050,104 @@ on a normal week.
 **Verification.** Four tests: the permissive reading is feasible, the strict reading produces exactly
 three errors naming all three capabilities, `createWorld` refuses the unimplemented reading, and
 capacity 1 makes cell culture impossible while the shipped value does not. 283 tests in total.
+
+---
+
+## 31. Hours, overtime and fatigue; energy deleted
+
+**Context.** `energy` was a percentage that drained while working, refilled while resting, sent people
+on breaks at 20% and released them at 95%. It was grounded in nothing measurable, it gated nothing a
+decision could turn on, and it was carried through all of Phase 1 as a known limitation precisely
+because removing it before a replacement existed would have changed the interface for no gain.
+
+**Decision.** Three numbers per person, all measurable: `minutesWorkedToday`,
+`minutesWorkedThisWeek`, `overtimeMinutesThisWeek`. Reset by day and week hooks that compare the clock
+rather than being scheduled — midnight falls outside every shift, so no attended minute is ever
+credited between a day ending and the reset noticing.
+
+**Fatigue is a pace, read at one call site.** Past `fatigueAfterWeeklyHours` (45), attended work is
+consumed at 1/1.1 of the rate, so the same minute of presence buys less work done. No flag, no "tired"
+state, no recomputation when the threshold is crossed mid-step. That matters because the stored-flag
+version is exactly the failure mode `energy` had: two places describing the same person and able to
+disagree.
+
+**Overtime is judged against each person's own contract**, not against forty hours. An hour of Nina's
+Tuesday afternoon is overtime because her shift ends at noon; a weekly threshold would have called it
+ordinary and made a part-timer's overtime free.
+
+### Overtime could not happen, which made the specification unmodellable
+
+The specification prices overtime in bands — the first two hours a day at 125%, beyond that 150%, cap
+twelve hours. None of it could ever apply, because `applyShiftWindow` sent everybody home the instant
+their shift ended. The bands would have priced a quantity that was always zero, and the lab manager's
+actual complaint — *overtime is invisible until payroll* — would have been impossible to show.
+
+So people may now stay late, under the narrowest rule that produces overtime at all: **finish the step
+you are on, then go.** Nobody starts new work after hours and nobody exceeds the daily cap. It needs
+no policy input and no judgement about when a lab would ask somebody to stay, which matters because a
+richer rule would be a modelling opinion rather than a mechanism.
+
+This is a deliberate behaviour change and it broke nine tests, all of which asserted the old promise
+that a job is dropped mid-step at 16:00. They now assert the new one, which is more specific: a job is
+set down at close only when its operator stops *mid-step*, and the only things that do that are the
+daily cap and sickness. The step-size invariance test survived the change with its invariance intact
+and only its magnitude bound removed — which is the right outcome for a test of a property rather than
+of a number.
+
+### Three bugs, two of them boundary conditions
+
+**Overtime was judged by where the clock is, not where the slice was.** The clock advances before work
+is credited, so a slice ending exactly at 16:00 was recorded as overtime — a quarter of an hour of
+ordinary afternoon charged at a premium. Credit is now judged at the slice's *start*, which is
+unambiguous because the loop clamps to shift boundaries and a slice never straddles one. Same shape as
+the A3b-2 ordering bug and the third boundary error of this kind in the phase.
+
+**The shift window undid the daily cap.** Hitting twelve hours sent somebody home mid-step; the window
+then ran, saw an open lab and an off-duty rostered person, and brought them straight back. The cap now
+holds somebody at home for the rest of the day. A guard that fires and is immediately reversed is
+worse than no guard, because the ledger shows the cap working.
+
+**A test's "next morning" was the next closing time.** Advancing a flat day from 18:00 lands at 16:00,
+when the person is going home again — so the job was never picked up and the test failed for a reason
+unrelated to what it was testing.
+
+### The view
+
+The energy bar becomes an hours bar: hours worked against contracted hours, with the overtime shown
+separately when there is any. The colours run the other way from the bar they replace — full is a
+warning here, not good — and over 100% is allowed, because clamping it would hide the one thing the
+lab manager says she cannot see. `staffLoadPercent` changed and nothing else did, which is the query
+seam's third free absorption of a model change.
+
+"On Break" becomes "On Overtime", counting people over their contracted hours this week.
+
+### What it did to the lab
+
+Four simulated weeks, same seeds, same naive assignment:
+
+| | before B1 | after B1 |
+|---|---|---|
+| jobs completed | 475 | **538** |
+| jobs late | 96 | **71** |
+| rush orders missed | 18 | **13** |
+| jobs abandoned | 7 | **0** |
+| average backlog | 97.4 | **64.4** |
+
+Overtime is worth about sixty jobs a month, and nothing is abandoned any more. Whether a lab manager
+*wants* that trade is exactly the question the tool exists to put to her — B2 prices it, and the
+answer may well be that sixty jobs cost more in premiums than they earn.
+
+The cross-training comparison also moved, which is a caution about quoting any of these numbers early:
+the penalty narrowed from −34 jobs to −24, and lateness went from +98 to **−18**. The decision now
+looks mixed rather than clearly bad, on the same seeds, because of a change to a different part of
+the model entirely.
+
+**Verification.** 18 new tests. The ledger counts work rather than presence, agrees with the progress
+the job records, and resets on the right boundaries. Overtime is zero inside a shift, counted for a
+part-timer's afternoon, not charged for the slice that ends at closing, and arises in a running lab.
+Fatigue is one at rest, slows work past the threshold by exactly the multiplier, and needs no
+recomputation mid-step. The load bar reads contracted hours so a part-timer is judged fairly and can
+exceed 100%. And energy is gone: no field, no break state, none appearing over a simulated week.
+
+303 tests in total, and the suite now takes 48 seconds — most of it simulating weeks a minute at a
+time, which B3 is what fixes.
