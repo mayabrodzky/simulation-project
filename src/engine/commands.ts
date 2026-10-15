@@ -10,15 +10,21 @@
  * calling showNotification from inside business logic. That was the single
  * biggest obstacle to running the simulation without a browser.
  */
-import type { EquipmentId, Skill, StaffId, TaskId } from '../domain/types';
+import type { EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 import type { EngineEvent, RejectionReason } from './events';
-import { isQualified } from './rules';
+import { assignJob, releaseJobOf } from './jobs';
+import { applyShiftWindow } from './shifts';
 import { failTask } from './tick';
-import { findEquipment, findEquipmentByName, findStaff, type WorldState } from './world';
+import { findEquipment, findStaff, type WorldState } from './world';
 
 export type Command =
-  | { type: 'ASSIGN_TASK'; staffId: StaffId; taskId: TaskId }
-  | { type: 'ASSIGN_EMERGENCY'; staffId: StaffId; emergencyId: string }
+  /**
+   * Hands a waiting job to a person, and records that a human chose the
+   * pairing — the dispatcher in B3 must not override it. Replaces ASSIGN_TASK,
+   * which created work out of nothing from a recipe; work now already exists
+   * and is waiting.
+   */
+  | { type: 'ASSIGN_JOB'; staffId: StaffId; jobId: JobId }
   | { type: 'START_TRAINING'; staffId: StaffId; equipmentId: EquipmentId; skill: Skill }
   | { type: 'SET_STATUS'; staffId: StaffId; sick: boolean }
   | { type: 'TOGGLE_SHIFT'; staffId: StaffId }
@@ -28,11 +34,8 @@ export type Command =
 export function applyCommand(world: WorldState, command: Command): EngineEvent[] {
   const events: EngineEvent[] = [];
   switch (command.type) {
-    case 'ASSIGN_TASK':
-      assignTask(world, command.staffId, command.taskId, null, events);
-      break;
-    case 'ASSIGN_EMERGENCY':
-      assignTask(world, command.staffId, null, command.emergencyId, events);
+    case 'ASSIGN_JOB':
+      assignJobCommand(world, command.staffId, command.jobId, events);
       break;
     case 'START_TRAINING':
       startTraining(world, command, events);
@@ -57,68 +60,25 @@ function reject(events: EngineEvent[], reason: RejectionReason, detail?: string)
   events.push({ type: 'rejected', reason, detail });
 }
 
-function assignTask(
+function assignJobCommand(
   world: WorldState,
   staffId: StaffId,
-  taskId: TaskId | null,
-  emergencyId: string | null,
+  jobId: JobId,
   events: EngineEvent[],
 ): void {
+  const outcome = assignJob(world, staffId, jobId, true);
+  if (!outcome.ok) {
+    if (outcome.reason !== 'no-such-job') reject(events, outcome.reason, outcome.detail);
+    return;
+  }
   const person = findStaff(world, staffId);
   if (!person) return;
-  if (person.state !== 'idle' || person.activeTask) {
-    reject(events, 'not-idle', person.name);
-    return;
-  }
-
-  const source = emergencyId
-    ? world.emergencies.find((e) => e.id === emergencyId)
-    : world.tasks.find((t) => t.id === taskId);
-  if (!source) return;
-
-  if (!isQualified(person, source)) {
-    reject(events, 'unqualified', person.name);
-    return;
-  }
-
-  const firstStep = source.equipmentSequence[0];
-  const firstEquipment = firstStep ? findEquipmentByName(world, firstStep.name) : undefined;
-  if (firstEquipment?.inUse) {
-    const user = world.staff.find((s) => s.id === firstEquipment.assignedTo);
-    reject(
-      events,
-      'equipment-in-use',
-      user ? `${firstEquipment.name}|${user.name}` : firstEquipment.name,
-    );
-    return;
-  }
-
-  const copy = structuredClone(source);
-  person.activeTask = emergencyId
-    ? { ...copy, id: emergencyId, isEmergency: true }
-    : { ...copy, id: taskId ?? copy.id };
-  person.taskStep = 0;
-  person.taskTimer = 0;
-  person.state = 'idle';
-
-  if (emergencyId) {
-    const emergency = world.emergencies.find((e) => e.id === emergencyId);
-    if (emergency) {
-      emergency.status = 'in-progress';
-      emergency.assignedTo = person.id;
-    }
-  }
-
-  if (firstEquipment) {
-    person.targetX = firstEquipment.x;
-    person.targetY = firstEquipment.y;
-  }
-
   events.push({
-    type: 'task-assigned',
+    type: 'job-assigned',
+    jobId: outcome.job.id,
+    name: outcome.job.name,
     staffId: person.id,
     staffName: person.name,
-    taskName: source.name,
   });
 }
 
@@ -191,7 +151,16 @@ function setStatus(
   // task.equipmentSequence (absent, so it threw). failTask now handles both.
   if (person.activeTask) failTask(world, person, person.activeTask, events);
 
+  // A job, by contrast, needs nothing unwound: it goes back to the queue with
+  // its remaining counters exactly as they were, and someone else can pick up
+  // where this person stopped. That is the whole argument for holding progress
+  // on the job rather than the person.
+  releaseJobOf(world, person);
+
   person.state = sick ? 'sick' : 'idle';
+  // Clearing "sick" at 02:00 must not put someone on the floor, so where they
+  // actually land is the clock's decision, not this command's.
+  if (!sick) applyShiftWindow(world, events);
   events.push({
     type: 'staff-status-changed',
     staffId: person.id,
@@ -200,23 +169,32 @@ function setStatus(
   });
 }
 
+/**
+ * Puts someone on the rota or takes them off it.
+ *
+ * Changes `rostered`, not `state` — the clock owns `state`. Taking someone off
+ * the rota sends them home now; putting them on brings them in if the lab is
+ * open and leaves them at home until morning if it is not. Before the calendar
+ * drove shifts this command set `state` directly, which is why clearing
+ * "sick" used to put an off-duty person back on the floor.
+ */
 function toggleShift(world: WorldState, staffId: StaffId, events: EngineEvent[]): void {
   const person = findStaff(world, staffId);
   if (!person) return;
 
-  if (person.state === 'off') {
-    person.state = 'idle';
-    person.energy = 100;
-  } else {
-    if (person.activeTask) failTask(world, person, person.activeTask, events);
-    person.state = 'off';
+  person.rostered = !person.rostered;
+  if (!person.rostered && person.activeTask) {
+    failTask(world, person, person.activeTask, events);
   }
+  // Lets the clock decide what the roster change means right now, rather than
+  // writing `state` here and getting it wrong at 02:00.
+  applyShiftWindow(world, events);
 
   events.push({
     type: 'shift-toggled',
     staffId: person.id,
     staffName: person.name,
-    onShift: person.state !== 'off',
+    onShift: person.rostered,
   });
 }
 
@@ -239,7 +217,7 @@ function serviceEquipment(
   }
 
   world.money -= cost;
-  world.metrics.equipmentSpend += cost;
+  world.metrics.repairs += cost;
   equipment.condition = Math.min(100, equipment.condition + amount);
 
   events.push({
@@ -270,14 +248,26 @@ function buyEquipment(world: WorldState, catalogId: string, events: EngineEvent[
 
   // A fresh id rather than the array length, which collides after a removal.
   const id = world.equipment.reduce((max, e) => Math.max(max, e.id), -1) + 1;
+  // Numbered by how many of this kind the lab already has, so a second
+  // microscope is "Microscope 2" rather than a duplicate of the first name.
+  // Buying one in the sandbox used to produce two entries called "Microscope B"
+  // of which only the first was ever selected.
+  const sameKind = world.equipment.filter((e) =>
+    item.capabilities.every((c) => e.capabilities.includes(c)),
+  );
   world.equipment.push({
     id,
-    name: item.name,
+    name: `${item.name} ${sameKind.length + 1}`,
+    instance: sameKind.length + 1,
     icon: item.icon,
     skill: item.skill,
+    capabilities: [...item.capabilities],
+    count: 1,
+    capacity: item.capacity,
     x: spot.x,
     y: spot.y,
     condition: 100,
+    heldBy: [],
     inUse: false,
     assignedTo: null,
     totalWorkTime: 0,

@@ -258,6 +258,13 @@ body.sandbox-mode {
 .staff-card:hover {
   border-color: var(--primary-color);
 }
+/* Qualified for this work, but busy, off duty, sick or on leave. Marked rather
+   than lit, so "could do it" and "could do it now" do not look the same. */
+.staff-card.qualified-unavailable {
+  border-color: var(--border-color);
+  border-style: dashed;
+  opacity: 0.55;
+}
 .staff-card.qualified-highlight {
   border-color: var(--highlight-color);
   background-color: #f0fdf4;
@@ -286,10 +293,6 @@ body.sandbox-mode {
 .badge-idle {
   background: #fef3c7;
   color: #92400e;
-}
-.badge-break {
-  background: #fed7aa;
-  color: #9a3412;
 }
 .badge-off {
   background: #fecaca;
@@ -414,6 +417,22 @@ body.sandbox-mode {
 }
 .task-def-card .details strong {
   color: #475569;
+}
+
+/* One line above the queue: how much is waiting, in jobs and in hours. */
+.queue-summary {
+  font-size: 0.875rem;
+  color: var(--text-light);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.queue-summary strong {
+  color: var(--text-dark);
+}
+.queue-overdue {
+  color: var(--danger-color);
+  font-weight: 600;
 }
 
 .ongoing-task-card {
@@ -650,4 +669,41 @@ body.sandbox-mode {
 .btn-small {
   padding: 0.35rem 0.75rem;
   font-size: 0.75rem;
+}
+
+/* Which run this is, in the game header. Small and quiet: it is for checking a
+   demo or a verification, not something a lab manager needs to read. */
+.run-badge {
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* Why the queue is not moving. Deliberately plain sentences rather than a
+   chart: the manager's question is which one to fix first. */
+.queue-holdups {
+  margin: 0.5rem 0 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.queue-holdup {
+  font-size: 0.8rem;
+  color: #92400e;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+}
+
+/* A rush order past its deadline. Quoted in wall-clock hours, so one arriving
+   on a Thursday afternoon can be impossible before anybody touches it. */
+.emergency-card.overdue {
+  border-left-color: var(--danger-color);
+  background: #fef2f2;
 }

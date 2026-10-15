@@ -17,16 +17,31 @@ import '../styles/lab.css';
 import { chemistryLab, scenarioFromBusinessProfile } from '../scenarios';
 import {
   applyCommand,
+  backlogView,
   cloneWorld,
+  holdUps,
+  countTraining,
   createWorld,
-  formatDuration,
+  describeAssignment,
+  formatMinutes,
   isPanelAffecting,
   isQualified,
+  isUnoccupied,
+  listActiveWork,
+  listAssignableJobs,
+  listUrgentWork,
+  progressByStaff,
+  qualifiedStaffForWorkType,
+  queueByWorkType,
+  staffLoadPercent,
   tick,
+  unoccupiedStaffIds,
+  urgentTimeLeft,
 } from '../engine';
 import { createRenderer } from '../render/renderer';
 import { installActions, installEscape, installHover } from '../ui/actions';
 import { appendHtml, html, setHtml, setHtmlById } from '../ui/dom';
+import { formatStart, parseRunOptions } from '../ui/runOptions';
 
 /**
  * How often the sidebar is rebuilt, in milliseconds. The canvas is redrawn
@@ -40,6 +55,7 @@ const Lab = {
   scenario: chemistryLab,
   renderer: null,
   seed: 1,
+  runOptions: null,
   lastPanelTick: 0,
   canvas: null,
   timeOverlay: null,
@@ -53,9 +69,9 @@ const Lab = {
   isSandboxMode: false,
   liveWorldBackup: null,
   selectedStaff: null,
-  activeEmergencyTask: null,
   hoveredEntity: null,
   highlightedStaffIds: [],
+  dimmedStaffIds: [],
   sandboxSessionHistory: [],
   currentSandboxSession: null,
 
@@ -67,12 +83,6 @@ const Lab = {
   },
   get equipment() {
     return this.world.equipment;
-  },
-  get tasks() {
-    return this.world.tasks;
-  },
-  get emergencyQueue() {
-    return this.world.emergencies;
   },
   get equipmentCatalog() {
     return this.world.catalog;
@@ -91,24 +101,38 @@ const Lab = {
   },
 
   init() {
-    // Seeded so a run can be reproduced: ?seed=123 replays it exactly.
-    // Without the parameter the seed is taken from the clock, which keeps
-    // today's behaviour of a different lab on every load.
-    const seedParam = new URLSearchParams(window.location.search).get('seed');
-    this.seed = seedParam !== null && seedParam !== '' ? Number(seedParam) : Date.now();
-    if (!Number.isFinite(this.seed)) this.seed = Date.now();
-    console.log('Simulation seed:', this.seed);
+    // Which lab, when it opens, and how fast the clock runs — all three from
+    // the URL, so a demo or a verification can name the exact run it wants:
+    //
+    //   ?seed=42&start=sun-08:00&speed=60
+    //
+    // The clock used to start from the real time of day. That made two loads
+    // of the same seed non-comparable, showed an empty lab to anyone opening
+    // the page in the evening, and put the weekend pause days of real time
+    // away. It now opens Sunday 08:00 unless told otherwise.
+    const options = parseRunOptions(window.location.search, Date.now());
+    this.seed = options.seed;
+    this.runOptions = options;
+    for (const warning of options.warnings) console.warn('Run options:', warning);
+    console.log(
+      `Simulation seed: ${this.seed} · opens ${formatStart(options.startMinutes)} · speed ×${options.speed}`,
+    );
+
     this.scenario = this.businessProfile
       ? scenarioFromBusinessProfile(this.businessProfile)
       : chemistryLab;
 
-    // The clock still starts from the real time of day, which is why the lab
-    // renders in daylight or at night depending on when it is opened. The
-    // engine takes it as a parameter, so a fixed start is now one argument
-    // away when Phase 2 wants comparable runs.
-    const now = new Date();
-    const startMinutes = now.getHours() * 60 + now.getMinutes();
-    this.world = createWorld(this.scenario, this.seed, startMinutes);
+    this.world = createWorld(this.scenario, this.seed, options.startMinutes);
+    this.world.speed = options.speed;
+
+    // Shown in the game header so a run identifies itself on screen. Reading
+    // the console to find out which lab you are looking at is fine for one
+    // person debugging and useless for comparing two tabs side by side.
+    setHtmlById(
+      'runBadge',
+      html`seed ${String(this.seed)} · ${formatStart(options.startMinutes)} ·
+      ×${String(options.speed)}`,
+    );
 
     this.camera = { ...this.scenario.layout.initialCamera };
     this.canvas = document.getElementById('gameCanvas');
@@ -141,6 +165,8 @@ const Lab = {
       walls: this.world.walls,
       staticPersonnel: [],
       state: { time: this.world.minutes },
+      progressByStaff: progressByStaff(this.world),
+      unoccupiedStaffIds: unoccupiedStaffIds(this.world),
       nowMs: this.lastTime,
       hoveredEntity: this.hoveredEntity,
       highlightedStaffIds: this.highlightedStaffIds,
@@ -202,9 +228,7 @@ const Lab = {
       'open-task-modal': (el) => this.openTaskModal(staffId(el)),
       'toggle-shift': (el) => this.toggleShift(staffId(el)),
       'toggle-sick': (el) => this.setStaffStatus(staffId(el), 'sick'),
-      'open-emergency': (el) => this.openEmergencyModalById(el.dataset.emergencyId),
-      'assign-task': (el) => this.assignTask(el.dataset.taskId),
-      'assign-emergency': (el) => this.assignEmergencyTask(staffId(el)),
+      'assign-job': (el) => this.assignJob(el.dataset.jobId),
       'start-training': (el) => this.assignTraining(el.dataset.skill, equipmentId(el)),
       repair: (el) => this.repairEquipment(equipmentId(el)),
       calibrate: (el) => this.calibrateEquipment(equipmentId(el)),
@@ -237,14 +261,18 @@ const Lab = {
     }
     this.hoveredEntity = foundEntity;
   },
-  highlightQualifiedStaff(taskId) {
-    const task = this.tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    this.highlightedStaffIds = this.staff.filter((p) => isQualified(p, task)).map((p) => p.id);
+  highlightQualifiedStaff(workTypeId) {
+    // Qualified and free is a different thing from qualified and out sick, so
+    // the two are shown differently rather than both lit up as if either could
+    // take the work.
+    const qualified = qualifiedStaffForWorkType(this.world, workTypeId);
+    this.highlightedStaffIds = qualified.available;
+    this.dimmedStaffIds = qualified.unavailable;
     this.updateStaffPanel();
   },
   clearStaffHighlights() {
     this.highlightedStaffIds = [];
+    this.dimmedStaffIds = [];
     this.updateStaffPanel();
   },
 
@@ -413,8 +441,7 @@ const Lab = {
           actions: this.currentSandboxSession.actions,
           finalState: {
             money: Math.round(this.world.money),
-            materials: this.world.materials,
-            samples: this.world.samples,
+            revenue: this.world.metrics.revenue,
           },
         }),
       });
@@ -461,46 +488,45 @@ const Lab = {
     if (events.some(isPanelAffecting)) this.updateAllPanels();
     for (const e of events) {
       switch (e.type) {
-        case 'task-assigned':
-          this.announce(`${e.staffName} assigned to "${e.taskName}"`, 'info');
+        case 'job-arrived':
           break;
-        case 'task-completed':
+        case 'job-assigned':
+          this.announce(`${e.staffName} took on ${e.name} (${e.jobId})`, 'info');
+          break;
+        case 'job-completed':
           this.showNotification(
-            `Task "${e.taskName}" completed by ${e.staffName}. +$${e.reward}`,
-            'success',
+            e.onTime
+              ? `${e.name} ${e.jobId} finished. +₪${e.revenue}`
+              : `${e.name} ${e.jobId} finished ${formatMinutes(e.minutesLate)} late. +₪${e.revenue}`,
+            e.onTime ? 'success' : 'info',
           );
           break;
-        case 'task-failed':
-          this.announce(`Task "${e.taskName}" failed! Penalty: $${e.penalty}`, 'error');
+        // A handover is normal traffic, not news: the sample has moved to the
+        // next specialist. Logged in the sandbox, not shouted about.
+        case 'job-handed-over':
+          this.announce(`${e.name} ${e.jobId} ready for ${e.nextStep}`, 'info');
+          break;
+        case 'job-expired':
+          this.announce(
+            `${e.name} ${e.jobId} cancelled by the client — ${String(e.workingDaysLate)} working days past its deadline`,
+            'error',
+          );
           break;
         case 'training-started':
-          this.announce(`${e.staffName} started training on ${e.skill}. (-$${e.cost})`, 'info');
+          this.announce(`${e.staffName} started training on ${e.skill}. (-₪${e.cost})`, 'info');
           break;
         case 'training-completed':
           this.showNotification(`${e.staffName} is now certified for ${e.skill}!`, 'success');
           break;
-        case 'emergency-raised':
-          this.flashEmergencyPanel();
-          this.openEmergencyModalById(e.emergencyId);
-          break;
-        case 'emergency-expired':
-          this.showNotification(
-            `Unassigned emergency task failed! Penalty: $${e.penalty}!`,
-            'error',
-          );
-          if (this.activeEmergencyTask && this.activeEmergencyTask.id === e.emergencyId) {
-            this.closeAllModals();
-          }
-          break;
         case 'equipment-serviced':
           this.announce(
-            `${e.equipmentName} ${e.kind === 'repair' ? 'repaired' : 'calibrated'} for $${e.cost}.`,
+            `${e.equipmentName} ${e.kind === 'repair' ? 'repaired' : 'calibrated'} for ₪${e.cost}.`,
             'info',
           );
           break;
         case 'equipment-purchased':
           this.announce(
-            `${e.equipmentName} purchased for $${e.cost} and placed in the lab.`,
+            `${e.equipmentName} purchased for ₪${e.cost} and placed in the lab.`,
             'info',
           );
           break;
@@ -509,8 +535,21 @@ const Lab = {
           break;
         case 'shift-toggled':
           this.announce(
-            `${e.staffName} has ${e.onShift ? 'started' : 'ended'} their shift`,
+            `${e.staffName} is ${e.onShift ? 'now on the rota' : 'off the rota'}`,
             'info',
+          );
+          break;
+        // The clock bringing people in and sending them home is not news: it
+        // happens to everyone twice a day. Logged in the sandbox so a session
+        // can be read back, but never announced.
+        case 'shift-started':
+          this.logSandboxAction(`${e.staffName} arrived.`);
+          break;
+        case 'shift-ended':
+          this.logSandboxAction(
+            e.jobSetDown
+              ? `${e.staffName} left, setting down ${e.jobSetDown}.`
+              : `${e.staffName} left.`,
           );
           break;
         case 'rejected':
@@ -537,7 +576,7 @@ const Lab = {
         return `${name} is currently in use${user ? ` by ${user}` : ''}.`;
       }
       case 'no-funds':
-        return `Insufficient funds (cost: $${e.detail}, budget: $${this.world.money.toFixed(0)}).`;
+        return `Insufficient funds (cost: ₪${e.detail}, budget: ₪${this.world.money.toFixed(0)}).`;
       case 'already-known':
         return `Already certified for ${e.detail}.`;
       case 'off-shift':
@@ -554,9 +593,9 @@ const Lab = {
     this.handleEvents(applyCommand(this.world, command));
   },
 
-  assignTask(taskId) {
+  assignJob(jobId) {
     if (!this.selectedStaff) return;
-    this.dispatch({ type: 'ASSIGN_TASK', staffId: this.selectedStaff.id, taskId });
+    this.dispatch({ type: 'ASSIGN_JOB', staffId: this.selectedStaff.id, jobId });
     this.closeAllModals();
   },
 
@@ -567,18 +606,6 @@ const Lab = {
       staffId: this.selectedStaff.id,
       equipmentId,
       skill: skillToLearn,
-    });
-    this.closeAllModals();
-  },
-
-  assignEmergencyTask(staffId) {
-    const person = this.staff.find((p) => p.id === staffId);
-    if (!person || !this.activeEmergencyTask) return;
-    this.selectedStaff = person;
-    this.dispatch({
-      type: 'ASSIGN_EMERGENCY',
-      staffId,
-      emergencyId: this.activeEmergencyTask.id,
     });
     this.closeAllModals();
   },
@@ -620,50 +647,49 @@ const Lab = {
         movementMultiplier: this.isSandboxMode ? 5 : 1,
       }),
     );
-    // Previously these four ran on every frame, rebuilding each panel's whole
+    // Previously these ran on every frame, rebuilding each panel's whole
     // subtree with innerHTML about 240 times a second between them, and
     // throwing away scroll position and hover state each time. Panels that
     // react to a change are driven by the event stream instead; this interval
-    // only covers the things that tick down on their own.
+    // only covers the things that change with the clock rather than with an
+    // event.
+    //
+    // The staff panel is on this list because a person's state now changes
+    // without any event: they arrive at a machine and start work, or finish a
+    // step. Driven by events alone, a badge could read "idle" for seconds after
+    // work began — and at ×5 or ×60 that is tens or hundreds of simulated
+    // minutes of apparent lag, which reads as a walk taking ten times longer
+    // than it does. Review saw exactly that and reasonably read it as a bug in
+    // the simulation.
     if (now - this.lastPanelTick >= PANEL_INTERVAL_MS) {
       this.lastPanelTick = now;
       this.updateTimeOfDayOverlay();
       this.updateUI();
       this.updateStatusCounts();
+      this.updateStaffPanel();
       this.updateEmergencyListPanel();
       this.updateOngoingTasksPanel();
-      this.updateEmergencyModalDeadline();
     }
 
     this.renderer.render(this.buildRenderView());
     requestAnimationFrame(() => this.gameLoop());
   },
-  /**
-   * Keeps the open emergency modal's countdown moving. This used to live
-   * inside the emergency update loop, which now runs in the engine and cannot
-   * touch the DOM, so it moved here with the rest of the view work.
-   */
-  updateEmergencyModalDeadline() {
-    if (!this.activeEmergencyTask) return;
-    const live = this.emergencyQueue.find((t) => t.id === this.activeEmergencyTask.id);
-    if (!live) return;
-    setHtmlById(
-      'emergencyTaskDeadline',
-      html`<strong>Deadline:</strong> ${formatDuration(live.timeLimit, true)}`,
-    );
-  },
   updateUI() {
     document.getElementById('money').textContent = this.world.money.toFixed(0);
-    document.getElementById('materials').textContent = this.world.materials;
-    document.getElementById('samples').textContent = this.world.samples;
+    // The two numbers the lab manager's complaint is actually about. Labour
+    // includes the overtime premium, which is the part she says she cannot see
+    // until payroll.
+    const m = this.world.metrics;
+    document.getElementById('revenue').textContent = Math.round(m.revenue).toLocaleString();
+    document.getElementById('labour').textContent = Math.round(
+      m.labourBase + m.labourOvertime,
+    ).toLocaleString();
   },
   updateStatusCounts() {
-    const c = { working: 0, break: 0, off: 0, sick: 0, vacation: 0, training: 0 };
+    const c = { working: 0, overtime: 0, off: 0, sick: 0, vacation: 0, training: 0 };
     this.staff.forEach((p) => {
       if (p.state === 'working' || p.state === 'idle') {
         c.working++;
-      } else if (p.state === 'break') {
-        c.break++;
       } else if (p.state === 'off') {
         c.off++;
       } else if (p.state === 'sick') {
@@ -671,12 +697,15 @@ const Lab = {
       } else if (p.state === 'vacation') {
         c.vacation++;
       }
-      if (p.activeTask && p.activeTask.type === 'training') {
-        c.training++;
-      }
     });
+    // Replaces the "On Break" count, which existed only because a draining
+    // percentage sent people for a rest. How many people are *over* their
+    // contracted hours this week is the thing the lab manager says she cannot
+    // see until payroll.
+    c.overtime = this.staff.filter((p) => p.overtimeMinutesThisWeek > 0).length;
+    c.training = countTraining(this.world);
     document.getElementById('workingCount').textContent = c.working;
-    document.getElementById('breakCount').textContent = c.break;
+    document.getElementById('overtimeCount').textContent = c.overtime;
     document.getElementById('offCount').textContent = c.off;
     document.getElementById('sickCount').textContent = c.sick;
     document.getElementById('vacationCount').textContent = c.vacation;
@@ -687,26 +716,49 @@ const Lab = {
     setHtml(
       listEl,
       html`${this.staff.map((p) => {
-        const energy = Math.floor(p.energy);
-        const energyColor = energy > 60 ? '#10b981' : energy > 30 ? '#f59e0b' : '#ef4444';
+        // Hours worked against contracted hours. Over 100% means overtime, so
+        // the colours run the other way from the energy bar they replace: full
+        // is not good here, it is a warning.
+        const load = staffLoadPercent(this.world, p);
+        const loadColor = load > 100 ? '#ef4444' : load > 85 ? '#f59e0b' : '#10b981';
+        const overtimeHours = p.overtimeMinutesThisWeek / 60;
         // An array of fragments rather than a joined string: html`` flattens
         // arrays and leaves nested results unescaped, whereas a pre-joined
         // string of markup would be escaped and shown as literal tags.
         const skillTags = p.skills.map((skill) => html`<span class="skill-tag">${skill}</span>`);
         const isHighlighted = this.highlightedStaffIds.includes(p.id);
-        return html` <div class="staff-card ${isHighlighted ? 'qualified-highlight' : ''}">
+        const isDimmed = this.dimmedStaffIds.includes(p.id);
+        const highlightClass = isHighlighted
+          ? 'qualified-highlight'
+          : isDimmed
+            ? 'qualified-unavailable'
+            : '';
+        return html` <div class="staff-card ${highlightClass}">
           <div class="staff-header">
             <span class="staff-name">${p.name}</span>
             <span class="staff-badge badge-${p.state}">${p.state}</span>
           </div>
           <div class="energy-bar-container">
-            <div class="energy-bar-label"><span>Energy</span><span>${energy}%</span></div>
+            <div class="energy-bar-label">
+              <span>Hours this week</span>
+              <span
+                >${(p.minutesWorkedThisWeek / 60).toFixed(1)} /
+                ${p.weeklyHours}h${
+                  overtimeHours > 0.05
+                    ? html` · <strong>+${overtimeHours.toFixed(1)}h OT</strong>`
+                    : ''
+                }</span
+              >
+            </div>
             <div class="energy-bar">
-              <div class="energy-fill" style="width: ${energy}%; background: ${energyColor};"></div>
+              <div
+                class="energy-fill"
+                style="width: ${Math.min(100, load)}%; background: ${loadColor};"
+              ></div>
             </div>
           </div>
           <div style="font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.25rem;">
-            Task: ${p.activeTask ? p.activeTask.name : 'None'}
+            Task: ${describeAssignment(this.world, p)?.label ?? 'None'}
           </div>
           <div class="skills-container">
             ${skillTags.length ? skillTags : html`<span style="font-size: 0.75rem; color: var(--text-light);">No special skills.</span>`}
@@ -721,7 +773,7 @@ const Lab = {
               Assign Task
             </button>
             <button class="btn btn-secondary" data-action="toggle-shift" data-staff-id="${p.id}">
-              ${p.state === 'off' ? 'Start Shift' : 'End Shift'}
+              ${p.rostered ? 'Take Off Rota' : 'Put On Rota'}
             </button>
             <button class="btn btn-secondary" data-action="toggle-sick" data-staff-id="${p.id}">
               ${p.state === 'sick' ? 'Clear Sick' : 'Set Sick'}
@@ -743,7 +795,7 @@ const Lab = {
                 <strong>${eq.name}</strong>
                 <div class="equipment-info">
                   ${eq.inUse ? '🔴 In Use' : '🟢 Available'} | Use:
-                  ${formatDuration(eq.totalWorkTime)}
+                  ${formatMinutes(eq.totalWorkTime)}
                 </div>
               </div>
             </div>
@@ -755,71 +807,138 @@ const Lab = {
             </div>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
               <button class="btn" data-action="repair" data-equipment-id="${eq.id}">
-                Repair ($${this.world.tuning.repairCost})</button
+                Repair (₪${this.world.tuning.repairCost})</button
               ><button class="btn" data-action="calibrate" data-equipment-id="${eq.id}">
-                Calibrate ($${this.world.tuning.calibrateCost})
+                Calibrate (₪${this.world.tuning.calibrateCost})
               </button>
             </div>
           </div>`,
       )}`,
     );
   },
+  /**
+   * Rush orders: ordinary jobs a client needs tomorrow.
+   *
+   * This panel used to list emergencies, which were a separate kind of work
+   * with their own entity, their own progress fields on a person and their own
+   * events. It reads jobs now and the shape it receives is unchanged, because
+   * it has always asked through `listUrgentWork` rather than reaching into the
+   * simulation.
+   *
+   * Time left can be negative. A rush order is quoted in wall-clock hours, so
+   * one arriving on a Thursday afternoon may simply be impossible, and saying
+   * so is more useful than showing a zero.
+   */
   updateEmergencyListPanel() {
     const p = document.getElementById('emergencyListPanel');
     if (!p) return;
     p.replaceChildren();
-    const a = this.emergencyQueue.filter(
-      (t) => t.status === 'pending' || t.status === 'in-progress',
-    );
-    if (a.length === 0) {
+
+    const urgent = listUrgentWork(this.world);
+    if (urgent.length === 0) {
       setHtml(
         p,
         html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
-          No active emergencies.
+          No rush orders waiting.
         </div>`,
       );
       return;
     }
-    a.forEach((t) => {
-      const s = t.status === 'pending' ? 'Waiting' : 'In Progress';
+
+    urgent.forEach((item) => {
+      const late = item.timeLeft < 0;
       appendHtml(
         p,
-        html`<div class="emergency-card" data-action="open-emergency" data-emergency-id="${t.id}">
-          <strong>${t.name}</strong>
-          <div><span>${s}</span><span>Time Left: ${formatDuration(t.timeLimit, true)}</span></div>
+        html`<div class="emergency-card ${late ? 'overdue' : ''}">
+          <strong>${item.name} ${item.id}</strong>
+          <div>
+            <span>${item.status}</span
+            ><span
+              >${
+                late
+                  ? html`Overdue by ${formatMinutes(-item.timeLeft)}`
+                  : html`Due in ${formatMinutes(item.timeLeft)}`
+              }</span
+            >
+          </div>
         </div>`,
       );
     });
   },
+  /**
+   * The work queue: what has arrived and is waiting, by kind.
+   *
+   * This panel used to list the three recipes the lab can perform, which never
+   * changed and so told the manager nothing. Work now arrives on its own, so
+   * the useful question is what is piling up — read through the query seam, so
+   * this panel does not know how a job is represented.
+   */
   updateTaskListPanel() {
     const panel = document.getElementById('taskListPanel');
     if (!panel) return;
+    const summary = backlogView(this.world);
+    const lines = queueByWorkType(this.world);
+    // Why the queue is not moving. The point of the whole phase, in one line:
+    // a manager can act on "11 waiting for an instrument in use" and cannot act
+    // on a backlog number.
+    const blocked = holdUps(this.world);
+
     setHtml(
       panel,
-      html`${this.tasks.map((task) => {
-        const totalTime = task.equipmentSequence.reduce((acc, step) => acc + step.duration, 0);
-        const skills = task.equipmentSequence.map((s) => s.skillRequired).join(', ');
-        const qualifiedStaff =
-          this.staff
-            .filter((p) => p.state === 'idle' && isQualified(p, task))
-            .map((p) => p.name)
-            .join(', ') || 'None available';
-        return html` <div class="task-def-card" data-hover-task="${task.id}">
-          <strong>${task.name}</strong>
-          <div class="details">
-            <span>Time: ${formatDuration(totalTime)} | Reward: $${task.reward}</span><br />
-            <strong>Required Skills:</strong> ${skills}<br /><strong>Qualified Staff:</strong>
-            ${qualifiedStaff}
-          </div>
-        </div>`;
-      })}`,
+      html`<div class="queue-summary">
+          ${
+            summary.waiting === 0
+              ? 'Nothing waiting.'
+              : html`<strong>${summary.waiting}</strong> waiting ·
+                  <strong>${formatMinutes(summary.minutesOfWorkWaiting)}</strong> of
+                  work${
+                    summary.overdue > 0
+                      ? html` · <span class="queue-overdue">${summary.overdue} overdue</span>`
+                      : ''
+                  }`
+          }
+        </div>
+        ${
+          blocked.length > 0
+            ? html`<div class="queue-holdups">
+                ${blocked.map((h) => html`<div class="queue-holdup">${h.text}</div>`)}
+              </div>`
+            : ''
+        }
+        ${lines.map(
+          (line) =>
+            html`<div class="task-def-card" data-hover-task="${line.workTypeId}">
+              <strong>${line.name}</strong>
+              <div class="details">
+                <span
+                  >Waiting: <strong>${line.waiting}</strong> | ${formatMinutes(line.minutesEach)}
+                  each | ₪${line.priceEach}</span
+                ><br />
+                ${
+                  line.soonestDueInMinutes === null
+                    ? 'None in the queue.'
+                    : line.soonestDueInMinutes < 0
+                      ? html`<span class="queue-overdue"
+                          >Soonest deadline passed ${formatMinutes(-line.soonestDueInMinutes)}
+                          ago</span
+                        >`
+                      : html`Soonest due in ${formatMinutes(line.soonestDueInMinutes)}`
+                }
+                ${
+                  line.overdue > 0
+                    ? html`<br /><span class="queue-overdue">${line.overdue} overdue</span>`
+                    : ''
+                }
+              </div>
+            </div>`,
+        )}`,
     );
   },
   updateOngoingTasksPanel() {
     const panel = document.getElementById('ongoingTasksPanel');
     if (!panel) return;
-    const activeStaff = this.staff.filter((p) => p.activeTask);
-    if (activeStaff.length === 0) {
+    const active = listActiveWork(this.world);
+    if (active.length === 0) {
       setHtml(
         panel,
         html`<div style="font-size:0.875rem;color:#64748b;padding:1rem 0;">
@@ -830,30 +949,19 @@ const Lab = {
     }
     setHtml(
       panel,
-      html`${activeStaff.map((p) => {
-        const task = p.activeTask;
-        let progress = 0;
-        let statusText = 'Moving to equipment';
-        if (p.state === 'working') {
-          if (task.type === 'training') {
-            statusText = 'Training in progress';
-            progress = Math.max(0, 100 * (1 - p.taskTimer / task.duration));
-          } else {
-            statusText = 'Processing';
-            const currentStep = task.equipmentSequence[p.taskStep];
-            if (currentStep) {
-              progress = Math.max(0, 100 * (1 - p.taskTimer / currentStep.duration));
-            }
-          }
-        }
-        return html`<div class="ongoing-task-card">
-          <strong>${task.name}</strong>
-          <div class="info">Assigned to: ${p.name} (${statusText})</div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progress}%; background: #a78bfa;"></div>
-          </div>
-        </div>`;
-      })}`,
+      html`${active.map(
+        (item) =>
+          html`<div class="ongoing-task-card">
+            <strong>${item.name}</strong>
+            <div class="info">Assigned to: ${item.assignee} (${item.statusText})</div>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                style="width: ${item.progress * 100}%; background: #a78bfa;"
+              ></div>
+            </div>
+          </div>`,
+      )}`,
     );
   },
   openTaskModal(staffId) {
@@ -862,9 +970,10 @@ const Lab = {
     // Someone who has just been given a task is still 'idle' until they reach
     // the machine, so reporting their state would say "is currently idle".
     // Describe the task when there is one.
-    if (this.selectedStaff.activeTask) {
+    const current = describeAssignment(this.world, this.selectedStaff);
+    if (current) {
       this.showNotification(
-        `Cannot assign task: ${this.selectedStaff.name} is already on "${this.selectedStaff.activeTask.name}".`,
+        `Cannot assign task: ${this.selectedStaff.name} is already on "${current.label}".`,
         'error',
       );
       return;
@@ -881,40 +990,58 @@ const Lab = {
     document.getElementById('taskModal').className = 'modal active';
     const o = document.getElementById('taskOptions');
     const options = [];
-    this.tasks.forEach((t, i) => {
-      const q = isQualified(this.selectedStaff, t);
+
+    // Real samples that are waiting, not a list of things the lab can do.
+    // Soonest deadline first, because that is the order they matter in.
+    const jobs = listAssignableJobs(this.world, this.selectedStaff);
+    if (jobs.length === 0) {
+      options.push(
+        html`<div class="task-option" disabled>
+          <strong>Nothing waiting</strong>
+          <div style="font-size:0.875rem;color:#64748b;">
+            No samples in the queue. Work arrives through the day.
+          </div>
+        </div>`,
+      );
+    }
+
+    // Capped: a backlog of a hundred and fifty is realistic and a dialogue of
+    // a hundred and fifty rows is not. Phase 2.5 decides how to present a
+    // queue properly; this keeps the live lab usable until then.
+    jobs.slice(0, 12).forEach((job) => {
+      const overdue = job.dueInMinutes < 0;
+      const due = overdue
+        ? html`<span class="queue-overdue">overdue by ${formatMinutes(-job.dueInMinutes)}</span>`
+        : html`due in ${formatMinutes(job.dueInMinutes)}`;
       options.push(
         html`<div
           class="task-option"
-          ${!q ? 'disabled' : ''}
-          ${q ? html`data-action="assign-task" data-task-id="${t.id}"` : ''}
+          ${!job.qualified ? 'disabled' : ''}
+          ${job.qualified ? html`data-action="assign-job" data-job-id="${job.id}"` : ''}
         >
-          <strong>${t.name}</strong>
+          <strong>${job.name}</strong>
+          <span style="float:right;font-size:0.75rem;color:#94a3b8;">${job.id}</span>
           <div style="font-size:0.875rem;color:#64748b;">
-            Reward: $${t.reward} | Time: ${formatDuration(t.timeLimit, true)} |
-            ${q ? '✅ Qualified' : '❌ Not Qualified'}
+            ₪${job.price} | next: ${job.nextStep} | ${formatMinutes(job.minutesOfWork)} left |
+            ${due}<br />
+            ${job.qualified ? '✅ Qualified' : html`❌ Needs ${job.missingSkills.join(', ')}`}${
+              job.partlyDone ? ' · part-finished' : ''
+            }
           </div>
         </div>`,
       );
     });
-    this.equipment.forEach((eq) => {
-      if (!this.selectedStaff.skills.includes(eq.skill)) {
-        options.push(
-          html`<div
-            class="task-option"
-            data-action="start-training"
-            data-skill="${eq.skill}"
-            data-equipment-id="${eq.id}"
-          >
-            <strong>🎓 Train: ${eq.name}</strong>
-            <div style="font-size:0.875rem;color:#64748b;">
-              Cost: $${this.scenario.tuning.trainingCost} | Duration:
-              ${this.scenario.tuning.trainingDuration} min
-            </div>
-          </div>`,
-        );
-      }
-    });
+
+    if (jobs.length > 12) {
+      options.push(
+        html`<div class="task-option" disabled>
+          <div style="font-size:0.875rem;color:#64748b;">
+            …and ${String(jobs.length - 12)} more waiting.
+          </div>
+        </div>`,
+      );
+    }
+
     setHtml(o, html`${options}`);
   },
   closeAllModals() {
@@ -922,65 +1049,6 @@ const Lab = {
       .querySelectorAll('.modal.active, .modal-overlay.active')
       .forEach((el) => el.classList.remove('active'));
     this.selectedStaff = null;
-    this.activeEmergencyTask = null;
-  },
-  openEmergencyModalById(id) {
-    const task = this.emergencyQueue.find((t) => t.id === id);
-    if (task) this.openEmergencyModal(task);
-  },
-  openEmergencyModal(task) {
-    this.activeEmergencyTask = task;
-    setHtml(
-      document.getElementById('emergencyTaskName'),
-      html`<strong>Task:</strong> ${task.name}`,
-    );
-    setHtmlById('emergencyTaskReward', html`<strong>Reward:</strong> $${task.reward}`);
-    setHtmlById('emergencyTaskPenalty', html`<strong>Penalty:</strong> $${task.penalty}`);
-    setHtmlById(
-      'emergencyTaskDeadline',
-      html`<strong>Deadline:</strong> ${formatDuration(task.timeLimit, true)}`,
-    );
-    const staffListEl = document.getElementById('emergencyStaffList');
-    staffListEl.replaceChildren();
-    const availableStaff = this.staff.filter(
-      (p) => p.state === 'idle' && !p.activeTask && isQualified(p, task),
-    );
-    if (availableStaff.length > 0) {
-      availableStaff.forEach((p) => {
-        appendHtml(
-          staffListEl,
-          html`<div
-            class="staff-assign-option"
-            data-action="assign-emergency"
-            data-staff-id="${p.id}"
-          >
-            <span>${p.name}</span><small>Energy: ${Math.floor(p.energy)}%</small>
-          </div>`,
-        );
-      });
-    } else {
-      setHtml(
-        staffListEl,
-        html`<div style="color: #b91c1c; text-align: center; font-weight: 600;">
-          No qualified and available staff found!
-        </div>`,
-      );
-    }
-    document.getElementById('modalOverlay').className = 'modal-overlay active';
-    document.getElementById('emergencyModal').className = 'modal active';
-  },
-  flashEmergencyPanel() {
-    const header = document.getElementById('emergencyPanelHeader');
-    if (!header) return;
-    // Removing the class and reading offsetWidth forces a reflow, so the
-    // animation restarts if a second emergency arrives while the first flash
-    // is still playing. Without it the browser sees no change and does nothing.
-    header.classList.remove('emergency-alert');
-    void header.offsetWidth;
-    header.classList.add('emergency-alert');
-    header.addEventListener('animationend', () => header.classList.remove('emergency-alert'), {
-      once: true,
-    });
   },
   resetCamera() {
     // Previously duplicated the initial camera literals, so the two could
@@ -1032,7 +1100,7 @@ const Lab = {
                 Requires Skill: ${item.skill}
               </div>
             </div>
-            <div class="cost">$${item.cost}</div>
+            <div class="cost">₪${item.cost}</div>
             <button
               class="btn btn-primary"
               data-action="buy-equipment"

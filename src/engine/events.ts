@@ -2,7 +2,7 @@
  * What the engine reports back after a tick or a command.
  *
  * Events carry facts, never formatted sentences. The engine says
- * `{ type: 'task-completed', staffName: 'Dana Cohen', reward: 500 }`; the UI
+ * `{ type: 'job-completed', name: 'Blood panel', revenue: 180 }`; the UI
  * decides that this reads "Task completed by Dana Cohen. +$500" and that it is
  * green. That separation is the reason the engine can run with no browser
  * attached — previously the assignment code called showNotification directly
@@ -13,7 +13,7 @@
  * metrics and Phase 4's verdict card are new consumers of this stream, not new
  * branches inside the simulation.
  */
-import type { EquipmentId, Skill, StaffId } from '../domain/types';
+import type { BlockReason, EquipmentId, JobId, Skill, StaffId } from '../domain/types';
 
 export type RejectionReason =
   | 'not-idle'
@@ -23,29 +23,84 @@ export type RejectionReason =
   | 'equipment-missing'
   | 'no-space'
   | 'already-known'
-  | 'off-shift';
+  | 'off-shift'
+  /** The job was taken, finished or abandoned between showing it and clicking. */
+  | 'job-not-open';
 
 export type EngineEvent =
-  | { type: 'task-assigned'; staffId: StaffId; staffName: string; taskName: string }
-  | {
-      type: 'task-completed';
-      staffId: StaffId;
-      staffName: string;
-      taskName: string;
-      reward: number;
-    }
-  | {
-      type: 'task-failed';
-      staffId: StaffId;
-      staffName: string;
-      taskName: string;
-      penalty: number;
-    }
   | { type: 'training-started'; staffId: StaffId; staffName: string; skill: Skill; cost: number }
   | { type: 'training-completed'; staffId: StaffId; staffName: string; skill: Skill }
-  | { type: 'emergency-raised'; emergencyId: string; name: string }
-  | { type: 'emergency-expired'; emergencyId: string; name: string; penalty: number }
-  | { type: 'emergency-resolved'; emergencyId: string; name: string }
+  /**
+   * A sample turned up. Carries the facts, not a sentence: the view decides
+   * whether one arrival is worth a notification or only a counter.
+   */
+  | { type: 'job-arrived'; jobId: JobId; name: string; dueAtMinute: number }
+  | { type: 'job-assigned'; jobId: JobId; name: string; staffId: StaffId; staffName: string }
+  /** `minutesLate` is zero when on time, so a caller needs no second check. */
+  | {
+      type: 'job-completed';
+      jobId: JobId;
+      name: string;
+      onTime: boolean;
+      revenue: number;
+      minutesLate: number;
+    }
+  /**
+   * A step finished and the person cannot do the next one, so the job went back
+   * to the queue part-finished. Not a failure — it is how a sample moves
+   * between specialists — but worth reporting, because a job that waits a long
+   * time for its second specialist is a real cost with no other symptom.
+   */
+  | {
+      type: 'job-handed-over';
+      jobId: JobId;
+      name: string;
+      staffId: StaffId;
+      staffName: string;
+      nextStep: string;
+    }
+  /**
+   * The operator has finished their part and the instrument is now running
+   * alone. They are free from this instant, which is the point of reporting it:
+   * an instrument being the constraint is a different sentence from its
+   * scientist being the constraint.
+   */
+  | {
+      type: 'job-unattended';
+      jobId: JobId;
+      name: string;
+      staffId: StaffId;
+      staffName: string;
+      minutes: number;
+    }
+  /**
+   * A prepped sample that was queueing for an instrument finally got one.
+   *
+   * Separate from `job-unattended`, which reports a handover that succeeded
+   * immediately and names the person it freed. This one has no person: the
+   * operator was released when the preparation finished, and the sample then
+   * waited. The gap between the two events is the instrument queue, which is
+   * the bottleneck this whole scenario is built around.
+   */
+  | { type: 'job-on-instrument'; jobId: JobId; name: string; minutes: number; waited: number }
+  /** An unattended run finished and the instrument is free again. */
+  | { type: 'job-off-instrument'; jobId: JobId; name: string; stepsLeft: number }
+  /**
+   * Nothing has moved this job for a long time, and here is what is in the way.
+   *
+   * Reported once per continuous block. Changes nothing — it exists so that a
+   * run which fails by doing nothing says so, rather than looking like a
+   * working run with a disappointing result.
+   */
+  | {
+      type: 'job-stalled';
+      jobId: JobId;
+      name: string;
+      reason: BlockReason;
+      blockedForMinutes: number;
+    }
+  /** The client gave up. Nothing is charged; the work is simply not paid for. */
+  | { type: 'job-expired'; jobId: JobId; name: string; workingDaysLate: number }
   | {
       type: 'equipment-serviced';
       equipmentId: EquipmentId;
@@ -61,6 +116,27 @@ export type EngineEvent =
     }
   | { type: 'staff-status-changed'; staffId: StaffId; staffName: string; status: string }
   | { type: 'shift-toggled'; staffId: StaffId; staffName: string; onShift: boolean }
+  /**
+   * Somebody reached the daily hours cap and went home mid-step.
+   *
+   * Distinct from a shift ending, because the cause is different and a manager
+   * would want to know which: one is the lab closing, the other is a person
+   * having worked twelve hours.
+   */
+  | {
+      type: 'hours-cap-reached';
+      staffId: StaffId;
+      staffName: string;
+      minutesWorked: number;
+      jobSetDown: JobId | null;
+    }
+  /** The clock brought someone in. Distinct from a roster change. */
+  | { type: 'shift-started'; staffId: StaffId; staffName: string }
+  /**
+   * The clock sent someone home. `jobSetDown` names the job they put down, if
+   * any — work carried over to tomorrow is a cost worth being able to count.
+   */
+  | { type: 'shift-ended'; staffId: StaffId; staffName: string; jobSetDown: JobId | null }
   | { type: 'rejected'; reason: RejectionReason; detail?: string };
 
 /** True for events that change something a sidebar panel displays. */

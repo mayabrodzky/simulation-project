@@ -1,0 +1,19 @@
+# Line endings.
+#
+# Git already stores text as LF, but on Windows core.autocrlf=true converts it
+# to CRLF on checkout. Prettier's default endOfLine is lf, so a fresh checkout
+# left every file failing `npm run format:check` while looking unchanged in a
+# diff — and produced a "LF will be replaced by CRLF" warning on every commit.
+#
+# `eol=lf` overrides autocrlf for this repository, so the working tree matches
+# what is stored and what the formatter expects, on every platform. Fixing it
+# in the repository rather than in one machine's git config means a clone does
+# the right thing without anyone being told.
+* text=auto eol=lf
+
+# Binary: never translated, never diffed as text.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

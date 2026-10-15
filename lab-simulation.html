@@ -40,22 +40,26 @@
           <div class="stat">
             <span>💰</span>
             <div>
-              <div style="font-weight: 700">$<span id="money">—</span></div>
+              <div style="font-weight: 700">₪<span id="money">—</span></div>
               <div style="font-size: 0.75rem; color: #64748b">Budget</div>
             </div>
           </div>
+          <!-- Materials and Samples were two counters nothing consumed and no
+               decision turned on. Replaced by the two numbers a lab manager
+               actually argues about: what the work earned, and what the people
+               cost. -->
           <div class="stat">
-            <span>🧪</span>
+            <span>📈</span>
             <div>
-              <div style="font-weight: 700"><span id="materials">—</span></div>
-              <div style="font-size: 0.75rem; color: #64748b">Materials</div>
+              <div style="font-weight: 700">₪<span id="revenue">—</span></div>
+              <div style="font-size: 0.75rem; color: #64748b">Revenue</div>
             </div>
           </div>
           <div class="stat">
-            <span>🔬</span>
+            <span>👷</span>
             <div>
-              <div style="font-weight: 700"><span id="samples">—</span></div>
-              <div style="font-size: 0.75rem; color: #64748b">Samples</div>
+              <div style="font-weight: 700">₪<span id="labour">—</span></div>
+              <div style="font-size: 0.75rem; color: #64748b">Labour</div>
             </div>
           </div>
         </div>
@@ -70,7 +74,7 @@
       </div>
       <div class="status-item">
         <span class="status-dot" style="background: #f59e0b"></span
-        ><span><strong id="breakCount">0</strong> On Break</span>
+        ><span><strong id="overtimeCount">0</strong> On Overtime</span>
       </div>
       <div class="status-item">
         <span class="status-dot" style="background: #ef4444"></span
@@ -94,6 +98,11 @@
         <div class="game-header">
           <span style="font-size: 1.1rem; font-weight: 600">🏢 Office Floor - Isometric View</span>
           <div class="controls">
+            <span
+              class="run-badge"
+              id="runBadge"
+              title="Which lab this is, when it opened, and how fast the clock runs. Set with ?seed=42&amp;start=sun-08:00&amp;speed=60"
+            ></span>
             <button class="btn-control" data-action="reset-camera" title="Reset View">🎯</button>
           </div>
         </div>
@@ -103,7 +112,7 @@
       <aside class="sidebar">
         <div class="panel">
           <div class="panel-header" id="emergencyPanelHeader" data-action="toggle-panel">
-            <h3>🚨 Active Emergencies</h3>
+            <h3>🚨 Rush Orders</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
           <div class="panel-content emergency-list" id="emergencyListPanel"></div>
@@ -168,7 +177,7 @@
         </div>
         <div class="panel">
           <div class="panel-header" data-action="toggle-panel">
-            <h3>📋 Task Definitions</h3>
+            <h3>📋 Work Queue</h3>
             <span class="panel-toggle-icon">▼</span>
           </div>
           <div class="panel-content task-definition-list" id="taskListPanel"></div>
@@ -178,21 +187,9 @@
 
     <div class="modal-overlay" id="modalOverlay" data-action="close-modals"></div>
     <div class="modal" id="taskModal">
-      <h3>Select Task for <span id="selectedStaffName"></span></h3>
+      <h3>Assign work to <span id="selectedStaffName"></span></h3>
       <div class="task-options" id="taskOptions"></div>
       <button class="btn" data-action="close-modals">Cancel</button>
-    </div>
-    <div class="modal" id="emergencyModal">
-      <h3>🚨 EMERGENCY ALERT 🚨</h3>
-      <div class="emergency-details">
-        <div id="emergencyTaskName"><strong>Task:</strong></div>
-        <div id="emergencyTaskReward"><strong>Reward:</strong></div>
-        <div id="emergencyTaskPenalty"><strong>Penalty:</strong></div>
-        <div id="emergencyTaskDeadline"><strong>Deadline:</strong></div>
-      </div>
-      <h4>Assign Available Qualified Staff:</h4>
-      <div id="emergencyStaffList"></div>
-      <button class="btn" style="margin-top: 1rem" data-action="close-modals">Dismiss</button>
     </div>
     <div class="modal" id="buyEquipmentModal">
       <h3>Buy New Equipment</h3>

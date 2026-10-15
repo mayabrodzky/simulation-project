@@ -8,13 +8,27 @@
  */
 import { describe, expect, it } from 'vitest';
 import { chemistryLab } from '../scenarios';
+import { dayOfWeek } from './calendar';
 import { applyCommand } from './commands';
+import { qualifiedStaffForWorkType } from './queries';
 import { isQualified, missingSkills } from './rules';
 import { createRng } from './rng';
-import { tick } from './tick';
+import { advance, tick } from './tick';
 import { createWorld, type WorldState } from './world';
 
 const SEED = 42;
+
+/**
+ * Runs with the dispatcher off.
+ *
+ * These tests build a precise situation by hand — this person, that job, this
+ * many minutes — and then assert about it. With dispatch on, which is the
+ * default the live lab wants, the engine assigns work the moment somebody is
+ * free, so the subject of the test would be given something else before the
+ * test could give it anything. Off is the only setting under which a
+ * hand-built setup survives contact with the clock.
+ */
+const QUIET = { dispatch: { enabled: false } } as const;
 
 function run(seed: number, ticks: number, dt = 1 / 30): WorldState {
   const world = createWorld(chemistryLab, seed, 480);
@@ -29,9 +43,9 @@ function fingerprint(world: WorldState) {
     minutes: world.minutes,
     rngState: world.rngState,
     metrics: world.metrics,
-    staff: world.staff.map((p) => [p.id, p.state, p.x, p.y, p.energy, p.taskStep]),
+    staff: world.staff.map((p) => [p.id, p.state, p.x, p.y, p.minutesWorkedThisWeek, p.jobId]),
     equipment: world.equipment.map((e) => [e.id, e.inUse, e.condition, e.assignedTo]),
-    emergencies: world.emergencies.map((e) => [e.id, e.status, e.timeLimit]),
+    jobs: world.jobs.map((j) => [j.id, j.status, j.stepIndex, j.rush]),
   };
 }
 
@@ -64,6 +78,35 @@ describe('determinism', () => {
     const b = createRng(1);
     b.setState(copy.rngState);
     expect([a.next(), a.next(), a.next()]).toEqual([b.next(), b.next(), b.next()]);
+  });
+});
+
+describe('speed', () => {
+  it('scales simulated time without changing what happens', () => {
+    // ?speed=60 in the live view, and the x1/x10/x60 controls Phase 4 needs.
+    // It multiplies the dt handed to the engine rather than changing any rule,
+    // which is why a fast-forwarded run and a watched one agree — the slice
+    // loop still lands on every event.
+    const normal = createWorld(chemistryLab, SEED, 480);
+    const fast = createWorld(chemistryLab, SEED, 480);
+    fast.speed = 60;
+
+    for (let i = 0; i < 60; i++) tick(normal, 1);
+    tick(fast, 1);
+
+    expect(fast.simMinutes).toBeCloseTo(normal.simMinutes, 6);
+    expect(fast.jobs.map((j) => j.id)).toEqual(normal.jobs.map((j) => j.id));
+    expect(fast.arrivalQueue[0]?.arrivedAtMinute).toBeCloseTo(
+      normal.arrivalQueue[0]?.arrivedAtMinute ?? 0,
+      6,
+    );
+  });
+
+  it('leaves the clock still when stopped', () => {
+    const world = createWorld(chemistryLab, SEED, 480);
+    world.speed = 0;
+    tick(world, 1000);
+    expect(world.simMinutes).toBe(480);
   });
 });
 
@@ -103,25 +146,45 @@ describe('isQualified', () => {
 
   it('matches the scenario it was extracted from', () => {
     const world = createWorld(chemistryLab, SEED, 480);
-    const bloodPanel = world.tasks.find((t) => t.name === 'Blood Sample Analysis');
-    const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo');
-    const amir = world.staff.find((p) => p.name === 'Amir Barzilay');
-    expect(isQualified(hadas!, bloodPanel!)).toBe(true);
-    expect(isQualified(amir!, bloodPanel!)).toBe(false);
+    const bloodPanel = world.workTypes.find((w) => w.id === 'blood-panel')!;
+    const hadas = world.staff.find((p) => p.name === 'Hadas Ben Hamo')!;
+    const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
+    const alex = world.staff.find((p) => p.name === 'Alex Tom')!;
+
+    // isQualified reads `equipmentSequence`, which a work type does not have;
+    // the job path asks `canOperate` instead, over the step it is on.
+    const qualified = qualifiedStaffForWorkType(world, bloodPanel.id);
+    const anyone = [...qualified.available, ...qualified.unavailable];
+
+    // Hadas can do both steps. Amir can do only the centrifuge, and counts,
+    // because a job moves between specialists. Alex holds Spectrophotometry
+    // alone, which no step of a blood panel asks for.
+    expect(anyone).toContain(hadas.id);
+    expect(anyone).toContain(amir.id);
+    expect(anyone).not.toContain(alex.id);
   });
 });
 
 describe('cancelling a task mid-flight', () => {
+  /**
+   * Trains Amir on the microscope.
+   *
+   * Was Dana, who under the spec roster already holds Microscopy — so the
+   * command was refused as already-known and the test passed by doing nothing.
+   * Amir holds Centrifuge Usage alone, which makes him the person a training
+   * decision would actually be about.
+   */
   function startTraining(world: WorldState) {
-    const dana = world.staff.find((p) => p.name === 'Dana Cohen')!;
-    const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
+    const trainee = world.staff.find((p) => p.name === 'Amir Barzilay')!;
+    const microscope = world.equipment.find((e) => e.name === 'Microscope')!;
+    expect(trainee.skills).not.toContain('Microscopy');
     applyCommand(world, {
       type: 'START_TRAINING',
-      staffId: dana.id,
+      staffId: trainee.id,
       equipmentId: microscope.id,
       skill: 'Microscopy',
     });
-    return dana;
+    return trainee;
   }
 
   it('does not throw or corrupt the budget when someone is marked sick during training', () => {
@@ -130,35 +193,40 @@ describe('cancelling a task mid-flight', () => {
     // task.equipmentSequence, which a training does not have either, so it
     // threw. Typing ActiveTask as a real union is what made both impossible.
     const world = createWorld(chemistryLab, SEED, 480);
-    const dana = startTraining(world);
+    const trainee = startTraining(world);
     const budgetDuringTraining = world.money;
 
     expect(() =>
-      applyCommand(world, { type: 'SET_STATUS', staffId: dana.id, sick: true }),
+      applyCommand(world, { type: 'SET_STATUS', staffId: trainee.id, sick: true }),
     ).not.toThrow();
 
     expect(Number.isFinite(world.money)).toBe(true);
     expect(world.money).toBe(budgetDuringTraining);
-    expect(dana.state).toBe('sick');
-    expect(dana.activeTask).toBeNull();
+    expect(trainee.state).toBe('sick');
+    expect(trainee.activeTask).toBeNull();
   });
 
   it('releases the machine the trainee was holding', () => {
     const world = createWorld(chemistryLab, SEED, 480);
-    const dana = startTraining(world);
-    const microscope = world.equipment.find((e) => e.name === 'Microscope A')!;
+    const trainee = startTraining(world);
+    const microscope = world.equipment.find((e) => e.name === 'Microscope')!;
     // Walk her to the machine so the training actually starts.
     for (let i = 0; i < 400; i++) tick(world, 1 / 30);
     expect(microscope.inUse).toBe(true);
 
-    applyCommand(world, { type: 'SET_STATUS', staffId: dana.id, sick: true });
+    applyCommand(world, { type: 'SET_STATUS', staffId: trainee.id, sick: true });
     expect(microscope.inUse).toBe(false);
     expect(microscope.assignedTo).toBeNull();
   });
 
   it('refuses to mark an off-shift person sick, rather than putting them back on shift', () => {
+    // Every one of the eight is now employed and the lab is open at 08:00, so
+    // somebody has to be taken off the rota to be off duty at all.
     const world = createWorld(chemistryLab, SEED, 480);
-    const offDuty = world.staff.find((p) => p.state === 'off')!;
+    const offDuty = world.staff.find((p) => p.name === 'Alex Tom')!;
+    applyCommand(world, { type: 'TOGGLE_SHIFT', staffId: offDuty.id });
+    expect(offDuty.state).toBe('off');
+
     const events = applyCommand(world, { type: 'SET_STATUS', staffId: offDuty.id, sick: true });
     expect(events).toEqual([{ type: 'rejected', reason: 'off-shift', detail: offDuty.name }]);
     expect(offDuty.state).toBe('off');
@@ -166,31 +234,68 @@ describe('cancelling a task mid-flight', () => {
 });
 
 describe('the engine reports rather than renders', () => {
-  it('raises an emergency as an event, with no side effects outside the world', () => {
-    // The emergency path crossed into the DOM before the extraction, which is
-    // why it could not be tested at all. Forcing the rate high makes it
-    // certain within a few ticks.
+  it('reports arriving work as an event, with no side effects outside the world', () => {
+    // Was an emergency test. Emergencies crossed into the DOM before the
+    // extraction, which is why they could not be tested at all; they are now
+    // a flag on an ordinary job and the arrival is the event.
     const world = createWorld(chemistryLab, SEED, 480);
-    world.tuning = { ...world.tuning, emergencyRatePerSecond: 50 };
-    const events = [];
-    for (let i = 0; i < 20 && events.length === 0; i++) events.push(...tick(world, 1));
+    const events = advance(world, 240, QUIET);
 
-    const raised = events.find((e) => e.type === 'emergency-raised');
-    expect(raised).toBeDefined();
-    expect(world.emergencies).toHaveLength(1);
-    expect(world.emergencies[0]!.status).toBe('pending');
+    const arrived = events.filter((e) => e.type === 'job-arrived');
+    expect(arrived.length).toBeGreaterThan(0);
+    expect(world.jobs.length).toBe(arrived.length);
   });
 
   it('gives refusals a reason instead of a sentence', () => {
     const world = createWorld(chemistryLab, SEED, 480);
-    const amir = world.staff.find((p) => p.name === 'Amir Barzilay')!;
-    const bloodPanel = world.tasks.find((t) => t.name === 'Blood Sample Analysis')!;
+    // Alex holds only Spectrophotometry; a blood panel starts on the centrifuge.
+    const alex = world.staff.find((p) => p.name === 'Alex Tom')!;
+    for (let i = 0; i < 2000 && !world.jobs.some((j) => j.workTypeId === 'blood-panel'); i++) {
+      advance(world, 1, QUIET);
+    }
+    const bloodPanel = world.jobs.find((j) => j.workTypeId === 'blood-panel')!;
     const events = applyCommand(world, {
-      type: 'ASSIGN_TASK',
-      staffId: amir.id,
-      taskId: bloodPanel.id,
+      type: 'ASSIGN_JOB',
+      staffId: alex.id,
+      jobId: bloodPanel.id,
     });
-    expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: amir.name }]);
-    expect(amir.activeTask).toBeNull();
+    expect(events).toEqual([{ type: 'rejected', reason: 'unqualified', detail: alex.name }]);
+    expect(alex.jobId).toBeNull();
+  });
+});
+
+describe('the world clock', () => {
+  it('knows what day it is, and keeps counting past midnight', () => {
+    // Minute 0 is Sunday 00:00, so a world started at 480 begins Sunday 08:00.
+    const world = createWorld(chemistryLab, SEED, 480);
+    expect(world.simMinutes).toBe(480);
+    expect(dayOfWeek(world.simMinutes)).toBe(0);
+
+    // Run three simulated days. The old clock wrapped and lost the date.
+    const minutesToRun = 3 * 24 * 60;
+    const seconds = minutesToRun / chemistryLab.tuning.minutesPerSecond;
+    for (let i = 0; i < seconds; i++) tick(world, 1);
+
+    expect(world.simMinutes).toBeCloseTo(480 + minutesToRun, 6);
+    expect(dayOfWeek(world.simMinutes)).toBe(3); // Sunday + 3 → Wednesday
+  });
+
+  it('keeps the derived time of day inside a day, for the HUD', () => {
+    const world = createWorld(chemistryLab, SEED, 1380); // 23:00
+    for (let i = 0; i < 600; i++) {
+      tick(world, 1);
+      expect(world.minutes).toBeGreaterThanOrEqual(0);
+      expect(world.minutes).toBeLessThan(24 * 60);
+    }
+    // It wrapped past midnight while the absolute clock did not.
+    expect(world.minutes).toBeLessThan(1380);
+    expect(world.simMinutes).toBeGreaterThan(1380);
+  });
+
+  it('freezes both clocks in sandbox mode', () => {
+    const world = createWorld(chemistryLab, SEED, 480);
+    for (let i = 0; i < 100; i++) tick(world, 1, { freezeClock: true });
+    expect(world.simMinutes).toBe(480);
+    expect(world.minutes).toBe(480);
   });
 });

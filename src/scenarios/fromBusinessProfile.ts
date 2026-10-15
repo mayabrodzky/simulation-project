@@ -22,9 +22,19 @@ export interface BusinessProfile {
 
 const DEFAULT_REWARD = 500;
 const DEFAULT_DURATION = 30;
-/** The original derived a deadline as twelve times the task's duration. */
-const TIME_LIMIT_FACTOR = 12;
-const PENALTY_FRACTION = 0.3;
+
+/**
+ * Invented, because a business profile cannot describe demand.
+ *
+ * The old shape needed only a reward and a duration. A work type also needs how
+ * much of it arrives each week and how long a client waits, and the onboarding
+ * form asks for neither — so these are placeholders that produce a plausible
+ * simulation of nothing in particular. Already on the Phase 2.5 list: either
+ * the form asks, or this path stops pretending to model a real business.
+ */
+const DEFAULT_PER_WEEK = 20;
+const DEFAULT_VARIATION = 0.2;
+const DEFAULT_DUE_WORKING_DAYS = 3;
 
 export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario {
   const { layout } = chemistryLab;
@@ -44,7 +54,12 @@ export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario 
 
     staff:
       employees.length > 0
-        ? employees.map((e) => ({ name: e.name, role: e.role, skills: [e.role] }))
+        ? employees.map((e) => ({
+            name: e.name,
+            role: e.role,
+            skills: [e.role],
+            weeklyHours: 40,
+          }))
         : chemistryLab.staff,
 
     equipment:
@@ -55,29 +70,68 @@ export function scenarioFromBusinessProfile(profile: BusinessProfile): Scenario 
             x: f.x + 3 + (i % 5) * 2.5,
             y: f.y + 2 + Math.floor(i / 5) * 4,
             skill: null,
+            capabilities: ['general'],
+            count: 1,
+            capacity: 1,
           }))
         : chemistryLab.equipment,
 
-    tasks:
+    // A profile's "tasks" become work types, which now also need a volume and
+    // a deadline. Both are guesses, and flagged: this path was already on the
+    // Phase 2.5 list for review, since a profile cannot describe a lab's
+    // demand and inventing one produces a simulation of nothing in particular.
+    workTypes:
       tasks.length > 0
         ? tasks.map((t, i) => {
-            const reward = t.reward ?? DEFAULT_REWARD;
             const duration = t.duration ?? DEFAULT_DURATION;
             return {
-              id: 'TSK' + String(i + 1).padStart(3, '0'),
+              id: 'wt' + String(i + 1).padStart(3, '0'),
               name: t.name,
-              reward,
-              timeLimit: duration * TIME_LIMIT_FACTOR,
-              penalty: Math.round(reward * PENALTY_FRACTION),
-              equipmentSequence: [{ name: 'Workstation', duration, skillRequired: null }],
+              perWeek: DEFAULT_PER_WEEK,
+              variation: DEFAULT_VARIATION,
+              basePrice: t.reward ?? DEFAULT_REWARD,
+              dueWorkingDays: DEFAULT_DUE_WORKING_DAYS,
+              steps: [
+                {
+                  capability: 'general',
+                  skillRequired: null,
+                  attended: duration,
+                  unattended: 0,
+                  resourceHeldDuring: 'both' as const,
+                },
+              ],
             };
           })
-        : chemistryLab.tasks,
+        : chemistryLab.workTypes,
 
     catalog: [
-      { id: 'cat001', name: 'Workstation', icon: '💼', cost: 1000, skill: null },
-      { id: 'cat002', name: 'Meeting Room', icon: '🪑', cost: 2000, skill: null },
-      { id: 'cat003', name: 'Storage Unit', icon: '🗄️', cost: 500, skill: null },
+      {
+        id: 'cat001',
+        name: 'Workstation',
+        capabilities: ['general'],
+        capacity: 1,
+        icon: '💼',
+        cost: 1000,
+        skill: null,
+      },
+      {
+        id: 'cat002',
+        name: 'Meeting Room',
+        capabilities: ['meeting'],
+        capacity: 1,
+        icon: '🪑',
+        cost: 2000,
+        skill: null,
+      },
+      {
+        id: 'cat003',
+        name: 'Storage Unit',
+        capabilities: ['storage'],
+        capacity: 1,
+        icon: '🗄️',
+        cost: 500,
+        skill: null,
+      },
     ],
   };
 }

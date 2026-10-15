@@ -32,9 +32,48 @@ export interface Rng {
    * of exceeding 1 the way `rate * dt` would.
    */
   chance(ratePerUnit: number, dt: number): boolean;
+  /**
+   * How long until the next event in a Poisson process of the given rate.
+   *
+   * This is what `chance` should have been. `chance` asks "did it happen
+   * during this slice?", so the number of draws — and therefore the answer —
+   * depends on how finely time is stepped. Drawing the *interval* once and
+   * waiting for it makes the result identical whether the simulation advances
+   * a minute at a time or a day at a time, which is the property the batch
+   * runner depends on: three hundred fast runs must agree with the one being
+   * watched.
+   *
+   * Returns Infinity for a rate of zero, so "never" needs no special case.
+   */
+  nextInterval(ratePerUnit: number): number;
   /** Current internal state, for snapshotting and resuming a run. */
   getState(): number;
   setState(state: number): void;
+}
+
+/**
+ * An independent stream derived from a master seed and a name.
+ *
+ * Without this, everything random shares one sequence, so the *number* of
+ * draws one thing makes shifts every draw after it. Adding a ninth staff
+ * member then changes every machine's starting condition and moves the first
+ * emergency by fifty minutes — so comparing "hire a technician" against "do
+ * nothing" would compare two different labs and report the difference as the
+ * effect of hiring.
+ *
+ * Naming the streams instead means each concern draws from its own sequence,
+ * and a decision that adds people cannot disturb the weather.
+ *
+ * FNV-1a over the label, mixed with the seed. Not a strong hash, and does not
+ * need to be: it only has to spread similar labels apart.
+ */
+export function deriveSeed(seed: number, label: string): number {
+  let h = (2166136261 ^ (seed >>> 0)) >>> 0;
+  for (let i = 0; i < label.length; i++) {
+    h = (h ^ label.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0 || 1;
 }
 
 export function createRng(seed: number): Rng {
@@ -57,6 +96,12 @@ export function createRng(seed: number): Rng {
     chance: (ratePerUnit, dt) => {
       if (ratePerUnit <= 0 || dt <= 0) return false;
       return next() < 1 - Math.exp(-ratePerUnit * dt);
+    },
+    nextInterval: (ratePerUnit) => {
+      if (ratePerUnit <= 0) return Infinity;
+      // Inverse-transform sampling of the exponential distribution. 1 - u
+      // rather than u so the argument is never zero, which would be -Infinity.
+      return -Math.log(1 - next()) / ratePerUnit;
     },
     getState: () => state,
     setState: (s) => {

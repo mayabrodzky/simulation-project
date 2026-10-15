@@ -12,9 +12,72 @@
  * reads back EngineEvents. It never mutates the world itself.
  */
 export { createWorld, cloneWorld, findStaff, findEquipment, type WorldState } from './world';
-export { tick, failTask, type TickOptions } from './tick';
+export { tick, advance, failTask, type TickOptions } from './tick';
+export {
+  assignJob,
+  blockedMinutesByReason,
+  canOperate,
+  findJob,
+  isFinished,
+  isOpen,
+  settlementFor,
+  jobOf,
+  missingSkillsFor,
+} from './jobs';
 export { applyCommand, type Command } from './commands';
 export { isQualified, missingSkills } from './rules';
 export { createRng, type Rng } from './rng';
 export { isPanelAffecting, type EngineEvent, type RejectionReason } from './events';
-export { formatDuration } from './time';
+export { formatMinutes } from './time';
+export {
+  dayOfWeek,
+  isWithinShift,
+  minuteOfDay,
+  nextOpen,
+  addWorkingDays,
+  addWorkingMinutes,
+  workingMinutesBetween,
+} from './calendar';
+/**
+ * The seam the interface asks questions through, rather than reading the
+ * simulation's shapes. Keeps panels and the canvas independent of how work is
+ * represented, which is what lets that representation change.
+ */
+export {
+  backlogView,
+  holdUps,
+  countTraining,
+  describeAssignment,
+  clockView,
+  isUnoccupied,
+  listActiveWork,
+  listAssignableJobs,
+  listUrgentWork,
+  progressByStaff,
+  qualifiedStaffForWorkType,
+  queueByWorkType,
+  staffLoadPercent,
+  unoccupiedStaffIds,
+  urgentTimeLeft,
+  type ActiveWorkView,
+  type AssignableJobView,
+  type BacklogView,
+  type HoldUpView,
+  type AssignmentView,
+  type ClockView,
+  type QueueLineView,
+  type UrgentWorkView,
+} from './queries';
+
+/**
+ * The account. Everything here is derived from `world.metrics`, which is
+ * cumulative — a measurement window is `snapshot` plus `since`, kept out of the
+ * hot loop on purpose.
+ */
+export { profitAndLoss, ratePerHour, since, snapshot, type ProfitAndLoss } from './money';
+
+/**
+ * Who works on what. Inside the slice loop, so assignment is covered by the
+ * same step-size invariance guarantee as everything else.
+ */
+export { dispatch, isAvailable, type DispatchOptions, type OperatorPolicy } from './dispatch';

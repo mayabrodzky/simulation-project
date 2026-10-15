@@ -29,6 +29,16 @@ export interface RenderView {
   /** Simulation clock, minutes past midnight. Read by the HUD. */
   state: { time: number };
   /**
+   * How far through its current step each working person is, 0–1.
+   *
+   * Supplied rather than derived, so the renderer holds no opinion about how
+   * work is represented. When work becomes an entity of its own, nothing here
+   * changes.
+   */
+  progressByStaff: Record<StaffId, number>;
+  /** Who is free and idle. Cosmetic: they bob on the spot. */
+  unoccupiedStaffIds: StaffId[];
+  /**
    * Animation clock in milliseconds, used only for cosmetic motion such as the
    * idle bob. Passed in rather than read from performance.now() so that drawing
    * stays a pure function of the view — which is what lets Phase 4 render a
@@ -104,6 +114,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     },
     get state() {
       return v().state;
+    },
+    get progressByStaff() {
+      return v().progressByStaff;
+    },
+    get unoccupiedStaffIds() {
+      return v().unoccupiedStaffIds;
     },
     /** drawStaff's idle bob reads this; it used to live on the Lab object. */
     get lastTime() {
@@ -435,10 +451,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     drawStaff(person: Staff) {
       const iso = this.toIso(person.x, person.y);
       const size = 14;
-      const bob =
-        person.state === 'idle' && !person.activeTask
-          ? Math.sin(this.lastTime / 200 + person.id) * 2
-          : 0;
+      const bob = this.unoccupiedStaffIds.includes(person.id)
+        ? Math.sin(this.lastTime / 200 + person.id) * 2
+        : 0;
       const y = iso.y - bob;
       const stateColor: Record<string, string> = {
         ...palette.staff.state,
@@ -474,13 +489,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       this.ctx.arc(iso.x - size * 0.18, y - size * 1.58, size * 0.09, 0, Math.PI * 2);
       this.ctx.arc(iso.x + size * 0.18, y - size * 1.58, size * 0.09, 0, Math.PI * 2);
       this.ctx.fill();
-      if (person.activeTask && person.state === 'working') {
-        const task = person.activeTask;
-        const dur =
-          task.type === 'training'
-            ? task.duration
-            : (task.equipmentSequence[person.taskStep]?.duration ?? 0);
-        const progress = dur > 0 ? Math.max(0, Math.min(1, 1 - person.taskTimer / dur)) : 0;
+      const progress = this.progressByStaff[person.id];
+      if (progress !== undefined) {
         this.ctx.fillStyle = palette.staff.progress.track;
         this.ctx.fillRect(iso.x - size, y - size * 2.5, size * 2, 4);
         this.ctx.fillStyle = palette.staff.progress.fill;

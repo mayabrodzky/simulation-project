@@ -7,6 +7,8 @@ export default tseslint.config(
   {
     ignores: [
       'dist/',
+      // Built output: the batch runner's bundle, produced by `npm run compare`.
+      'dist-batch/',
       'node_modules/',
       'legacy/',
       // The old Express backend. Not part of the frontend project; it moves
