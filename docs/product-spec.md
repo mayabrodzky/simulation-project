@@ -19,6 +19,58 @@
 3. **One senior person carries the lab.** The most multi-skilled scientist is overloaded and accumulates overtime; if she's sick, everything stops.
 4. **Overtime is expensive and invisible** until payroll arrives.
 
+> ### ⚠️ The model disagrees with pain point 1
+>
+> Added after Phase 2. This document says mass spectrometry is the bottleneck.
+> The simulation, run against this document's own numbers, says it is not — and
+> this is the most consequential disagreement in the project, because three of
+> the four decisions in §2 are aimed at the wrong resource.
+>
+> The load audit computes offered load per capability in closed form, with no
+> simulation:
+>
+> | Capability | instrument h/wk | of which attended | % of working week | % of calendar week |
+> |---|---|---|---|---|
+> | Incubator | 579.0 | 3.0 | 241% | 57% |
+> | PCR | 110.0 | 30.0 | 138% | 33% |
+> | Mass spectrometer | 45.0 | 30.0 | 113% | 27% |
+> | **Microscope** | **35.7** | **35.7** | **89%** | 21% |
+> | Centrifuge | 33.3 | 33.3 | 83% | 20% |
+> | Spectrophotometer | 30.0 | 30.0 | 75% | 18% |
+> | Biosafety cabinet | 24.0 | 24.0 | 60% | 14% |
+>
+> **The microscope is the binding constraint, at 89% of the working week.** Two
+> things make it bind where the mass spectrometer does not:
+>
+> 1. **It is 100% attended.** All 35.7 of its hours need somebody standing at it,
+>    so a microscope-hour and a person-hour are the same hour. The mass
+>    spectrometer's 45 hours are only 30 hours of people: the other 15 run alone.
+> 2. **Its work cannot move overnight.** The three capabilities reading above
+>    100% of the working week — incubator, PCR, mass spectrometer — are all
+>    feasible *only* because their runs continue outside working hours (see
+>    assumption 13). The mass spectrometer is busy 27% of the calendar week. It
+>    has room.
+>
+> At 89% on a single-slot instrument a queue is inevitable from variability
+> alone, and it is the queue the lab manager is describing. Her diagnosis of
+> *where* it is appears to be wrong, which is exactly the kind of thing this tool
+> exists to find — a manager sees the symptom and names the cause they already
+> suspect.
+>
+> People are not the constraint either: 186 hands-on hours offered against 280
+> contracted, and the most-used skill (PCR Operation, 38%) sits comfortably
+> inside the hours of those who hold it. **Nothing in this lab is short of
+> people. One instrument is busy and cannot run alone.**
+>
+> Measured, not argued: cross-training two technicians on mass spectrometry
+> (decision D) changes nothing — better in 5 months of 10 and worse in 5, with a
+> typical profit difference of ₪4, and mass-spec utilisation unchanged to one
+> decimal. See `docs/engineering-log.md` entry 34.
+>
+> Two caveats held open honestly. This rests on assumption 12, the split of
+> hands-on minutes across steps, which is the one assumption that silently
+> decides which instrument binds. And the lab manager has not seen any of it yet.
+
 ---
 
 ## 2. The decisions to compare (Phase 4 presets)
@@ -31,6 +83,44 @@
 | D | **Cross-train 2 technicians on mass spec** | ₪6,000 one-off + 2 weeks at 50% productivity for both | 4 operators instead of 2 | Cheapest; short-term pain for long-term capacity |
 
 The model must also support **combinations** (e.g. B + D) and a **"do nothing"** baseline. The interesting outcome to be able to *test* (not assume): decisions interact — B alone may underperform because people, not machines, become the constraint.
+
+### 2.1 Proposed revision to the presets — for review, not implemented
+
+Written after Phase 2 measured the lab. **Nothing here is built**; the four
+decisions above are what the model currently runs. This section exists to be
+argued with, and the costs are placeholders to put to the lab manager alongside
+everything else.
+
+The problem with the current four: **A, B and D all aim at the mass
+spectrometer**, directly or by implication, and it is running at 27% of the
+calendar week. The model predicts all three do approximately nothing. D has been
+measured and does nothing. Only C targets the resource that actually binds, and
+it does so incidentally.
+
+| # | Proposed decision | Monthly cost (placeholder) | What it changes | Why it targets the real constraint |
+|---|---|---|---|---|
+| **A′** | **Lease a second microscope** | ₪2,500? | Microscope count 1 → 2 | The direct fix. 89% on one slot becomes ~45% on two, and the queue that causes should disappear. The cheapest decision on the list if the model is right. |
+| **B′** | **Add an evening shift** (2 people, 16:00–22:00, Sun–Thu) | ~₪9,000 premium | Attended capacity 40 h/wk → 70 h/wk | Unchanged from C, but now the *reason* is stated: it relieves every attended-only capability at once — microscope 89% → 51%, centrifuge 83% → 48%. The only current preset aimed at the binding resource. |
+| **C′** | **Lease a second centrifuge** | ₪1,500? | Centrifuge count 1 → 2 | The next tightest at 83%, and also fully attended. Interesting mainly in combination: relieving the microscope alone may just move the queue one step upstream. |
+| **D′** | **Hire a generalist technician** | ₪16,000 | +1 staff: Centrifuge, Microscopy, Spectrophotometry | Kept deliberately as the **intuitive wrong answer**. The lab is at 66% of contracted hours; another pair of hands cannot help when the shortage is instrument-slots. The most expensive option on the list, and the model should say it is the worst. |
+
+**Keep decision D (cross-train on mass spec) as a control, not a candidate.** It
+has been measured at no effect, and a decision-support tool that can only show
+improvements is one nobody should trust. Having an option in the set that the
+tool says is *not worth taking*, and being able to show why — the instrument is
+idle three-quarters of the time — is what makes the other verdicts credible. The
+same argument applies to a second mass spectrometer (B): the model predicts no
+effect, which is a **testable prediction** and worth keeping for that reason.
+
+What this would let the manager see, which the current set cannot: that the
+cheapest decision is the best one, that the most expensive is the worst, and that
+her own diagnosis was pointing at the wrong machine. That is a far better
+demonstration of the tool than four options that all help a little.
+
+**Open question for the lab manager, before any of this is built:** is a second
+microscope actually procurable at anything like that price, and is bench space
+the real limit rather than money? A decision the model loves and the lab cannot
+execute is worse than no recommendation.
 
 ---
 
@@ -232,3 +322,33 @@ rather than a rewrite.
    numbers chosen reproduce this spec's own claim that mass spec binds first; a different split makes
    the microscope bind instead. This is the single assumption most worth checking, because it
    silently determines the answer to the question the whole tool exists to ask.
+
+13. **Do instrument runs continue outside working hours?** Modelled as **yes**,
+   and this is load-bearing rather than incidental. A 48-hour incubation started
+   on Thursday afternoon finishes on Saturday; a 90-minute mass-spec run begun at
+   15:30 finishes at 17:00, after the lab has closed, and the sample is collected
+   the next working morning. Attended work stops at 16:00 and resumes the
+   following working day; only the machine's own clock ignores the calendar.
+
+   **Why it decides the answer.** Three capabilities are infeasible without it:
+   the incubator needs 579 instrument-hours a week (241% of the working week, 57%
+   of the calendar week), PCR 110 (138% / 33%), and the mass spectrometer 45
+   (113% / 27%). Under the opposite reading — nothing runs unless somebody is in
+   the building — the lab as described in §3.1 **cannot function at all**, and
+   `createWorld` refuses the scenario with three errors rather than reporting an
+   implausibly busy lab.
+
+   It is also why the mass spectrometer is not the bottleneck this document says
+   it is. Judged against the working week it reads 113%, which is the number
+   behind the bottleneck claim; judged against the calendar week it reads 27%.
+   Both are reported for exactly this reason, and the audit names which
+   capabilities depend on the assumption.
+
+   **For the lab manager:** does an overnight or weekend run actually happen —
+   is the instrument left running unattended, and is that permitted for each of
+   the incubator, the PCR machine and the mass spectrometer separately? A sample
+   that must be collected within minutes of a run finishing, or an instrument
+   that may not be left unattended out of hours, would change this from a
+   near-certainty to a false assumption, and would make the lab's own described
+   workload impossible. Related: assumption 10 asks whether a *finished* run
+   frees its instrument before anybody unloads it.
